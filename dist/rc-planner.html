@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.open-meteo.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="c5de928daa-single">
+  <meta name="build" content="7e84d600d4-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1168,6 +1168,15 @@ RC.PACKING_PRESETS = [
 window.RC = window.RC || {};
 
 RC.CHANGELOG = [
+  {
+    v: 7,
+    date: '2026-08-24',
+    title: 'Готовые платформы можно править при создании',
+    items: [
+      'Выбор готовой платформы открывает форму с заполненными ТТХ — вес, размах, порог ветра и высоту можно поправить под свою сборку ещё до создания.',
+      'Типовая комплектация подставляется в компоненты после сохранения, как раньше.',
+    ],
+  },
   {
     v: 6,
     date: '2026-08-24',
@@ -2405,19 +2414,16 @@ const ACTIONS = {
       и типовой комплектацией — всё можно поменять в карточке.</p>`);
   },
   'model-empty': () => { closeModal(); openModelForm(null); },
-  'model-preset': async (el) => {
+  'model-preset': (el) => {
+    // Форма предзаполняется ТТХ платформы — всё можно поправить до создания.
     const p = RC.AIRCRAFT_PRESETS[+el.dataset.i];
     if (!p) return;
-    const a = {
-      id: uid(), createdAt: Date.now(), statusManual: '',
+    closeModal();
+    openModelForm({
       name: p.name, type: p.type, manufacturer: p.manufacturer,
       weight: p.weight, wingspan: p.wingspan,
       maxWind: p.maxWind, maxAlt: p.maxAlt, notes: p.notes,
-      components: JSON.parse(JSON.stringify(p.components)),
-    };
-    await put('aircraft', a);
-    closeModal();
-    go('#/model/' + a.id);
+    }, p.id);
   },
   'edit-model': () => openModelForm(S.aircraft.find((a) => a.id === UI.arg)),
   'del-model': (el) => confirmModal(
@@ -2706,10 +2712,11 @@ function beginPrep(aircraftId) {
    8. ФОРМЫ
 ============================================================ */
 
-function openModelForm(a) {
-  const isNew = !a;
+function openModelForm(a, presetId) {
+  const isNew = !a || !a.id;
   a = a || { type: 'quad' };
-  openModal(isNew ? 'Новая модель' : 'Изменить модель', `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''}>
+  const title = a.id ? 'Изменить модель' : presetId ? 'Новая модель · проверьте ТТХ' : 'Новая модель';
+  openModal(title, `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''} ${presetId ? `data-preset="${presetId}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(a.name || '')}" placeholder="напр. Mini Talon">`)}
     ${field('Тип', selectHtml('type', Object.entries(TYPES), a.type))}
     <div class="grid2">
@@ -2821,8 +2828,10 @@ const FORMS = {
   model: async (form) => {
     const fd = new FormData(form);
     const id = form.dataset.id;
+    const preset = RC.AIRCRAFT_PRESETS.find((p) => p.id === form.dataset.preset);
     const a = id ? S.aircraft.find((x) => x.id === id) : {
-      id: uid(), components: {}, statusManual: '', createdAt: Date.now(),
+      id: uid(), statusManual: '', createdAt: Date.now(),
+      components: preset ? JSON.parse(JSON.stringify(preset.components)) : {},
     };
     a.name = fd.get('name').trim();
     a.type = fd.get('type');

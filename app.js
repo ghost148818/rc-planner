@@ -1159,19 +1159,16 @@ const ACTIONS = {
       и типовой комплектацией — всё можно поменять в карточке.</p>`);
   },
   'model-empty': () => { closeModal(); openModelForm(null); },
-  'model-preset': async (el) => {
+  'model-preset': (el) => {
+    // Форма предзаполняется ТТХ платформы — всё можно поправить до создания.
     const p = RC.AIRCRAFT_PRESETS[+el.dataset.i];
     if (!p) return;
-    const a = {
-      id: uid(), createdAt: Date.now(), statusManual: '',
+    closeModal();
+    openModelForm({
       name: p.name, type: p.type, manufacturer: p.manufacturer,
       weight: p.weight, wingspan: p.wingspan,
       maxWind: p.maxWind, maxAlt: p.maxAlt, notes: p.notes,
-      components: JSON.parse(JSON.stringify(p.components)),
-    };
-    await put('aircraft', a);
-    closeModal();
-    go('#/model/' + a.id);
+    }, p.id);
   },
   'edit-model': () => openModelForm(S.aircraft.find((a) => a.id === UI.arg)),
   'del-model': (el) => confirmModal(
@@ -1460,10 +1457,11 @@ function beginPrep(aircraftId) {
    8. ФОРМЫ
 ============================================================ */
 
-function openModelForm(a) {
-  const isNew = !a;
+function openModelForm(a, presetId) {
+  const isNew = !a || !a.id;
   a = a || { type: 'quad' };
-  openModal(isNew ? 'Новая модель' : 'Изменить модель', `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''}>
+  const title = a.id ? 'Изменить модель' : presetId ? 'Новая модель · проверьте ТТХ' : 'Новая модель';
+  openModal(title, `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''} ${presetId ? `data-preset="${presetId}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(a.name || '')}" placeholder="напр. Mini Talon">`)}
     ${field('Тип', selectHtml('type', Object.entries(TYPES), a.type))}
     <div class="grid2">
@@ -1575,8 +1573,10 @@ const FORMS = {
   model: async (form) => {
     const fd = new FormData(form);
     const id = form.dataset.id;
+    const preset = RC.AIRCRAFT_PRESETS.find((p) => p.id === form.dataset.preset);
     const a = id ? S.aircraft.find((x) => x.id === id) : {
-      id: uid(), components: {}, statusManual: '', createdAt: Date.now(),
+      id: uid(), statusManual: '', createdAt: Date.now(),
+      components: preset ? JSON.parse(JSON.stringify(preset.components)) : {},
     };
     a.name = fd.get('name').trim();
     a.type = fd.get('type');
