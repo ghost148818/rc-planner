@@ -36,8 +36,10 @@ const UI = {
   },
 };
 
-const WX_DEFAULT_WIND = 10; // м/с, порог без выбранной модели
+const WX_DEFAULT_WIND = 8;  // м/с, порог без выбранной модели
+const WX_DEFAULT_ALT = { quad: 60, plane: 150, wing: 150, other: 100 }; // м, типичная высота полёта
 const WX_API = 'https://api.open-meteo.com/v1/forecast';
+const WX_DAYS = 7;
 
 let SWREG = null;
 let TIMER = null;
@@ -737,23 +739,53 @@ function viewPack() {
 
 /* ---------- Окна для полётов (погода, online) ---------- */
 
-function wxThreshold() {
+// Оценка допустимого ветра (м/с) по ТТХ модели, если пилот не задал свой
+// порог. База по типу; лёгкие модели парусят, тяжёлые стабильнее.
+function wxEstimate(a) {
+  let w = { quad: 10, plane: 8, wing: 9, other: 8 }[a.type] || WX_DEFAULT_WIND;
+  if (a.weight) {
+    if (a.weight < 250) w -= 3;
+    else if (a.weight < 600) w -= 1;
+    else if (a.weight > 2000) w += 1;
+  }
+  return Math.max(3, w);
+}
+
+// Порог ветра и высота полёта текущей выбранной модели.
+function wxLimits() {
   const a = S.aircraft.find((x) => x.id === UI.wx.aircraftId);
-  return (a && a.maxWind) || WX_DEFAULT_WIND;
+  if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false, name: '' };
+  return {
+    maxW: a.maxWind || wxEstimate(a),
+    alt: a.maxAlt || WX_DEFAULT_ALT[a.type] || 100,
+    est: !a.maxWind,
+    name: a.name,
+  };
+}
+
+// Уровни ветра Open-Meteo, попадающие в высоту полёта модели.
+// Ветер выше высоты полёта модель не касается.
+function wxLevels(alt) {
+  const levels = [];
+  if (alt > 40) levels.push(80);
+  if (alt > 90) levels.push(120);
+  if (alt > 140) levels.push(180);
+  return levels;
 }
 
 // Оценка часа: ok / warn / bad по порогу ветра (м/с) и осадкам.
-// alt — максимальный ветер на 80/120/180 м (полёты в пределах 200 м).
+// alt — максимальный ветер на уровнях в пределах высоты полёта.
 function wxVerdict(hr, maxW) {
   if (hr.w10 > maxW || hr.alt > maxW || hr.gust > maxW * 1.4 || hr.prec >= 0.2 || hr.pp >= 60) return 'bad';
   if (hr.w10 > maxW * 0.8 || hr.alt > maxW * 0.8 || hr.gust > maxW * 1.15 || hr.pp >= 40) return 'warn';
   return 'ok';
 }
 
-function wxDay(json, dayIdx, maxW) {
+function wxDay(json, dayIdx, maxW, altM) {
   const H = json.hourly;
   const date = (json.daily.time || [])[dayIdx];
   if (!date) return null;
+  const levels = wxLevels(altM);
   const sunrise = json.daily.sunrise[dayIdx];
   const sunset = json.daily.sunset[dayIdx];
   const riseH = parseInt(sunrise.slice(11, 13), 10);
@@ -768,7 +800,9 @@ function wxDay(json, dayIdx, maxW) {
       temp: H.temperature_2m[i],
       w10: H.wind_speed_10m[i],
       gust: H.wind_gusts_10m[i],
-      alt: Math.max(H.wind_speed_80m[i], H.wind_speed_120m[i], H.wind_speed_180m[i]),
+      alt: levels.length
+        ? Math.max(...levels.map((l) => H['wind_speed_' + l + 'm'][i]))
+        : H.wind_speed_10m[i],
       prec: H.precipitation[i],
       pp: H.precipitation_probability[i] || 0,
       cloud: H.cloud_cover[i],
@@ -788,6 +822,7 @@ function wxDay(json, dayIdx, maxW) {
   if (run) windows.push(run);
   return {
     date, hours, windows,
+    topLevel: levels.length ? levels[levels.length - 1] : 0,
     sunrise: sunrise.slice(11, 16), sunset: sunset.slice(11, 16),
   };
 }
@@ -820,7 +855,7 @@ async function wxLoad() {
   }
   const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
     '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,cloud_cover' +
-    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=auto&forecast_days=3';
+    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=auto&forecast_days=' + WX_DAYS;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -840,13 +875,27 @@ async function wxLoad() {
   render();
 }
 
+function wxDayOptions() {
+  // 7 дней от сегодня; индекс совпадает с daily-массивами прогноза.
+  const names = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  const out = [];
+  for (let i = 0; i < WX_DAYS; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const label = i === 0 ? 'Сегодня' : i === 1 ? 'Завтра'
+      : names[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS_RU[d.getMonth()];
+    out.push([String(i), label]);
+  }
+  return out;
+}
+
 function viewWeather() {
   const wx = UI.wx;
   if (!wx.data && S.settings.weatherCache) wx.data = S.settings.weatherCache;
-  const maxW = wxThreshold();
+  const lim = wxLimits();
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
-  let h = pageHead('Окна для полётов', { back: '#/today', sub: 'Прогноз до высоты 200 м · <span class="badge online">online</span>' });
+  let h = pageHead('Окна для полётов', { back: '#/today', sub: 'Модель · место · дата · <span class="badge online">online</span>' });
 
   if (!navigator.onLine && !wx.data) {
     h += `<div class="banner warn">Погода недоступна офлайн. Приложение продолжает работать —
@@ -854,21 +903,22 @@ function viewWeather() {
   }
 
   h += `<div class="card">`;
-  h += field('Локация', selectHtml('wxsite',
+  h += field('Модель', selectHtml('wxmodel',
+    [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
+      .concat(S.aircraft.map((a) => {
+        const w = a.maxWind || wxEstimate(a);
+        const alt = a.maxAlt || WX_DEFAULT_ALT[a.type] || 100;
+        return [a.id, `${a.name} · ${a.maxWind ? '' : '≈'}${w} м/с · до ${alt} м`];
+      })),
+    wx.aircraftId, 'data-change="weather-model"'),
+    'Порог и высота — из карточки модели; «≈» — оценка по типу и весу');
+  h += field('Место', selectHtml('wxsite',
     [['', '— выберите —']]
       .concat(sitesWithCoords.map((s) => [s.id, s.name]))
       .concat([['gps', 'Моё местоположение (GPS)']]),
     wx.siteId, 'data-change="weather-site"'),
     sitesWithCoords.length ? '' : 'У локаций пока нет координат — добавьте их в «Ещё → Локации»');
-  h += field('Модель', selectHtml('wxmodel',
-    [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с)`]]
-      .concat(S.aircraft.map((a) => [a.id, a.name + (a.maxWind ? ` (до ${a.maxWind} м/с)` : ` (порог ${WX_DEFAULT_WIND} м/с)`)])),
-    wx.aircraftId, 'data-change="weather-model"'),
-    'Порог ветра задаётся в карточке модели («Макс. ветер»)');
-  h += `<div class="seg" style="margin-bottom:12px">
-    ${['Сегодня', 'Завтра', 'Послезавтра'].map((t, i) =>
-      `<button data-act="weather-day" data-i="${i}" aria-pressed="${wx.day === i}">${t}</button>`).join('')}
-  </div>`;
+  h += field('Дата', selectHtml('wxday', wxDayOptions(), String(wx.day), 'data-change="weather-day"'));
   h += `<button class="btn btn-primary" data-act="weather-load" ${wx.loading ? 'disabled' : ''}>
     ${wx.loading ? 'Запрашиваю прогноз…' : 'Показать прогноз'}</button>`;
   h += '</div>';
@@ -876,7 +926,9 @@ function viewWeather() {
   if (wx.error) h += `<div class="banner warn">${esc(wx.error)}</div>`;
 
   if (wx.data) {
-    const day = wxDay(wx.data.json, wx.day, maxW);
+    // Индекс дня привязан к датам прогноза: вчерашний кэш не сдвигает дни.
+    const baseIdx = (wx.data.json.daily.time || []).indexOf(todayISO());
+    const day = baseIdx < 0 ? null : wxDay(wx.data.json, baseIdx + wx.day, lim.maxW, lim.alt);
     const age = Date.now() - wx.data.fetched;
     const ago = age < 90000 ? 'только что'
       : age < 3600000 ? Math.round(age / 60000) + ' мин назад'
@@ -884,23 +936,27 @@ function viewWeather() {
     h += `<p class="small muted">${esc(wx.data.place)} · прогноз получен ${ago}
       ${age > 3 * 3600 * 1000 ? ' — <span style="color:var(--warn)">устарел, обновите</span>' : ''}</p>`;
     if (!day) {
-      h += `<div class="banner warn">На этот день прогноза нет — обновите.</div>`;
+      h += `<div class="banner warn">Сохранённый прогноз устарел или не покрывает эту дату — нажмите «Показать прогноз».</div>`;
     } else {
       if (day.windows.length) {
         h += `<div class="banner ok">Окна для полёта: ${day.windows.map((w) =>
           `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join(', ')}</div>`;
       } else {
-        h += `<div class="banner warn">В светлое время подходящих окон нет (порог ${maxW} м/с).</div>`;
+        h += `<div class="banner warn">В светлое время подходящих окон нет
+          (порог ${lim.maxW} м/с${lim.name ? ' для «' + esc(lim.name) + '»' : ''}).</div>`;
       }
-      h += `<div class="small muted" style="margin-bottom:8px">Светлое время: ${day.sunrise}–${day.sunset} ·
-        порог ${maxW} м/с, порывы до ${(maxW * 1.4).toFixed(0)} м/с · «до 200 м» — максимум ветра на 80–180 м</div>`;
+      h += `<div class="small muted" style="margin-bottom:8px">
+        ${lim.name ? esc(lim.name) + ': ' : ''}порог ${lim.est && lim.name ? '≈' : ''}${lim.maxW} м/с,
+        порывы до ${(lim.maxW * 1.4).toFixed(0)} м/с, высота полёта до ${lim.alt} м
+        ${day.topLevel ? `(ветер проверен на 10–${day.topLevel} м)` : '(ветер проверен у земли)'} ·
+        светлое время ${day.sunrise}–${day.sunset}</div>`;
       h += '<div class="card flat">';
       h += day.hours.filter((hr) => hr.light).map((hr) => {
         const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
         return `<div class="row" style="min-height:44px;padding:6px 14px">
           <span class="mono nowrap" style="width:52px">${String(hr.hh).padStart(2, '0')}:00</span>
-          <span class="grow small">ветер ${hr.w10.toFixed(0)}, порывы ${hr.gust.toFixed(0)},
-            до 200 м ${hr.alt.toFixed(0)} м/с
+          <span class="grow small">ветер ${hr.w10.toFixed(0)}, порывы ${hr.gust.toFixed(0)}${day.topLevel
+            ? `, на высоте ${hr.alt.toFixed(0)}` : ''} м/с
             <span class="muted">· ${Math.round(hr.temp)}° · осадки ${hr.pp}%</span></span>
           <span style="width:12px;height:12px;border-radius:50%;background:${col};flex:none"></span>
         </div>`;
@@ -1280,8 +1336,8 @@ const ACTIONS = {
     if (!form || !('geolocation' in navigator)) return;
     el.textContent = 'Определяю…';
     navigator.geolocation.getCurrentPosition((pos) => {
-      form.elements.lat.value = pos.coords.latitude.toFixed(5);
-      form.elements.lon.value = pos.coords.longitude.toFixed(5);
+      form.elements.coords.value =
+        pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5);
       el.textContent = 'Определить по GPS';
     }, () => {
       el.textContent = 'GPS недоступен — разрешите геопозицию';
@@ -1289,7 +1345,6 @@ const ACTIONS = {
   },
 
   /* --- Погода --- */
-  'weather-day': (el) => { UI.wx.day = +el.dataset.i; render(true); },
   'weather-load': () => {
     UI.wx.loading = true;
     UI.wx.error = '';
@@ -1381,9 +1436,10 @@ function openModelForm(a) {
       ${field('Производитель', `<input type="text" name="manufacturer" value="${esc(a.manufacturer || '')}">`)}
       ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
     </div>
+    ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
     <div class="grid2">
-      ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
-      ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="30" step="0.5" value="${a.maxWind || ''}">`, 'для окон погоды')}
+      ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="30" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
+      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
     </div>
     ${field('Фото', `<input type="file" name="photo" accept="image/*">`, a.photo ? 'Фото уже есть — новое заменит его' : '')}
     ${field('Заметки', `<textarea name="notes">${esc(a.notes || '')}</textarea>`)}
@@ -1415,10 +1471,8 @@ function openSiteForm(s) {
   openModal(isNew ? 'Новая локация' : 'Изменить локацию', `<form data-form="site" ${s.id ? `data-id="${s.id}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(s.name || '')}" placeholder="напр. Поле за деревней">`)}
     ${field('Где это', `<input type="text" name="place" value="${esc(s.place || '')}" placeholder="адрес или описание">`)}
-    <div class="grid2">
-      ${field('Широта', `<input type="text" name="lat" inputmode="decimal" value="${s.lat != null ? s.lat : ''}" placeholder="55.7558">`)}
-      ${field('Долгота', `<input type="text" name="lon" inputmode="decimal" value="${s.lon != null ? s.lon : ''}" placeholder="37.6176">`)}
-    </div>
+    ${field('Координаты', `<input type="text" name="coords" inputmode="text" value="${s.lat != null ? s.lat + ', ' + s.lon : ''}" placeholder="55.7558, 37.6176">`,
+      'Вставьте одной строкой из Яндекс.Карт или Google Maps (широта, долгота)')}
     <button class="btn" type="button" data-act="site-gps">Определить по GPS</button>
     <div class="hint" style="margin:-4px 0 10px">Координаты нужны для окон погоды и открытия на карте. GPS работает без интернета.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
@@ -1496,6 +1550,8 @@ const FORMS = {
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
+    const maxAlt = +fd.get('maxAlt');
+    a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
     a.notes = fd.get('notes').trim();
     const photo = fd.get('photo');
     if (photo && photo.size) { a.photo = photo; dropPhotoURL(a.id); }
@@ -1532,10 +1588,13 @@ const FORMS = {
     const s = form.dataset.id ? S.sites.find((x) => x.id === form.dataset.id) : { id: uid() };
     s.name = fd.get('name').trim();
     s.place = fd.get('place').trim();
-    const lat = parseFloat(String(fd.get('lat')).replace(',', '.'));
-    const lon = parseFloat(String(fd.get('lon')).replace(',', '.'));
-    s.lat = isFinite(lat) && Math.abs(lat) <= 90 ? +lat.toFixed(5) : null;
-    s.lon = isFinite(lon) && Math.abs(lon) <= 180 ? +lon.toFixed(5) : null;
+    // Одно поле «широта, долгота» — как копируется из карт.
+    const nums = String(fd.get('coords')).match(/-?\d+\.\d+|-?\d+/g) || [];
+    const lat = parseFloat(nums[0]);
+    const lon = parseFloat(nums[1]);
+    const valid = isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    s.lat = valid ? +lat.toFixed(5) : null;
+    s.lon = valid ? +lon.toFixed(5) : null;
     s.notes = fd.get('notes').trim();
     s.isDefault = !!fd.get('isDefault');
     if (s.isDefault) {
@@ -1869,6 +1928,9 @@ document.addEventListener('change', (e) => {
     UI.wx.siteId = el.value;
   } else if (kind === 'weather-model') {
     UI.wx.aircraftId = el.value;
+    render(true);
+  } else if (kind === 'weather-day') {
+    UI.wx.day = +el.value || 0;
     render(true);
   }
 });
