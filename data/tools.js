@@ -3,8 +3,10 @@
 // Ничего стороннего внутрь приложения не встраивается.
 //
 // Правило: перед добавлением или правкой ссылки — сверить с актуальной
-// документацией (Context7) и проверить, что адрес живой (HTTP 200).
-// Последняя проверка всех ссылок: 2026-08-23.
+// документацией (Context7) и проверить САМУ СТРАНИЦУ, а не только код ответа:
+// HTTP 200 + заголовок/содержимое соответствуют назначению + ресурс известен
+// сообществу. HTTP 200 у припаркованного или вредоносного домена — не проверка.
+// Последняя проверка всех ссылок: 2026-08-24.
 window.RC = window.RC || {};
 
 RC.TOOLS = [
@@ -134,12 +136,12 @@ RC.TOOLS = [
     src: 'rcplanes.online — открытый калькулятор ЦТ',
   },
   {
-    id: 'calc-cg-adamone',
+    id: 'calc-cg-wing',
     cat: 'calc',
-    name: 'CG Calculator (Adam One)',
-    desc: 'Классический калькулятор центровки: до трёх панелей крыла, стабилизатор, MAC.',
-    url: 'https://adamone.rchomepage.com/cg_calc.htm',
-    src: 'adamone.rchomepage.com — известный калькулятор сообщества',
+    name: 'Центровка летающего крыла',
+    desc: 'Flying Wing CG Calculator V3: CG, MAC и аэродинамический фокус по геометрии крыла.',
+    url: 'https://fwcg.3dzone.dk/',
+    src: 'fwcg.3dzone.dk — известный калькулятор сообщества (наследник fwcg.ru)',
   },
   {
     id: 'calc-wing-loading',
@@ -156,6 +158,58 @@ RC.TOOLS = [
     desc: 'Пересчёт ватт в амперы по напряжению батареи: проверка ESC и проводки по току.',
     url: 'https://www.omnicalculator.com/physics/watts-to-amps',
     src: 'omnicalculator.com — Watts to Amps Calculator',
+  },
+
+  // Подбор компонентов и базы данных
+  {
+    id: 'db-mqtb',
+    cat: 'db',
+    name: 'Mini Quad Test Bench',
+    desc: 'Измеренная на стенде тяга и токи реальных моторов и пропеллеров — данные, а не реклама.',
+    url: 'https://www.miniquadtestbench.com/',
+    src: 'miniquadtestbench.com — известный стенд сообщества',
+  },
+  {
+    id: 'db-rotorbuilds',
+    cat: 'db',
+    name: 'RotorBuilds',
+    desc: 'Каталог реальных сборок: списки комплектующих, фото и обсуждения — удобно подсмотреть проверенную связку.',
+    url: 'https://rotorbuilds.com/',
+    src: 'rotorbuilds.com — крупнейшая база сборок FPV',
+  },
+  {
+    id: 'db-fpvbuilder',
+    cat: 'db',
+    name: 'FPVBuilder',
+    desc: 'Онлайн-подбор комплектующих дрона с проверкой совместимости: крепёж, питание, UART, аналог/цифра.',
+    url: 'https://fpvbuilder.io/en',
+    src: 'fpvbuilder.io — бесплатный конструктор сборок',
+  },
+  {
+    id: 'db-fpvknowitall',
+    cat: 'db',
+    name: 'FPV Know-It-All',
+    desc: 'Проверенные списки комплектующих и гайды Джошуа Бардвелла (англ.).',
+    url: 'https://www.fpvknowitall.com/',
+    src: 'fpvknowitall.com — Joshua Bardwell',
+  },
+
+  // Погода
+  {
+    id: 'weather-windy',
+    cat: 'weather',
+    name: 'Windy',
+    desc: 'Карта ветра и прогноз по высотам: ветер, порывы, осадки, облачность в точке полётов.',
+    url: 'https://www.windy.com/',
+    src: 'windy.com — известный метеосервис',
+  },
+  {
+    id: 'weather-uavforecast',
+    cat: 'weather',
+    name: 'UAV Forecast',
+    desc: 'Прогноз специально для полётов дронов: ветер по высотам, Kp-индекс, видимость, «можно ли лететь».',
+    url: 'https://www.uavforecast.com/',
+    src: 'uavforecast.com — сервис для пилотов БПЛА',
   },
 
   // Документация
@@ -205,5 +259,7 @@ RC.TOOL_CATS = [
   { id: 'config', name: 'Web-конфигураторы' },
   { id: 'firmware', name: 'Прошивки и десктоп-приложения' },
   { id: 'calc', name: 'Калькуляторы' },
+  { id: 'db', name: 'Подбор и базы данных' },
+  { id: 'weather', name: 'Погода' },
   { id: 'docs', name: 'Документация' },
 ];
