@@ -939,26 +939,37 @@ function viewWeather() {
       h += `<div class="banner warn">Сохранённый прогноз устарел или не покрывает эту дату — нажмите «Показать прогноз».</div>`;
     } else {
       if (day.windows.length) {
-        h += `<div class="banner ok">Окна для полёта: ${day.windows.map((w) =>
-          `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join(', ')}</div>`;
+        h += `<div class="banner ok" style="font-size:16px"><span>Можно лететь:
+          <strong>${day.windows.map((w) =>
+            `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join('</strong> и <strong>')}</strong></span></div>`;
       } else {
-        h += `<div class="banner warn">В светлое время подходящих окон нет
-          (порог ${lim.maxW} м/с${lim.name ? ' для «' + esc(lim.name) + '»' : ''}).</div>`;
+        h += `<div class="banner warn" style="font-size:16px">Сегодня лучше не лететь${lim.name ? ' на «' + esc(lim.name) + '»' : ''}:
+          весь день ветер выше ${lim.maxW} м/с или осадки.</div>`;
       }
       h += `<div class="small muted" style="margin-bottom:8px">
-        ${lim.name ? esc(lim.name) + ': ' : ''}порог ${lim.est && lim.name ? '≈' : ''}${lim.maxW} м/с,
-        порывы до ${(lim.maxW * 1.4).toFixed(0)} м/с, высота полёта до ${lim.alt} м
-        ${day.topLevel ? `(ветер проверен на 10–${day.topLevel} м)` : '(ветер проверен у земли)'} ·
-        светлое время ${day.sunrise}–${day.sunset}</div>`;
+        ${lim.name ? '«' + esc(lim.name) + '» держит' : 'Порог'} ${lim.est && lim.name ? 'примерно ' : ''}до ${lim.maxW} м/с ·
+        летает до ${lim.alt} м · светлое время ${day.sunrise}–${day.sunset}</div>`;
+
+      h += `<div class="h2">Час за часом</div>
+        <p class="small muted" style="margin-bottom:8px">Полоска — сколько «съедено» от допустимого ветра
+        модели: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
+        и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
       h += day.hours.filter((hr) => hr.light).map((hr) => {
+        const worst = Math.max(hr.w10, hr.alt, hr.gust / 1.4);
+        const load = Math.min(1.15, worst / lim.maxW);
         const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
-        return `<div class="row" style="min-height:44px;padding:6px 14px">
-          <span class="mono nowrap" style="width:52px">${String(hr.hh).padStart(2, '0')}:00</span>
-          <span class="grow small">ветер ${hr.w10.toFixed(0)}, порывы ${hr.gust.toFixed(0)}${day.topLevel
-            ? `, на высоте ${hr.alt.toFixed(0)}` : ''} м/с
-            <span class="muted">· ${Math.round(hr.temp)}° · осадки ${hr.pp}%</span></span>
-          <span style="width:12px;height:12px;border-radius:50%;background:${col};flex:none"></span>
+        const word = hr.verdict === 'ok' ? 'можно' : hr.verdict === 'warn' ? 'на пределе' : 'не стоит';
+        const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
+        const rain = hr.pp >= 15 || hr.prec > 0.1 ? ` · дождь ${hr.pp}%` : '';
+        return `<div class="wxr">
+          <div class="wxr-top">
+            <span class="mono nowrap">${String(hr.hh).padStart(2, '0')}:00</span>
+            <div class="gauge"><i style="width:${Math.round(load * 100 / 1.15)}%;background:${col}"></i></div>
+            <span class="chip ${chipCls}">${word}</span>
+          </div>
+          <div class="wxr-sub">ветер у земли ${hr.w10.toFixed(0)} м/с${day.topLevel
+            ? ` · на высоте ${hr.alt.toFixed(0)}` : ''} · порывы до ${hr.gust.toFixed(0)} · ${Math.round(hr.temp)}°${rain}</div>
         </div>`;
       }).join('');
       h += '</div>';
@@ -1138,7 +1149,30 @@ const ACTIONS = {
   'dismiss-hi': () => { lsSet('rcp.hi', '1'); render(); },
 
   /* --- Модели --- */
-  'add-model': () => openModelForm(null),
+  'add-model': () => {
+    openModal('Новая модель', `<div class="card flat">` +
+      rowBtn('data-act="model-empty"',
+        `<span class="grow"><span class="t">Пустая модель</span><span class="d">Заполню сам</span></span>`) +
+      RC.AIRCRAFT_PRESETS.map((p, i) => rowBtn(`data-act="model-preset" data-i="${i}"`,
+        `<span class="grow"><span class="t">${esc(p.name)}</span><span class="d">${esc(p.desc)}</span></span>`)).join('') +
+      `</div><p class="small muted" style="margin-top:8px">Готовые платформы приходят с заводскими ТТХ
+      и типовой комплектацией — всё можно поменять в карточке.</p>`);
+  },
+  'model-empty': () => { closeModal(); openModelForm(null); },
+  'model-preset': async (el) => {
+    const p = RC.AIRCRAFT_PRESETS[+el.dataset.i];
+    if (!p) return;
+    const a = {
+      id: uid(), createdAt: Date.now(), statusManual: '',
+      name: p.name, type: p.type, manufacturer: p.manufacturer,
+      weight: p.weight, wingspan: p.wingspan,
+      maxWind: p.maxWind, maxAlt: p.maxAlt, notes: p.notes,
+      components: JSON.parse(JSON.stringify(p.components)),
+    };
+    await put('aircraft', a);
+    closeModal();
+    go('#/model/' + a.id);
+  },
   'edit-model': () => openModelForm(S.aircraft.find((a) => a.id === UI.arg)),
   'del-model': (el) => confirmModal(
     'Удалить модель вместе с историей полётов, обслуживанием и конфигурациями? Это нельзя отменить.',

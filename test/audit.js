@@ -32,6 +32,7 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'packing', 'weather',
   const payload = '<img src=x onerror="window.__xss=1">Проба';
   await page.evaluate(() => { location.hash = '#/fleet'; });
   await page.click('[data-act="add-model"]');
+  await page.click('[data-act="model-empty"]');
   await page.fill('dialog input[name="name"]', payload);
   await page.click('dialog button[type="submit"]');
   await page.waitForSelector('.head h1');

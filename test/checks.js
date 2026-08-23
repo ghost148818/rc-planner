@@ -14,7 +14,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const sandbox = {};
 sandbox.window = sandbox; // как в браузере: window — глобальный объект
 vm.createContext(sandbox);
-for (const f of ['data/checklists.js', 'data/tools.js', 'data/packing.js', 'data/changelog.js']) {
+for (const f of ['data/checklists.js', 'data/presets.js', 'data/tools.js', 'data/packing.js', 'data/changelog.js']) {
   vm.runInContext(read(f), sandbox, { filename: f });
 }
 const RC = sandbox.RC;
@@ -30,6 +30,21 @@ for (const c of RC.CHECKLISTS) {
   ok(!ids.has(c.id), `id ${c.id} уникален`);
   ids.add(c.id);
   ok(c.items.every((i) => i.t && typeof i.t === 'string'), `пункты «${c.name}» непустые`);
+}
+
+console.log('Готовые платформы:');
+ok(Array.isArray(RC.AIRCRAFT_PRESETS) && RC.AIRCRAFT_PRESETS.length >= 3, 'есть готовые платформы');
+const presetIds = new Set();
+for (const p of RC.AIRCRAFT_PRESETS) {
+  ok(p.id && p.name && p.desc && p.notes, `«${p.name || p.id}» описана`);
+  ok(['quad', 'plane', 'wing', 'other'].includes(p.type), `«${p.name}»: тип известен`);
+  ok(p.weight > 300 && p.weight <= 10000, `«${p.name}»: снаряжённый вес правдоподобен (${p.weight} г)`);
+  ok(p.wingspan > 100 && p.wingspan <= 4000, `«${p.name}»: размах/диагональ правдоподобны`);
+  ok(p.maxWind >= 3 && p.maxWind <= 15, `«${p.name}»: порог ветра в разумных пределах`);
+  ok(p.maxAlt >= 10 && p.maxAlt <= 200, `«${p.name}»: высота полёта до 200 м`);
+  ok(p.components && Object.values(p.components).every((c) => c && c.name), `«${p.name}»: компоненты заполнены`);
+  ok(!presetIds.has(p.id), `«${p.id}» уникален`);
+  presetIds.add(p.id);
 }
 
 console.log('Инструменты:');

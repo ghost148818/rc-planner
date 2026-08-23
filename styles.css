@@ -417,6 +417,22 @@ details.fold .fold-body { padding: 0 2px 14px; }
   max-height: 50vh;
 }
 
+/* ---------- Почасовой прогноз ---------- */
+.wxr { padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.wxr:last-child { border-bottom: 0; }
+.wxr-top { display: flex; align-items: center; gap: 10px; }
+.wxr-top .chip { min-width: 96px; justify-content: center; }
+.gauge {
+  flex: 1;
+  min-width: 56px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--card-2);
+  overflow: hidden;
+}
+.gauge i { display: block; height: 100%; border-radius: 4px; }
+.wxr-sub { color: var(--mut); font-size: 12.5px; margin-top: 4px; }
+
 /* ---------- Модальные окна ---------- */
 dialog {
   border: 0;

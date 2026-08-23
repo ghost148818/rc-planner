@@ -22,6 +22,7 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
 
   // 1. Модель
   await page.click('[data-act="add-model"]');
+  await page.click('[data-act="model-empty"]');
   await page.fill('dialog input[name="name"]', 'Test Wing');
   await page.selectOption('dialog select[name="type"]', 'wing');
   await page.click('dialog button[type="submit"]');

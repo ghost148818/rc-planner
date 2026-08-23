@@ -39,6 +39,7 @@ const css = read('styles.css');
 const js = [
   'db.js',
   'data/checklists.js',
+  'data/presets.js',
   'data/tools.js',
   'data/packing.js',
   'data/changelog.js',
