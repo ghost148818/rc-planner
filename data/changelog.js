@@ -6,6 +6,17 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: 2,
+    date: '2026-08-23',
+    title: 'Актуальный каталог инструментов',
+    items: [
+      'Конфигураторы теперь работают из браузера: Betaflight App, Blackbox Explorer, ExpressLRS Web Flasher, EdgeTX Buddy, ESC Configurator, KISS Ultra, VTX Tables.',
+      'Калькуляторы заменены на рабочие: подбор мотора, время полёта, центровка (два варианта), нагрузка на крыло, мощность и ток.',
+      'Десктоп-приложения (INAV и ExpressLRS Configurator) перенесены в раздел «Прошивки».',
+      'Все ссылки каталога проверены на доступность.',
+    ],
+  },
+  {
     v: 1,
     date: '2026-08-23',
     title: 'Первый выпуск',
