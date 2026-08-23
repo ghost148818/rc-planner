@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'">
+  <meta name="theme-color" content="#14181e">
+  <meta name="build" content="__VERSION__">
+  <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
+  <title>RC Planner</title>
+  <script>
+    // Тема до первой отрисовки, чтобы не мигало.
+    try {
+      var t = localStorage.getItem('rcp.theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+  <!-- build:pwa -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-180.png">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!-- /build:pwa -->
+  <!-- build:css -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- /build:css -->
+</head>
+<body>
+  <main id="views" aria-live="polite"></main>
+  <nav id="tabbar" aria-label="Основная навигация"></nav>
+  <div id="modal-root"></div>
+  <!-- build:js -->
+  <script src="db.js"></script>
+  <script src="data/checklists.js"></script>
+  <script src="data/tools.js"></script>
+  <script src="data/packing.js"></script>
+  <script src="data/changelog.js"></script>
+  <script src="app.js"></script>
+  <!-- /build:js -->
+</body>
+</html>

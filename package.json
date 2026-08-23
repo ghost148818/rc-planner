@@ -1,0 +1,26 @@
+{
+  "name": "rc-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота",
+  "license": "MIT",
+  "scripts": {
+    "icons": "node make-icons.js",
+    "build": "node build.js",
+    "test:data": "node test/checks.js",
+    "test:audit": "node test/audit.js",
+    "test:single": "node test/single.js",
+    "test:pwa": "node test/pwa.js",
+    "test:visual": "node test/visual.js",
+    "test": "npm run test:data && npm run test:audit && npm run test:single && npm run test:pwa && npm run test:visual",
+    "release": "npm run build && npm test",
+    "setup": "npm install && npx playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0",
+    "sharp": "^0.34.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
