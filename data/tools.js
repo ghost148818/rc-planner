@@ -246,6 +246,22 @@ RC.TOOLS = [
     src: 'manual.edgetx.org',
   },
   {
+    id: 'doc-uchet-bvs',
+    cat: 'docs',
+    name: 'Госуслуги: учёт БВС',
+    desc: 'Официальный портал учёта беспилотных воздушных судов (обязателен для БВС от 150 г до 30 кг).',
+    url: 'https://uchetbvs.gosuslugi.ru/',
+    src: 'gosuslugi.ru — государственный портал (проверено владельцем)',
+  },
+  {
+    id: 'doc-favt',
+    cat: 'docs',
+    name: 'Росавиация: учёт БВС и СВС',
+    desc: 'Правила государственного учёта беспилотных и сверхлёгких воздушных судов.',
+    url: 'https://favt.gov.ru/dejatelnost-ucet-bespilotnyh-grajdanskih-vozdyshnih-sudov-i-sverkhlyogkih-grazhdanskih-vozdushnih-sudov/',
+    src: 'favt.gov.ru — Федеральное агентство воздушного транспорта (проверено владельцем)',
+  },
+  {
     id: 'doc-oscarliang',
     cat: 'docs',
     name: 'Oscar Liang — FPV guides',

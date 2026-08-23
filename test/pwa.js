@@ -10,7 +10,10 @@ const PUB = path.join(__dirname, '..', 'public');
 (async () => {
   const srv = await serve(PUB);
   const browser = await chromium.launch();
-  const { context, page, errors } = await newPage(browser);
+  const { context, page, errors } = await newPage(browser, {
+    geolocation: { latitude: 55.75, longitude: 37.62 },
+    permissions: ['geolocation'],
+  });
 
   await page.goto(srv.url);
   await page.waitForSelector('#tabbar .tab');
@@ -48,6 +51,15 @@ const PUB = path.join(__dirname, '..', 'public');
     return document.getElementById('views').innerHTML.length;
   });
   ok(offNav > 100, 'офлайн: навигация работает');
+
+  // Экран погоды офлайн: запрос честно падает в «недоступно офлайн», не в ошибку
+  await page.evaluate(() => { location.hash = '#/weather'; });
+  await page.waitForSelector('select[name="wxsite"]');
+  await page.selectOption('select[name="wxsite"]', 'gps');
+  await page.click('[data-act="weather-load"]');
+  await page.waitForFunction(() =>
+    document.getElementById('views').textContent.includes('офлайн'), null, { timeout: 15000 });
+  ok(true, 'офлайн: погода показывает «недоступна офлайн», приложение живо');
   await context.setOffline(false);
 
   const realErrors = errors.filter((e) => !/Failed to load resource|ERR_INTERNET_DISCONNECTED|fetch/i.test(e));
