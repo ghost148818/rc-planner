@@ -571,7 +571,11 @@ function viewModel() {
   // Паспорт
   const specs = [
     ['Тип', TYPES[a.type] || '—'], ['Производитель', a.manufacturer],
-    ['Вес', a.weight ? a.weight + ' г' : ''], ['Размах', a.wingspan ? a.wingspan + ' мм' : ''],
+    ['Вес (сухой)', a.weight ? a.weight + ' г' : ''], ['Размах', a.wingspan ? a.wingspan + ' мм' : ''],
+    ['АКБ модели', (() => {
+      const b = S.batteries.find((x) => x.id === a.batteryId);
+      return b ? b.label + (b.weight && a.weight ? ` → взлётный ${a.weight + b.weight} г` : b.weight ? ` · ${b.weight} г` : '') : '';
+    })()],
   ].filter((x) => x[1]);
   if (specs.length) {
     h += '<div class="h2">Паспорт</div><div class="card">' +
@@ -712,7 +716,10 @@ function viewPrep() {
       UI.prep.tplId, 'data-change="prep-template"'));
   }
   h += `<div class="grid2">
-    ${field('Локация', selectHtml('prepSite', siteOptions(), UI.prep.siteId, 'data-change="prep-site"'))}
+    ${field('Локация', `<div style="display:flex;gap:8px">
+      ${selectHtml('prepSite', siteOptions(), UI.prep.siteId, 'data-change="prep-site" style="flex:1;min-width:0"')}
+      <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
+    </div>`)}
     ${field('Аккумулятор', selectHtml('prepBatt', battOptions(), UI.prep.batteryId, 'data-change="prep-batt"'))}
   </div>`;
   h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
@@ -1118,7 +1125,8 @@ function viewWeather() {
   h += field('Модель', selectHtml('wxmodel',
     [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
       .concat(S.aircraft.map((a) => {
-        const w = a.maxWind || wxEstimate(a, (S.batteries.find((x) => x.id === wx.batteryId) || {}).weight);
+        const bId = a.id === wx.aircraftId ? wx.batteryId : (a.batteryId || '');
+        const w = a.maxWind || wxEstimate(a, (S.batteries.find((x) => x.id === bId) || {}).weight);
         const alt = a.maxAlt || WX_DEFAULT_ALT[a.type] || 100;
         return [a.id, `${a.name} · ${a.maxWind ? '' : '≈'}${w} м/с · до ${alt} м`];
       })),
@@ -1611,6 +1619,12 @@ const ACTIONS = {
     box.hidden = false;
     openMapPicker(box, box.closest('form'));
   },
+  // С чек-листа: открыть выбранную локацию (или новую) сразу с картой.
+  'prep-site-map': () => {
+    if (!UI.prep) return;
+    const s = S.sites.find((x) => x.id === UI.prep.siteId) || null;
+    openSiteForm(s, true);
+  },
   'site-gps': (el) => {
     const form = el.closest('form');
     if (!form || !('geolocation' in navigator)) return;
@@ -1731,6 +1745,10 @@ function openModelForm(a, presetId) {
       ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
     </div>
     ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
+    ${field('Аккумулятор модели', selectHtml('batteryId',
+      [['', '— не выбран —']].concat(S.batteries.filter((b) => b.status !== 'retired').map((b) =>
+        [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')])), a.batteryId),
+      'Вес АКБ прибавится к сухому весу в окнах погоды')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
       ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
@@ -1787,16 +1805,23 @@ function openMapPicker(box, form) {
     mLat: has ? iLat : null, mLon: has ? iLon : null,
   };
   box.innerHTML = `<div class="mp">
+    <div class="mp-search">
+      <input type="text" class="mp-q" placeholder="Найти место (город, деревня…)" enterkeyhint="search">
+      <button type="button" class="mp-go">Найти</button>
+    </div>
+    <div class="mp-found small muted" hidden></div>
     <div class="mp-view"><div class="mp-layer"></div><div class="mp-pin" hidden>${ICONS.sites}</div></div>
     <div class="mp-bar">
       <button type="button" class="mp-zo" aria-label="Дальше">−</button>
       <button type="button" class="mp-zi" aria-label="Ближе">+</button>
       <span class="small muted mp-hint">Тап — поставить точку</span>
-      <a class="small" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>
+      <a class="small mp-ya" href="#" target="_blank" rel="noopener noreferrer">Я.Карты</a>
+      <a class="small" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OSM</a>
     </div></div>`;
   const view = $('.mp-view', box);
   const layer = $('.mp-layer', box);
   const pin = $('.mp-pin', box);
+  const ya = $('.mp-ya', box);
 
   function draw() {
     const w = view.clientWidth, h = view.clientHeight;
@@ -1823,7 +1848,43 @@ function openMapPicker(box, form) {
       pin.style.left = ((mapLon2x(st.mLon, st.z) - cx) * MAP_TILE + w / 2) + 'px';
       pin.style.top = ((mapLat2y(st.mLat, st.z) - cy) * MAP_TILE + h / 2) + 'px';
     } else pin.hidden = true;
+    // Открыть точку (или центр) в Яндекс.Картах: на телефоне ссылка
+    // сама поднимает установленное приложение, на десктопе — сайт.
+    const yLat = st.mLat != null ? st.mLat : st.lat;
+    const yLon = st.mLon != null ? st.mLon : st.lon;
+    ya.href = 'https://yandex.ru/maps/?pt=' + yLon.toFixed(5) + ',' + yLat.toFixed(5) + '&z=' + st.z + '&l=map';
   }
+
+  // Поиск места — Nominatim (OSM), только по кнопке/Enter: политика
+  // сервиса запрещает автодополнение и чаще 1 запроса в секунду.
+  const qInput = $('.mp-q', box);
+  const found = $('.mp-found', box);
+  let searching = false;
+  async function search() {
+    const q = qInput.value.trim();
+    if (!q || searching) return;
+    searching = true;
+    found.hidden = false;
+    found.textContent = 'Ищу…';
+    try {
+      const res = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ru&q=' + encodeURIComponent(q));
+      const list = await res.json();
+      if (list.length) {
+        st.lat = parseFloat(list[0].lat);
+        st.lon = parseFloat(list[0].lon);
+        st.z = Math.max(st.z, 12);
+        found.textContent = list[0].display_name;
+        draw();
+      } else {
+        found.textContent = 'Не нашлось — уточните запрос.';
+      }
+    } catch (e) {
+      found.textContent = 'Поиск недоступен офлайн.';
+    }
+    searching = false;
+  }
+  $('.mp-go', box).addEventListener('click', search);
+  qInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
 
   // Перетаскивание: слой едет transform'ом, центр фиксируется на отпускании.
   let drag = null;
@@ -1862,7 +1923,8 @@ function openMapPicker(box, form) {
   draw();
 }
 
-function openSiteForm(s) {
+// showMap — открыть форму сразу с раскрытой мини-картой.
+function openSiteForm(s, showMap) {
   const isNew = !s;
   s = s || {};
   openModal(isNew ? 'Новая локация' : 'Изменить локацию', `<form data-form="site" ${s.id ? `data-id="${s.id}"` : ''}>
@@ -1883,6 +1945,10 @@ function openSiteForm(s) {
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${s.id ? `<button class="btn btn-danger" type="button" data-act="del-site" data-id="${s.id}">Удалить</button>` : ''}
   </form>`);
+  if (showMap) {
+    const box = $('#modal-root .site-map-box');
+    if (box) { box.hidden = false; openMapPicker(box, box.closest('form')); }
+  }
 }
 
 // Оценка веса пакета (г) по химии, банкам и ёмкости — типовая удельная
@@ -2017,6 +2083,7 @@ const FORMS = {
     a.manufacturer = fd.get('manufacturer').trim();
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
+    a.batteryId = fd.get('batteryId') || null;
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -2419,6 +2486,9 @@ document.addEventListener('change', (e) => {
     UI.wx.siteId = el.value;
   } else if (kind === 'weather-model') {
     UI.wx.aircraftId = el.value;
+    // АКБ, привязанная к модели, подставляется сама (можно переопределить)
+    const wa = S.aircraft.find((x) => x.id === el.value);
+    UI.wx.batteryId = (wa && wa.batteryId && S.batteries.some((b) => b.id === wa.batteryId)) ? wa.batteryId : '';
     render(true);
   } else if (kind === 'weather-batt') {
     UI.wx.batteryId = el.value;

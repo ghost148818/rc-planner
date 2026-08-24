@@ -445,6 +445,28 @@ details.fold .fold-body { padding: 0 2px 14px; }
 
 /* Мини-карта выбора точки (OSM) */
 .mp { margin-bottom: 10px; }
+.map-btn {
+  flex: none;
+  width: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--mut);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-btn svg { width: 22px; height: 22px; }
+.mp-search { display: flex; gap: 8px; margin-bottom: 6px; }
+.mp-search .mp-q { flex: 1; }
+.mp-search .mp-go {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 0 14px;
+  min-height: 44px;
+}
+.mp-found { margin: -2px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-view {
   position: relative;
   height: 300px;
