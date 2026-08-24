@@ -38,13 +38,26 @@ const presetIds = new Set();
 for (const p of RC.AIRCRAFT_PRESETS) {
   ok(p.id && p.name && p.desc && p.notes, `«${p.name || p.id}» описана`);
   ok(['quad', 'plane', 'wing', 'other'].includes(p.type), `«${p.name}»: тип известен`);
-  ok(p.weight > 300 && p.weight <= 10000, `«${p.name}»: снаряжённый вес правдоподобен (${p.weight} г)`);
+  ok(p.weight > 300 && p.weight <= 10000, `«${p.name}»: сухой вес правдоподобен (${p.weight} г)`);
   ok(p.wingspan > 100 && p.wingspan <= 4000, `«${p.name}»: размах/диагональ правдоподобны`);
   ok(p.maxWind >= 6 && p.maxWind <= 30, `«${p.name}»: порог ветра в разумных пределах`);
   ok(p.maxAlt >= 10 && p.maxAlt <= 200, `«${p.name}»: высота полёта до 200 м`);
   ok(p.components && Object.values(p.components).every((c) => c && c.name), `«${p.name}»: компоненты заполнены`);
   ok(!presetIds.has(p.id), `«${p.id}» уникален`);
   presetIds.add(p.id);
+}
+
+console.log('Готовые аккумуляторы:');
+ok(Array.isArray(RC.BATTERY_PRESETS) && RC.BATTERY_PRESETS.length >= 3, 'есть готовые аккумуляторы');
+const battIds = new Set();
+for (const b of RC.BATTERY_PRESETS) {
+  ok(b.id && b.label && b.desc, `«${b.label || b.id}» описан`);
+  ok(['LiPo', 'Li-Ion', 'LiFe', 'NiMH'].includes(b.chem), `«${b.label}»: химия известна`);
+  ok(b.cells >= 1 && b.cells <= 14 && b.p >= 1 && b.p <= 10, `«${b.label}»: банки S/P правдоподобны`);
+  ok(b.capacity > 100 && b.capacity <= 60000, `«${b.label}»: ёмкость правдоподобна`);
+  ok(b.weight > 30 && b.weight <= 5000, `«${b.label}»: вес правдоподобен (${b.weight} г)`);
+  ok(!battIds.has(b.id), `«${b.id}» уникален`);
+  battIds.add(b.id);
 }
 
 console.log('Инструменты:');

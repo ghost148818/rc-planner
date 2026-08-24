@@ -31,7 +31,7 @@ const UI = {
   importData: null,   // разобранный файл импорта до подтверждения
   updateReady: false, // service worker ждёт активации
   wx: {               // экран «Окна для полётов»
-    siteId: '', aircraftId: '', day: 0,
+    siteId: '', aircraftId: '', batteryId: '', day: 0,
     loading: false, error: '', data: null, // data: {fetched, place, json}
   },
   navCount: 0,        // сколько маршрутов прошли — для кнопки «Назад»
@@ -67,6 +67,14 @@ function todayISO() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
     '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Всё время в приложении — московское (решение владельца, 2026-08-25):
+// прогноз запрашивается в Europe/Moscow, дата «сегодня» для привязки
+// к дням прогноза тоже берётся по МСК, а не по поясу устройства.
+const WX_TZ = 'Europe/Moscow';
+function wxTodayISO() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: WX_TZ });
 }
 
 const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -297,12 +305,12 @@ async function migrateIfNeeded() {
 const ic = (inner, sw) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw || 1.8}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 const ICONS = {
   today: ic('<path d="M3 11l9-8 9 8"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>'),
-  // мультиротор на фоне самолёта
-  fleet: ic('<g opacity="0.55" transform="translate(12.6 -0.6) scale(0.46)"><path d="M12 3.5v16"/><path d="M12 8 3.5 10.8v1.7L12 11.6l8.5.9v-1.7L12 8Z"/><path d="M9.3 19.5h5.4"/></g><g transform="translate(-0.4 4.2) scale(0.8)"><circle cx="5.2" cy="5.2" r="2.7"/><circle cx="18.8" cy="5.2" r="2.7"/><circle cx="5.2" cy="18.8" r="2.7"/><circle cx="18.8" cy="18.8" r="2.7"/><path d="m7.1 7.1 9.8 9.8M16.9 7.1 7.1 16.9"/><circle cx="12" cy="12" r="2.6"/></g>'),
+  // самолёт главный (на них летают больше), мультиротор рядом
+  fleet: ic('<g transform="translate(-1.2 3.2) scale(0.85)"><path d="M12 3.5v16"/><path d="M12 8 3.5 10.8v1.7L12 11.6l8.5.9v-1.7L12 8Z"/><path d="M9.3 19.5h5.4"/></g><g transform="translate(13.4 0.6) scale(0.44)"><circle cx="5.2" cy="5.2" r="2.7"/><circle cx="18.8" cy="5.2" r="2.7"/><circle cx="5.2" cy="18.8" r="2.7"/><circle cx="18.8" cy="18.8" r="2.7"/><path d="m7.1 7.1 9.8 9.8M16.9 7.1 7.1 16.9"/><circle cx="12" cy="12" r="2.6"/></g>'),
   // летящий самолёт
   flight: ic('<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2Z"/>', 1.6),
-  // FPV-рюкзак с антенной
-  packing: ic('<path d="M4.5 20V11a4.5 4.5 0 0 1 4.5-4.5h6A4.5 4.5 0 0 1 19.5 11v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20Z"/><path d="M9.5 6.5V5A1.8 1.8 0 0 1 11.3 3.2h1.4A1.8 1.8 0 0 1 14.5 5v1.5"/><path d="M8.5 21.5v-4a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5v4"/><path d="M17.2 6 21 1.8"/><circle cx="21.2" cy="1.7" r="0.9" fill="currentColor" stroke="none"/>'),
+  // рюкзак: ручка, клапан, передний карман
+  packing: ic('<rect x="5" y="7" width="14" height="14.5" rx="3"/><path d="M9.5 7V5.5a2.5 2.5 0 0 1 5 0V7"/><path d="M5 12.5h14"/><path d="M8.5 21.5v-4.5a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5v4.5"/>'),
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>',
   chev: ic('<path d="m9 6 6 6-6 6"/>', 2),
   back: ic('<path d="M15 6 9 12l6 6"/>', 2),
@@ -318,6 +326,7 @@ const ICONS = {
   wxRain: ic('<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M16 14v5M8 14v5M12 16.5v5"/>'),
   wxSnow: ic('<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01" stroke-width="2.6"/>'),
   wxFog: ic('<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M16.5 17.5H7M15 21H9.5"/>'),
+  wxMoon: ic('<path d="M20 12.5A8 8 0 1 1 11.5 4a6.5 6.5 0 0 0 8.5 8.5Z"/>'),
   // «Ещё» и разное
   weather: ic('<path d="M9.6 4.6A2 2 0 1 1 11 8H2.5M12.6 19.4A2 2 0 1 0 14 16H2.5M17.3 7.3a2.5 2.5 0 1 1 1.8 4.3H2.5"/>'),
   tools: ic('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>'),
@@ -813,28 +822,36 @@ function viewPack() {
 
 /* ---------- Окна для полётов (погода, online) ---------- */
 
-// Оценка допустимого ветра (м/с) по ТТХ модели, если пилот не задал свой
-// порог. База по типу; лёгкие модели парусят, тяжёлые стабильнее.
+// Оценка допустимого ветра (м/с), если пилот не задал свой порог.
+// Считается от ПОЛНОГО веса (сухая модель + выбранная АКБ) и габаритов:
+// лёгкие парусят, тяжёлые пробивают ветер; большой long-range квад
+// (диагональ > 300 мм) инертнее и тяговооружён слабее фристайла.
 // Шкала рассчитана на опытных пилотов (решение владельца, 2026-08-24).
-function wxEstimate(a) {
+// Калибровка по парку владельца (2026-08-25): Talon Pro + 6S3P ≈ 18,
+// X8 ≈ 20, T2 + 6S2P ≈ 18, 5″ + 6S 1450 ≈ 20, 10″ + 6S 8000 ≈ 18.
+function wxEstimate(a, battWeight) {
   let w = { quad: 20, plane: 16, wing: 18, other: 16 }[a.type] || WX_DEFAULT_WIND;
-  if (a.weight) {
-    if (a.weight < 250) w -= 6;
-    else if (a.weight < 600) w -= 2;
-    else if (a.weight > 2000) w += 2;
+  const total = (a.weight || 0) + (battWeight || 0);
+  if (total) {
+    if (total < 250) w -= 6;
+    else if (total < 600) w -= 2;
+    else if (total > 2000) w += 2;
   }
+  if (a.type === 'quad' && a.wingspan > 300) w -= 4;
   return Math.max(6, w);
 }
 
-// Порог ветра и высота полёта текущей выбранной модели.
+// Порог ветра и высота полёта текущей выбранной модели (+ АКБ).
 function wxLimits() {
   const a = S.aircraft.find((x) => x.id === UI.wx.aircraftId);
-  if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false, name: '' };
+  if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false, name: '', battName: '' };
+  const b = S.batteries.find((x) => x.id === UI.wx.batteryId);
   return {
-    maxW: a.maxWind || wxEstimate(a),
+    maxW: a.maxWind || wxEstimate(a, b && b.weight),
     alt: a.maxAlt || WX_DEFAULT_ALT[a.type] || 100,
     est: !a.maxWind,
     name: a.name,
+    battName: b ? b.label : '',
   };
 }
 
@@ -853,18 +870,21 @@ function wxLevels(alt) {
 // 45/48 — туман, 71-77 и 85/86 — снег, 51-67 и 80-82 — дождь, 95+ — гроза.
 function wxIcon(hr) {
   const c = hr.code;
+  let name;
   if (c != null) {
-    if (c === 45 || c === 48) return 'wxFog';
-    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'wxSnow';
-    if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95) return 'wxRain';
-    if (c === 3) return 'wxCloud';
-    if (c === 1 || c === 2) return 'wxPartly';
-    return 'wxSun';
-  }
-  if (hr.pp >= 15 || hr.prec > 0.1) return 'wxRain';
-  if (hr.cloud >= 85) return 'wxCloud';
-  if (hr.cloud >= 40) return 'wxPartly';
-  return 'wxSun';
+    if (c === 45 || c === 48) name = 'wxFog';
+    else if ((c >= 71 && c <= 77) || c === 85 || c === 86) name = 'wxSnow';
+    else if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95) name = 'wxRain';
+    else if (c === 3) name = 'wxCloud';
+    else if (c === 1 || c === 2) name = 'wxPartly';
+    else name = 'wxSun';
+  } else if (hr.pp >= 15 || hr.prec > 0.1) name = 'wxRain';
+  else if (hr.cloud >= 85) name = 'wxCloud';
+  else if (hr.cloud >= 40) name = 'wxPartly';
+  else name = 'wxSun';
+  // Ночью ясное и малооблачное небо — луна.
+  if (!hr.light && (name === 'wxSun' || name === 'wxPartly')) name = 'wxMoon';
+  return name;
 }
 
 // Окно «Как считается»: те же числа, что и в wxVerdict, — если правите
@@ -876,23 +896,40 @@ function wxHelpHtml() {
   const row = (what, bad, warn) => `<tr><td>${what}</td><td class="wx-bad">${bad}</td><td class="wx-warn">${warn}</td></tr>`;
   return `<p class="small muted">Порядок такой: <b>модель → место → дата</b>. Ограничения берутся
     из карточки модели, а не из общей константы.</p>
-    <p class="small">Сейчас считаем для: <b>${lim.name ? esc(lim.name) : 'без модели'}</b> —
+    <p class="small">Сейчас считаем для: <b>${lim.name ? esc(lim.name) : 'без модели'}</b>${lim.battName ? ' + <b>' + esc(lim.battName) + '</b>' : ''} —
     порог ${lim.est && lim.name ? 'примерно ' : ''}<b>${w} м/с</b>, высота полёта <b>${lim.alt} м</b>.
-    ${lim.est && lim.name ? 'Порог оценён по типу и весу: задайте «Макс. ветер» в карточке, чтобы считать по-своему.' : ''}</p>
+    ${lim.est && lim.name ? 'Порог оценён по полному весу (сухая модель + АКБ) и габаритам: задайте «Макс. ветер» в карточке, чтобы считать по-своему.' : ''}</p>
 
     <div class="h2">Вердикт часа</div>
-    <p class="small muted">Достаточно одного сработавшего условия — берётся худшее.</p>
+    <p class="small muted">Достаточно одного сработавшего условия — берётся худшее.
+    Пороги ниже — для простых условий (день, ясно).</p>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Что смотрим</th><th>Не стоит</th><th>На пределе</th></tr></thead>
       <tbody>
         ${row('Ветер у земли', `> ${w} м/с`, `> ${n(w * 0.8)} м/с`)}
         ${row('Ветер на высоте полёта', `> ${w} м/с`, `> ${n(w * 0.8)} м/с`)}
         ${row('Порывы', `> ${n(w * 1.4)} м/с`, `> ${n(w * 1.15)} м/с`)}
-        ${row('Осадки', 'от 0,2 мм/ч', '—')}
         ${row('Вероятность осадков', 'от 60 %', 'от 40 %')}
       </tbody>
     </table></div>
-    <p class="small muted">Температура и облачность показываются, но на вердикт не влияют.</p>
+
+    <div class="h2">Сложные условия — порог ниже</div>
+    <p class="small">Ночь не запрещает полёт, но управлять сложнее. В непростых условиях
+    порог ветра умножается на коэффициент (условия перемножаются: ночь + морось = 0.8 × 0.85 ≈ 0.7):</p>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Условие</th><th></th><th>Порог для «${lim.name ? esc(lim.name) : 'модели'}»</th></tr></thead>
+      <tbody>
+        <tr><td>Темнота (ночь)</td><td>× 0.8</td><td>${n(w * 0.8)} м/с</td></tr>
+        <tr><td>Туман днём</td><td>× 0.75</td><td>${n(w * 0.75)} м/с</td></tr>
+        <tr><td>Морось, слабый дождь</td><td>× 0.85</td><td>${n(w * 0.85)} м/с</td></tr>
+        <tr><td>Слабый снег</td><td>× 0.8</td><td>${n(w * 0.8)} м/с</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="h2">Точно не стоит — при любом ветре</div>
+    <p class="small">Явный дождь (от 0,2 мм/ч или коды умеренного и сильного дождя),
+    снегопад, <b>метель</b> (снег при ветре сильнее 8 м/с), гроза и <b>туман ночью</b> —
+    час всегда «не стоит».</p>
 
     <div class="h2">Ветер на высоте</div>
     <p class="small">Прогноз даёт ветер на 10, 80, 120 и 180 м. Берём только уровни в пределах
@@ -900,20 +937,53 @@ function wxHelpHtml() {
     выше 140 м — ещё 180 м. Поэтому низколетящий квад не бракуется ветром на 180 метрах.</p>
 
     <div class="h2">Как складывается окно</div>
-    <p class="small">Окно — это подряд идущие светлые часы (от восхода до заката) без вердикта
-    «не стоит». Часы «на пределе» в окно входят: решение за вами. Полоска у часа показывает
-    худшее из ветра у земли, ветра на высоте и порывов (порывы приводятся к тому же масштабу
-    делением на 1,4) в долях от вашего порога.</p>
+    <p class="small">Окно — это подряд идущие часы без вердикта «не стоит», ночные тоже.
+    Часы «на пределе» в окно входят: решение за вами. Полоска у часа показывает худшее из
+    ветра у земли, ветра на высоте и порывов (порывы делятся на 1,4) в долях от порога
+    С УЧЁТОМ сложности условий этого часа.</p>
 
     <p class="small muted">Данные: Open-Meteo. Прогноз — ориентир, решение о вылете всегда за пилотом.</p>
     <button class="btn btn-primary" data-act="close-modal">Понятно</button>`;
 }
 
-// Оценка часа: ok / warn / bad по порогу ветра (м/с) и осадкам.
+// Ночью летают. Но в темноте, тумане и осадках управлять сложнее —
+// вместо запрета порог ветра умножается на коэффициент сложности k.
+// Возвращает {k, why}: множитель и человекочитаемые причины.
+function wxDifficulty(hr) {
+  let k = 1;
+  const why = [];
+  const c = hr.code;
+  if (!hr.light) { k *= 0.8; why.push('ночь'); }
+  if (c === 45 || c === 48) { k *= 0.75; why.push('туман'); }
+  const drizzle = (c >= 51 && c <= 61) || c === 80
+    || (c == null && hr.prec > 0 && hr.prec < 0.2);
+  if (drizzle) { k *= 0.85; why.push('морось'); }
+  else if (c === 71 || c === 85) { k *= 0.8; why.push('снег'); }
+  return { k, why };
+}
+
+// Жёсткие запреты: час «не стоит» независимо от ветра и порогов.
+// Коды WMO сверены с Open-Meteo (Context7 + живой запрос, 2026-08-25).
+function wxHardStop(hr) {
+  const c = hr.code;
+  if (hr.prec >= 0.2 || hr.pp >= 60) return 'осадки';
+  if (c == null) return '';
+  if (c >= 95) return 'гроза';
+  if (c === 63 || c === 65 || c === 66 || c === 67 || c === 81 || c === 82) return 'дождь';
+  if (c === 73 || c === 75 || c === 77 || c === 86) return 'снегопад';
+  if ((c === 71 || c === 85) && hr.w10 > 8) return 'метель';
+  if ((c === 45 || c === 48) && !hr.light) return 'туман ночью';
+  return '';
+}
+
+// Оценка часа: ok / warn / bad. Ветер сравнивается с эффективным
+// порогом maxW × k (k — сложность условий: темнота, туман, осадки).
 // alt — максимальный ветер на уровнях в пределах высоты полёта.
 function wxVerdict(hr, maxW) {
-  if (hr.w10 > maxW || hr.alt > maxW || hr.gust > maxW * 1.4 || hr.prec >= 0.2 || hr.pp >= 60) return 'bad';
-  if (hr.w10 > maxW * 0.8 || hr.alt > maxW * 0.8 || hr.gust > maxW * 1.15 || hr.pp >= 40) return 'warn';
+  if (wxHardStop(hr)) return 'bad';
+  const wEff = maxW * wxDifficulty(hr).k;
+  if (hr.w10 > wEff || hr.alt > wEff || hr.gust > wEff * 1.4) return 'bad';
+  if (hr.w10 > wEff * 0.8 || hr.alt > wEff * 0.8 || hr.gust > wEff * 1.15 || hr.pp >= 40) return 'warn';
   return 'ok';
 }
 
@@ -948,11 +1018,12 @@ function wxDay(json, dayIdx, maxW, altM) {
     hr.verdict = wxVerdict(hr, maxW);
     hours.push(hr);
   }
-  // Окна: подряд идущие светлые часы без вердикта bad.
+  // Окна: подряд идущие часы без вердикта bad. Ночь не запрещает
+  // полёт — она уже учтена коэффициентом сложности в вердикте.
   const windows = [];
   let run = null;
   hours.forEach((hr) => {
-    if (hr.light && hr.verdict !== 'bad') {
+    if (hr.verdict !== 'bad') {
       if (!run) run = { from: hr.hh, to: hr.hh };
       else run.to = hr.hh;
     } else if (run) { windows.push(run); run = null; }
@@ -993,7 +1064,7 @@ async function wxLoad() {
   }
   const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
     '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,cloud_cover,weather_code' +
-    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=auto&forecast_days=' + WX_DAYS;
+    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) + '&forecast_days=' + WX_DAYS;
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1014,11 +1085,11 @@ async function wxLoad() {
 }
 
 function wxDayOptions() {
-  // 7 дней от сегодня; индекс совпадает с daily-массивами прогноза.
+  // 7 дней от «сегодня» ПО МСК; индекс совпадает с daily-массивами прогноза.
   const names = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
   const out = [];
   for (let i = 0; i < WX_DAYS; i++) {
-    const d = new Date();
+    const d = new Date(wxTodayISO() + 'T12:00:00');
     d.setDate(d.getDate() + i);
     const label = i === 0 ? 'Сегодня' : i === 1 ? 'Завтра'
       : names[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS_RU[d.getMonth()];
@@ -1047,12 +1118,19 @@ function viewWeather() {
   h += field('Модель', selectHtml('wxmodel',
     [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
       .concat(S.aircraft.map((a) => {
-        const w = a.maxWind || wxEstimate(a);
+        const w = a.maxWind || wxEstimate(a, (S.batteries.find((x) => x.id === wx.batteryId) || {}).weight);
         const alt = a.maxAlt || WX_DEFAULT_ALT[a.type] || 100;
         return [a.id, `${a.name} · ${a.maxWind ? '' : '≈'}${w} м/с · до ${alt} м`];
       })),
     wx.aircraftId, 'data-change="weather-model"'),
-    'Порог и высота — из карточки модели; «≈» — оценка по типу и весу');
+    'Порог и высота — из карточки модели; «≈» — оценка по весу с АКБ и габаритам');
+  if (wx.aircraftId && !(S.aircraft.find((a) => a.id === wx.aircraftId) || {}).maxWind) {
+    h += field('Аккумулятор', selectHtml('wxbatt',
+      [['', '— без АКБ (сухой вес) —']]
+        .concat(S.batteries.filter((b) => b.status !== 'retired').map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')])),
+      wx.batteryId, 'data-change="weather-batt"'),
+      'Вес АКБ прибавляется к сухому весу модели в оценке порога');
+  }
   h += field('Место', selectHtml('wxsite',
     [['', '— выберите —']]
       .concat(sitesWithCoords.map((s) => [s.id, s.name]))
@@ -1068,7 +1146,7 @@ function viewWeather() {
 
   if (wx.data) {
     // Индекс дня привязан к датам прогноза: вчерашний кэш не сдвигает дни.
-    const baseIdx = (wx.data.json.daily.time || []).indexOf(todayISO());
+    const baseIdx = (wx.data.json.daily.time || []).indexOf(wxTodayISO());
     const day = baseIdx < 0 ? null : wxDay(wx.data.json, baseIdx + wx.day, lim.maxW, lim.alt);
     const age = Date.now() - wx.data.fetched;
     const ago = age < 90000 ? 'только что'
@@ -1089,21 +1167,25 @@ function viewWeather() {
       }
       h += `<div class="small muted" style="margin-bottom:8px">
         ${lim.name ? '«' + esc(lim.name) + '» держит' : 'Порог'} ${lim.est && lim.name ? 'примерно ' : ''}до ${lim.maxW} м/с ·
-        летает до ${lim.alt} м · светлое время ${day.sunrise}–${day.sunset}</div>`;
+        летает до ${lim.alt} м · восход ${day.sunrise} · закат ${day.sunset}</div>`;
 
       h += `<div class="h2">Час за часом</div>
         <p class="small muted" style="margin-bottom:8px">Полоска — сколько «съедено» от допустимого ветра
         модели: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
-      h += day.hours.filter((hr) => hr.light).map((hr) => {
+      h += day.hours.map((hr) => {
+        const diff = wxDifficulty(hr);
+        const stop = wxHardStop(hr);
+        const wEff = lim.maxW * diff.k;
         const worst = Math.max(hr.w10, hr.alt, hr.gust / 1.4);
-        const load = Math.min(1.15, worst / lim.maxW);
+        const load = Math.min(1.15, worst / wEff);
         const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
         const word = hr.verdict === 'ok' ? 'можно' : hr.verdict === 'warn' ? 'на пределе' : 'не стоит';
         const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
-        const rain = hr.pp >= 15 || hr.prec > 0.1 ? ` · дождь ${hr.pp}%` : '';
-        return `<div class="wxr">
+        const rain = !stop && (hr.pp >= 15 || hr.prec > 0.1) ? ` · дождь ${hr.pp}%` : '';
+        const marks = (stop ? [stop] : diff.why).map((t) => ' · ' + t).join('');
+        return `<div class="wxr${hr.light ? '' : ' night'}">
           <div class="wxr-top">
             <span class="mono nowrap">${String(hr.hh).padStart(2, '0')}:00</span>
             <span class="wx-ic">${ICONS[wxIcon(hr)]}</span>
@@ -1111,10 +1193,13 @@ function viewWeather() {
             <span class="chip ${chipCls}">${word}</span>
           </div>
           <div class="wxr-sub">ветер у земли ${hr.w10.toFixed(0)} м/с${day.topLevel
-            ? ` · на высоте ${hr.alt.toFixed(0)}` : ''} · порывы до ${hr.gust.toFixed(0)} · ${Math.round(hr.temp)}°${rain}</div>
+            ? ` · на высоте ${hr.alt.toFixed(0)}` : ''} · порывы до ${hr.gust.toFixed(0)} · ${Math.round(hr.temp)}°${rain}${marks}</div>
         </div>`;
       }).join('');
       h += '</div>';
+      const wlat = wx.data.json.latitude, wlon = wx.data.json.longitude;
+      h += `<a class="btn" style="margin-top:8px" href="https://www.windy.com/?${wlat},${wlon},11"
+        target="_blank" rel="noopener noreferrer">Открыть в Windy <span class="badge online">online</span></a>`;
       h += `<p class="small muted" style="margin-top:8px">Данные: Open-Meteo (бесплатно, без регистрации).
         Прогноз — ориентир, решение о вылете всегда за пилотом.</p>`;
     }
@@ -1177,7 +1262,7 @@ function viewTools() {
   }
   RC.TOOL_CATS.forEach((cat) => {
     const list = RC.TOOLS.filter((t) => t.cat === cat.id);
-    h += `<details class="fold" ${!favTools.length && cat.id === 'config' ? 'open' : ''}><summary>${esc(cat.name)} (${list.length})</summary>
+    h += `<details class="fold"><summary>${esc(cat.name)} (${list.length})</summary>
       <div class="fold-body"><div class="card flat">${list.map(toolRow).join('')}</div></div></details>`;
   });
   h += `<p class="small muted" style="margin-top:12px">Каталог — ссылки на официальные источники.
@@ -1217,7 +1302,7 @@ function viewBatteries() {
   h += '<div class="card flat">';
   h += S.batteries.map((b) => rowBtn(`data-act="edit-batt" data-id="${b.id}"`,
     `<span class="grow"><span class="t">${esc(b.label)}</span>
-     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''} · ${b.cycles || 0} циклов</span></span>
+     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов</span></span>
      ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}`)).join('');
   h += '</div>';
   return h;
@@ -1518,6 +1603,28 @@ const ACTIONS = {
   'del-pack-yes': async (el) => { await del('packing', el.dataset.id); closeModal(); go('#/packing'); },
 
   /* --- Локации, батареи, шаблоны --- */
+  // Карта Яндекса внутри формы локации. iframe создаётся через DOM:
+  // сборка сторожит литерал «айфрейм» как офлайн-нарушение, а это —
+  // online-функция по явному действию пользователя (CSP: frame-src yandex.ru).
+  'site-map': () => {
+    const box = $('#modal-root .site-map-box');
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+    const form = box.closest('form');
+    const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
+    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
+    const has = isFinite(lat) && isFinite(lon);
+    const fr = document.createElement('iframe');
+    fr.src = 'https://yandex.ru/map-widget/v1/?z=' + (has ? 15 : 9)
+      + '&ll=' + (has ? lon + ',' + lat : '37.62,55.75')
+      + (has ? '&pt=' + lon + ',' + lat : '');
+    fr.setAttribute('loading', 'lazy');
+    fr.style.cssText = 'width:100%;height:320px;border:0;border-radius:10px';
+    box.hidden = false;
+    box.innerHTML = '';
+    box.appendChild(fr);
+    fr.addEventListener('error', () => { box.innerHTML = '<div class="banner warn">Карта недоступна офлайн.</div>'; });
+  },
   'site-gps': (el) => {
     const form = el.closest('form');
     if (!form || !('geolocation' in navigator)) return;
@@ -1674,8 +1781,13 @@ function openSiteForm(s) {
     ${field('Где это', `<input type="text" name="place" value="${esc(s.place || '')}" placeholder="адрес или описание">`)}
     ${field('Координаты', `<input type="text" name="coords" inputmode="text" value="${s.lat != null ? s.lat + ', ' + s.lon : ''}" placeholder="55.7558, 37.6176">`,
       'Вставьте одной строкой из Яндекс.Карт или Google Maps (широта, долгота)')}
-    <button class="btn" type="button" data-act="site-gps">Определить по GPS</button>
-    <div class="hint" style="margin:-4px 0 10px">Координаты нужны для окон погоды и открытия на карте. GPS работает без интернета.</div>
+    <div class="btn-line">
+      <button class="btn" type="button" data-act="site-gps">Определить по GPS</button>
+      <button class="btn" type="button" data-act="site-map">Карта <span class="badge online">online</span></button>
+    </div>
+    <div class="site-map-box" hidden></div>
+    <div class="hint" style="margin:-4px 0 10px">Координаты нужны для окон погоды. GPS работает без
+      интернета; карта — Яндекс, прямо здесь: найдите точку и скопируйте координаты из её карточки.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
     ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
       <input type="checkbox" name="isDefault" ${s.isDefault ? 'checked' : ''} style="width:22px;height:22px"> Основная локация</label>`)}
@@ -1684,20 +1796,40 @@ function openSiteForm(s) {
   </form>`);
 }
 
-function openBattForm(b) {
-  const isNew = !b;
+// Оценка веса пакета (г) по химии, банкам и ёмкости — типовая удельная
+// энергия с проводами. Всегда правится вручную в форме.
+function battEstimateWeight(chem, cells, capacity) {
+  if (!cells || !capacity) return 0;
+  const dens = { LiPo: 145, 'Li-Ion': 220, LiFe: 110, NiMH: 75 }[chem] || 145;
+  const wh = capacity / 1000 * cells * 3.7;
+  return Math.round(wh / dens * 1000 / 10) * 10;
+}
+
+function openBattForm(b, presetId) {
+  const isNew = !b || !b.id;
   b = b || { chem: 'LiPo', status: 'ok' };
-  openModal(isNew ? 'Новый аккумулятор' : 'Аккумулятор', `<form data-form="batt" ${b.id ? `data-id="${b.id}"` : ''}>
+  const title = b.id ? 'Аккумулятор' : presetId ? 'Новый аккумулятор · проверьте' : 'Новый аккумулятор';
+  openModal(title, `<form data-form="batt" ${b.id ? `data-id="${b.id}"` : ''}>
+    ${isNew && !presetId && RC.BATTERY_PRESETS.length ? field('Готовые сборки',
+      selectHtml('battpreset', [['', '— или заполните вручную —']].concat(RC.BATTERY_PRESETS.map((p) => [p.id, p.label + ' · ' + p.desc])), '', 'data-change="batt-preset"')) : ''}
     ${field('Метка', `<input type="text" name="label" required value="${esc(b.label || '')}" placeholder="напр. LiPo 4S #3">`)}
     <div class="grid2">
       ${field('Химия', selectHtml('chem', [['LiPo', 'LiPo'], ['Li-Ion', 'Li-Ion'], ['LiFe', 'LiFe'], ['NiMH', 'NiMH']], b.chem))}
-      ${field('Банки (S)', `<input type="number" name="cells" min="1" max="14" value="${b.cells || ''}">`)}
+      ${field('Банки (S / P)', `<div style="display:flex;gap:8px;align-items:center">
+        <input type="number" name="cells" min="1" max="14" value="${b.cells || ''}" placeholder="6" style="flex:1">
+        <span class="muted">S ×</span>
+        <input type="number" name="p" min="1" max="10" value="${b.p || ''}" placeholder="1" style="flex:1">
+        <span class="muted">P</span></div>`)}
     </div>
     <div class="grid2">
       ${field('Ёмкость, мА·ч', `<input type="number" name="capacity" min="0" value="${b.capacity || ''}">`)}
-      ${field('Циклы', `<input type="number" name="cycles" min="0" value="${b.cycles || 0}">`, 'Растут сами после каждого полёта')}
+      ${field('Вес, г', `<input type="number" name="weight" min="0" value="${b.weight || ''}" placeholder="${battEstimateWeight(b.chem, b.cells, b.capacity) || 'оценю сам'}">`,
+        'пусто — оценка по химии и ёмкости')}
     </div>
-    ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
+    <div class="grid2">
+      ${field('Циклы', `<input type="number" name="cycles" min="0" value="${b.cycles || 0}">`, 'Растут сами после каждого полёта')}
+      ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
+    </div>
     ${field('Заметки', `<textarea name="notes">${esc(b.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${b.id ? `<button class="btn btn-danger" type="button" data-act="del-batt" data-id="${b.id}">Удалить</button>` : ''}
@@ -1861,7 +1993,9 @@ const FORMS = {
     b.label = fd.get('label').trim();
     b.chem = fd.get('chem');
     b.cells = +fd.get('cells') || null;
+    b.p = +fd.get('p') || null;
     b.capacity = +fd.get('capacity') || null;
+    b.weight = +fd.get('weight') || battEstimateWeight(b.chem, b.cells, b.capacity) || null;
     b.cycles = +fd.get('cycles') || 0;
     b.status = fd.get('status');
     b.notes = fd.get('notes').trim();
@@ -2182,6 +2316,9 @@ document.addEventListener('change', (e) => {
     if (!UI.prep) return;
     if (el.value === NEW_OPT) { el.value = UI.prep.batteryId || ''; openBattForm(null); }
     else UI.prep.batteryId = el.value;
+  } else if (kind === 'batt-preset') {
+    const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
+    if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
   } else if (kind === 'finish-site' || kind === 'finish-batt') {
     if (el.value !== NEW_OPT) return;
     const form = el.closest('form');
@@ -2193,6 +2330,9 @@ document.addEventListener('change', (e) => {
     UI.wx.siteId = el.value;
   } else if (kind === 'weather-model') {
     UI.wx.aircraftId = el.value;
+    render(true);
+  } else if (kind === 'weather-batt') {
+    UI.wx.batteryId = el.value;
     render(true);
   } else if (kind === 'weather-day') {
     UI.wx.day = +el.value || 0;

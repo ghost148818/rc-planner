@@ -1,20 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#14181e"/>
-  <!-- силуэт самолёта на втором плане -->
-  <g transform="translate(256 150) scale(3.6)" fill="none" stroke="#39c26d" stroke-opacity="0.38"
-     stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M0 -22v40"/>
-    <path d="M0 -8-30 2v5.5L0 1l30 6.5V2Z"/>
-    <path d="M-9 18h18"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c232e"/>
+      <stop offset="0.55" stop-color="#12161d"/>
+      <stop offset="1" stop-color="#0b0e13"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#39c26d" stop-opacity="0.16"/>
+      <stop offset="0.55" stop-color="#39c26d" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#39c26d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="jet" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ba55c"/>
+      <stop offset="1" stop-color="#5ee694"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1f5c39"/>
+      <stop offset="1" stop-color="#39c26d"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <!-- кольцо-окно: разомкнутая дуга -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="url(#ring)" stroke-width="22"
+          stroke-linecap="round" stroke-dasharray="792 264" stroke-dashoffset="-132"
+          transform="rotate(-90 256 256)" opacity="0.9"/>
+  <!-- линии ветра -->
+  <g stroke="#39c26d" stroke-opacity="0.45" stroke-width="16" stroke-linecap="round" fill="none">
+    <path d="M118 330 h74"/>
+    <path d="M96 282 h54"/>
   </g>
-  <!-- мультиротор на первом плане -->
-  <g transform="translate(256 316) scale(6.1)" fill="none" stroke="#39c26d"
-     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="-13.6" cy="-13.6" r="6.9"/>
-    <circle cx="13.6" cy="-13.6" r="6.9"/>
-    <circle cx="-13.6" cy="13.6" r="6.9"/>
-    <circle cx="13.6" cy="13.6" r="6.9"/>
-    <path d="M-9.7-9.7 9.7 9.7M9.7-9.7-9.7 9.7"/>
-    <circle cx="0" cy="0" r="5.2"/>
+  <!-- самолёт-дротик в наборе высоты -->
+  <g transform="rotate(45 256 256)">
+    <path d="M256 80
+             C 263 116 267 156 267 196
+             L 270 204 378 292 378 322 269 254
+             L 265 330 300 360 300 380 256 364 212 380 212 360 247 330
+             L 243 254 134 322 134 292 242 204
+             L 245 196 C 245 156 249 116 256 80 Z"
+          fill="url(#jet)"/>
   </g>
 </svg>

@@ -55,7 +55,9 @@ self.addEventListener('fetch', (e) => {
   }
 
   e.respondWith(
-    caches.match(req).then(
+    // ignoreSearch: иконки запрашиваются с ?v=<версия> (обновление значка
+    // установленного приложения), а в кэше лежат без query.
+    caches.match(req, { ignoreSearch: true }).then(
       (hit) =>
         hit ||
         fetch(req).then((res) => {

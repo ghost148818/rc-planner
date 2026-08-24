@@ -51,6 +51,16 @@ let manifest;
 try { manifest = JSON.parse(manifestSrc); } catch (e) { fail('pwa/manifest.json не разбирается: ' + e.message); }
 if (!manifest.name || !manifest.icons || !manifest.icons.length) fail('manifest без name или icons');
 
+// Версия иконок: меняется src в manifest — Chrome/Android замечает
+// обновление manifest и перекачивает значок установленного приложения.
+// (iOS обновляет apple-touch-icon только при переустановке — это
+// ограничение платформы, а не наше.)
+const iconsHash = crypto.createHash('sha1');
+for (const f of ICON_FILES) iconsHash.update(fs.readFileSync(path.join(ICON_DIR, f)));
+const iconsVer = iconsHash.digest('hex').slice(0, 8);
+manifest.icons = manifest.icons.map((i) => Object.assign({}, i, { src: i.src + '?v=' + iconsVer }));
+const manifestOut = JSON.stringify(manifest, null, 2) + '\n';
+
 // --- Вклейка по маркерам ---
 function replaceBlock(src, name, replacement) {
   const re = new RegExp('<!-- build:' + name + ' -->[\\s\\S]*?<!-- /build:' + name + ' -->');
@@ -65,8 +75,8 @@ html = replaceBlock(html, 'js', '<script>\n' + jsSafe + '\n</script>');
 
 const pwaHead = [
   '<link rel="manifest" href="manifest.json">',
-  '<link rel="apple-touch-icon" href="icons/apple-touch-180.png">',
-  '<link rel="icon" href="icons/icon.svg" type="image/svg+xml">',
+  '<link rel="apple-touch-icon" href="icons/apple-touch-180.png?v=' + iconsVer + '">',
+  '<link rel="icon" href="icons/icon.svg?v=' + iconsVer + '" type="image/svg+xml">',
 ].join('\n  ');
 
 const htmlPWA = replaceBlock(html, 'pwa', pwaHead);
@@ -89,7 +99,7 @@ for (const [re, what] of badPatterns) {
 
 // --- Версия ---
 const version = crypto.createHash('sha1')
-  .update(htmlPWA).update(manifestSrc)
+  .update(htmlPWA).update(manifestOut)
   .digest('hex').slice(0, 10);
 
 const outPWA = htmlPWA.replace(/__VERSION__/g, version);
@@ -102,7 +112,7 @@ fs.rmSync(PUB, { recursive: true, force: true });
 fs.mkdirSync(path.join(PUB, 'icons'), { recursive: true });
 fs.writeFileSync(path.join(PUB, 'index.html'), outPWA);
 fs.writeFileSync(path.join(PUB, 'sw.js'), sw);
-fs.writeFileSync(path.join(PUB, 'manifest.json'), manifestSrc);
+fs.writeFileSync(path.join(PUB, 'manifest.json'), manifestOut);
 fs.writeFileSync(path.join(PUB, '.nojekyll'), '');
 for (const f of ICON_FILES) {
   fs.copyFileSync(path.join(ICON_DIR, f), path.join(PUB, 'icons', f));

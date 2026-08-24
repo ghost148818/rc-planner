@@ -440,6 +440,8 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .wxr-top .chip { min-width: 96px; justify-content: center; }
 .wx-ic { color: var(--mut); flex: none; display: flex; }
 .wx-ic svg { width: 20px; height: 20px; }
+.wxr.night { background: rgba(0, 0, 0, 0.22); }
+.wxr.night .mono { color: var(--dim); }
 
 /* Таблица в окне «Как считается» */
 .tbl-wrap { overflow-x: auto; }
