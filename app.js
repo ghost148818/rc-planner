@@ -1603,27 +1603,13 @@ const ACTIONS = {
   'del-pack-yes': async (el) => { await del('packing', el.dataset.id); closeModal(); go('#/packing'); },
 
   /* --- Локации, батареи, шаблоны --- */
-  // Карта Яндекса внутри формы локации. iframe создаётся через DOM:
-  // сборка сторожит литерал «айфрейм» как офлайн-нарушение, а это —
-  // online-функция по явному действию пользователя (CSP: frame-src yandex.ru).
+  // Мини-карта выбора точки в форме локации (online, тайлы OSM).
   'site-map': () => {
     const box = $('#modal-root .site-map-box');
     if (!box) return;
     if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
-    const form = box.closest('form');
-    const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
-    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
-    const has = isFinite(lat) && isFinite(lon);
-    const fr = document.createElement('iframe');
-    fr.src = 'https://yandex.ru/map-widget/v1/?z=' + (has ? 15 : 9)
-      + '&ll=' + (has ? lon + ',' + lat : '37.62,55.75')
-      + (has ? '&pt=' + lon + ',' + lat : '');
-    fr.setAttribute('loading', 'lazy');
-    fr.style.cssText = 'width:100%;height:320px;border:0;border-radius:10px';
     box.hidden = false;
-    box.innerHTML = '';
-    box.appendChild(fr);
-    fr.addEventListener('error', () => { box.innerHTML = '<div class="banner warn">Карта недоступна офлайн.</div>'; });
+    openMapPicker(box, box.closest('form'));
   },
   'site-gps': (el) => {
     const form = el.closest('form');
@@ -1773,6 +1759,109 @@ function openMaintForm(m, aircraftId) {
   </form>`);
 }
 
+/* ---------- Мини-карта выбора точки (OSM, online) ----------
+   Тайлы tile.openstreetmap.org, схема slippy z/x/y (Web Mercator).
+   Математика проверена контрольными точками, живой тайл — curl 200
+   image/png (2026-08-25). Атрибуция OSM обязательна — ссылка в блоке.
+   Тап по карте вписывает координаты прямо в поле формы. */
+const MAP_TILES = 'https://tile.openstreetmap.org';
+const MAP_TILE = 256;
+function mapLon2x(lon, z) { return (lon + 180) / 360 * Math.pow(2, z); }
+function mapLat2y(lat, z) {
+  const r = lat * Math.PI / 180;
+  return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z);
+}
+function mapX2lon(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+function mapY2lat(y, z) {
+  const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z);
+  return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+function openMapPicker(box, form) {
+  const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
+  const iLat = parseFloat(nums[0]), iLon = parseFloat(nums[1]);
+  const has = isFinite(iLat) && isFinite(iLon) && Math.abs(iLat) <= 85 && Math.abs(iLon) <= 180;
+  // центр и метка; без координат стартуем с Москвы
+  const st = {
+    lat: has ? iLat : 55.7558, lon: has ? iLon : 37.6176, z: has ? 15 : 11,
+    mLat: has ? iLat : null, mLon: has ? iLon : null,
+  };
+  box.innerHTML = `<div class="mp">
+    <div class="mp-view"><div class="mp-layer"></div><div class="mp-pin" hidden>${ICONS.sites}</div></div>
+    <div class="mp-bar">
+      <button type="button" class="mp-zo" aria-label="Дальше">−</button>
+      <button type="button" class="mp-zi" aria-label="Ближе">+</button>
+      <span class="small muted mp-hint">Тап — поставить точку</span>
+      <a class="small" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a>
+    </div></div>`;
+  const view = $('.mp-view', box);
+  const layer = $('.mp-layer', box);
+  const pin = $('.mp-pin', box);
+
+  function draw() {
+    const w = view.clientWidth, h = view.clientHeight;
+    const cx = mapLon2x(st.lon, st.z), cy = mapLat2y(st.lat, st.z);
+    const max = Math.pow(2, st.z);
+    layer.style.transform = '';
+    layer.innerHTML = '';
+    const x0 = Math.floor(cx - w / 2 / MAP_TILE), x1 = Math.floor(cx + w / 2 / MAP_TILE);
+    const y0 = Math.floor(cy - h / 2 / MAP_TILE), y1 = Math.floor(cy + h / 2 / MAP_TILE);
+    for (let x = x0; x <= x1; x++) {
+      for (let y = Math.max(0, y0); y <= Math.min(max - 1, y1); y++) {
+        const img = document.createElement('img');
+        const wx = ((x % max) + max) % max; // долгота заворачивается
+        img.src = MAP_TILES + '/' + st.z + '/' + wx + '/' + y + '.png';
+        img.width = MAP_TILE; img.height = MAP_TILE;
+        img.draggable = false; img.alt = '';
+        img.style.cssText = 'position:absolute;left:' + Math.round((x - cx) * MAP_TILE + w / 2) +
+          'px;top:' + Math.round((y - cy) * MAP_TILE + h / 2) + 'px';
+        layer.appendChild(img);
+      }
+    }
+    if (st.mLat != null) {
+      pin.hidden = false;
+      pin.style.left = ((mapLon2x(st.mLon, st.z) - cx) * MAP_TILE + w / 2) + 'px';
+      pin.style.top = ((mapLat2y(st.mLat, st.z) - cy) * MAP_TILE + h / 2) + 'px';
+    } else pin.hidden = true;
+  }
+
+  // Перетаскивание: слой едет transform'ом, центр фиксируется на отпускании.
+  let drag = null;
+  view.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, y: e.clientY, moved: false };
+    view.setPointerCapture(e.pointerId);
+  });
+  view.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
+    if (drag.moved) layer.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  });
+  view.addEventListener('pointerup', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (drag.moved) {
+      st.lon = mapX2lon(mapLon2x(st.lon, st.z) - dx / MAP_TILE, st.z);
+      st.lat = mapY2lat(mapLat2y(st.lat, st.z) - dy / MAP_TILE, st.z);
+      draw();
+    } else {
+      // тап: точка под пальцем — в поле координат
+      const r = view.getBoundingClientRect();
+      const lon = mapX2lon(mapLon2x(st.lon, st.z) + (e.clientX - r.left - r.width / 2) / MAP_TILE, st.z);
+      const lat = mapY2lat(mapLat2y(st.lat, st.z) + (e.clientY - r.top - r.height / 2) / MAP_TILE, st.z);
+      st.mLat = lat; st.mLon = lon;
+      const input = form.querySelector('input[name="coords"]');
+      if (input) input.value = lat.toFixed(5) + ', ' + lon.toFixed(5);
+      draw();
+    }
+    drag = null;
+  });
+  view.addEventListener('pointercancel', () => { drag = null; layer.style.transform = ''; });
+  $('.mp-zi', box).addEventListener('click', () => { if (st.z < 18) { st.z++; draw(); } });
+  $('.mp-zo', box).addEventListener('click', () => { if (st.z > 3) { st.z--; draw(); } });
+  draw();
+}
+
 function openSiteForm(s) {
   const isNew = !s;
   s = s || {};
@@ -1787,7 +1876,7 @@ function openSiteForm(s) {
     </div>
     <div class="site-map-box" hidden></div>
     <div class="hint" style="margin:-4px 0 10px">Координаты нужны для окон погоды. GPS работает без
-      интернета; карта — Яндекс, прямо здесь: найдите точку и скопируйте координаты из её карточки.</div>
+      интернета; на карте тапните точку — координаты впишутся сами.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
     ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
       <input type="checkbox" name="isDefault" ${s.isDefault ? 'checked' : ''} style="width:22px;height:22px"> Основная локация</label>`)}
