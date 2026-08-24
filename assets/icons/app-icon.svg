@@ -1,10 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#14181e"/>
-  <g transform="translate(256 256)">
-    <!-- delta wing -->
-    <path d="M0 -148 L128 108 L34 74 L0 128 L-34 74 L-128 108 Z"
-          fill="none" stroke="#39c26d" stroke-width="26"
-          stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="0" cy="18" r="16" fill="#39c26d"/>
+  <!-- силуэт самолёта на втором плане -->
+  <g transform="translate(256 150) scale(3.6)" fill="none" stroke="#39c26d" stroke-opacity="0.38"
+     stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 -22v40"/>
+    <path d="M0 -8-30 2v5.5L0 1l30 6.5V2Z"/>
+    <path d="M-9 18h18"/>
+  </g>
+  <!-- мультиротор на первом плане -->
+  <g transform="translate(256 316) scale(6.1)" fill="none" stroke="#39c26d"
+     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="-13.6" cy="-13.6" r="6.9"/>
+    <circle cx="13.6" cy="-13.6" r="6.9"/>
+    <circle cx="-13.6" cy="13.6" r="6.9"/>
+    <circle cx="13.6" cy="13.6" r="6.9"/>
+    <path d="M-9.7-9.7 9.7 9.7M9.7-9.7-9.7 9.7"/>
+    <circle cx="0" cy="0" r="5.2"/>
   </g>
 </svg>

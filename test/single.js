@@ -24,7 +24,7 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.click('[data-act="add-model"]');
   await page.click('[data-act="model-empty"]');
   await page.fill('dialog input[name="name"]', 'Test Wing');
-  await page.selectOption('dialog select[name="type"]', 'wing');
+  await page.click('dialog [data-act="type-pick"][data-type="wing"]');
   await page.click('dialog button[type="submit"]');
   await page.waitForFunction(() => {
     const h = document.querySelector('.head h1');
@@ -46,10 +46,20 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.waitForSelector('#timer');
   ok(true, 'полёт начался, таймер идёт');
 
-  // 4. Итог
+  // 4. Итог: по дороге заводим локацию прямо из формы
   await page.click('[data-act="finish-flight"]');
   await page.fill('dialog input[name="durationMin"]', '5');
   await page.fill('dialog input[name="weather"]', 'ветер 3 м/с');
+  await page.selectOption('dialog select[name="siteId"]', '__new');
+  await page.waitForSelector('dialog input[name="name"]');
+  await page.fill('dialog input[name="name"]', 'Поле у реки');
+  await page.fill('dialog input[name="place"]', 'за деревней');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('dialog form[data-form="finish"]');
+  ok((await page.inputValue('dialog input[name="durationMin"]')) === '5',
+    'после добавления локации форма итога вернулась с введёнными данными');
+  ok((await page.inputValue('dialog select[name="siteId"]')) !== '__new',
+    'новая локация подставлена в поле');
   await page.click('dialog button[type="submit"]');
   await page.waitForSelector('.stat .v');
   ok((await page.textContent('.stat .v')) === '1', 'в карточке 1 полёт');

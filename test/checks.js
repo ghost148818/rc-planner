@@ -40,7 +40,7 @@ for (const p of RC.AIRCRAFT_PRESETS) {
   ok(['quad', 'plane', 'wing', 'other'].includes(p.type), `«${p.name}»: тип известен`);
   ok(p.weight > 300 && p.weight <= 10000, `«${p.name}»: снаряжённый вес правдоподобен (${p.weight} г)`);
   ok(p.wingspan > 100 && p.wingspan <= 4000, `«${p.name}»: размах/диагональ правдоподобны`);
-  ok(p.maxWind >= 3 && p.maxWind <= 15, `«${p.name}»: порог ветра в разумных пределах`);
+  ok(p.maxWind >= 6 && p.maxWind <= 30, `«${p.name}»: порог ветра в разумных пределах`);
   ok(p.maxAlt >= 10 && p.maxAlt <= 200, `«${p.name}»: высота полёта до 200 м`);
   ok(p.components && Object.values(p.components).every((c) => c && c.name), `«${p.name}»: компоненты заполнены`);
   ok(!presetIds.has(p.id), `«${p.id}» уникален`);
@@ -68,12 +68,15 @@ for (const p of RC.PACKING_PRESETS) {
 
 console.log('Что нового:');
 ok(RC.CHANGELOG.length >= 1 && RC.CHANGELOG.length <= 12, 'записей от 1 до 12');
-let prev = Infinity;
+const vs = RC.CHANGELOG.map((c) => c.v);
+ok(vs.every((v) => typeof v === 'string' && v.trim()), 'версии — непустые строки');
+ok(new Set(vs).size === vs.length, 'версии не повторяются');
+const dates = RC.CHANGELOG.map((c) => c.date);
+ok(dates.slice().sort().reverse().join() === dates.join(), 'выпуски идут от свежего к старому');
 for (const c of RC.CHANGELOG) {
-  ok(Number.isInteger(c.v) && c.v < prev, `v${c.v} убывает сверху вниз`);
-  prev = c.v;
   ok(/^\d{4}-\d{2}-\d{2}$/.test(c.date), `v${c.v}: дата в формате YYYY-MM-DD`);
   ok(c.title && c.items.length >= 1, `v${c.v}: есть заголовок и пункты`);
+  ok(c.items.every((t) => t.length <= 160), `v${c.v}: пункты не превращаются в стену текста`);
 }
 
 console.log('Каркас:');

@@ -124,7 +124,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   border-radius: 50%;
 }
 .back svg { width: 22px; height: 22px; }
-.head .head-act { color: var(--link); font-size: 15px; min-height: 40px; padding: 0 6px; }
+.head .head-act { color: var(--link); font-size: 15px; min-height: 40px; padding: 0 6px; flex: none; white-space: nowrap; }
 
 .h2 {
   font-size: 13px;
@@ -163,6 +163,8 @@ button.row:active, a.row:active { background: var(--card-2); }
 .row .d { display: block; color: var(--mut); font-size: 13px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
 .row .chev { color: var(--dim); flex: none; }
 .row .chev svg { width: 18px; height: 18px; }
+.row .row-ic { color: var(--mut); flex: none; display: flex; }
+.row .row-ic svg { width: 22px; height: 22px; }
 
 .thumb {
   width: 52px; height: 52px;
@@ -280,6 +282,20 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   font-size: 14px;
 }
 .seg button[aria-pressed="true"] { background: var(--card-2); color: var(--text); font-weight: 600; }
+/* Сегмент с иконками: класс модели в форме */
+.seg-ic button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 62px;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 6px 2px;
+}
+.seg-ic button svg { width: 24px; height: 24px; }
+.seg-ic button[aria-pressed="true"] svg { color: var(--ok); }
 
 /* ---------- Чек-лист ---------- */
 .ck {
@@ -422,6 +438,18 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .wxr:last-child { border-bottom: 0; }
 .wxr-top { display: flex; align-items: center; gap: 10px; }
 .wxr-top .chip { min-width: 96px; justify-content: center; }
+.wx-ic { color: var(--mut); flex: none; display: flex; }
+.wx-ic svg { width: 20px; height: 20px; }
+
+/* Таблица в окне «Как считается» */
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th, .tbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.tbl th { color: var(--mut); font-weight: 600; font-size: 12.5px; }
+.tbl td:first-child { color: var(--mut); }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl .wx-bad { color: var(--bad); white-space: nowrap; }
+.tbl .wx-warn { color: var(--warn); white-space: nowrap; }
 .gauge {
   flex: 1;
   min-width: 56px;
