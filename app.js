@@ -474,12 +474,22 @@ function viewToday() {
       <span class="badge online">online</span></span>
       <span class="d">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
 
-  // Флот со статусами
-  h += '<div class="h2">Флот</div><div class="card flat">';
-  h += S.aircraft.map((a) => rowBtn(`data-nav="#/model/${a.id}"`,
-    `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-     <span class="d">${TYPES[a.type] || ''} · ${sessionsOf(a.id).filter((s) => s.end).length} ${plural(sessionsOf(a.id).filter((s) => s.end).length, 'полёт', 'полёта', 'полётов')}</span></span>
-     ${chip(statusOf(a))}`)).join('');
+  // К вылету: только собранные модели (с установленным АКБ) — весь
+  // флот не дублируем, он живёт во вкладке «Флот».
+  const armed = S.aircraft.filter((a) => a.batteryId && S.batteries.some((b) => b.id === a.batteryId));
+  h += '<div class="h2">К вылету</div><div class="card flat">';
+  if (armed.length) {
+    h += armed.map((a) => {
+      const b = S.batteries.find((x) => x.id === a.batteryId);
+      return rowBtn(`data-nav="#/model/${a.id}"`,
+        `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+         <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
+         ${chip(statusOf(a))}`);
+    }).join('');
+  } else {
+    h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите модель к вылету</span>
+      <span class="d">Установите аккумулятор в карточке модели — она появится здесь</span></span>`, 'batteries');
+  }
   h += '</div>';
 
   // Незакрытое обслуживание
@@ -541,6 +551,15 @@ const COMPONENTS = [
   ['tx', 'Передатчик'], ['battery', 'Аккумулятор'],
 ];
 
+// АКБ ставится только в ОДНУ модель: занятые другими исчезают из выбора.
+function battOwner(bId) { return S.aircraft.find((x) => x.batteryId === bId); }
+function battFreeOptions(keepId) {
+  return [['', '— без аккумулятора —']].concat(
+    S.batteries
+      .filter((b) => b.status !== 'retired' && (b.id === keepId || !battOwner(b.id)))
+      .map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')]));
+}
+
 function viewModel() {
   const a = S.aircraft.find((x) => x.id === UI.arg);
   if (!a) return pageHead('Модель не найдена', { back: '#/fleet' });
@@ -560,6 +579,12 @@ function viewModel() {
       ${Object.keys(STATUS).filter((k) => k !== 'unknown').map((k) =>
         `<option value="${k}" ${a.statusManual === k ? 'selected' : ''}>Вручную: ${STATUS[k].label}</option>`).join('')}
     </select></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <span class="row-ic">${ICONS.batteries}</span>
+      ${selectHtml('modelBatt', battFreeOptions(a.batteryId), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+    </div>
+    <div class="hint" style="margin-top:4px">Модель с установленным АКБ считается собранной к вылету
+      и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>
     <div class="stat-line" style="margin-bottom:0">
       <div class="stat"><div class="v">${flights.length}</div><div class="k">${plural(flights.length, 'полёт', 'полёта', 'полётов')}</div></div>
       <div class="stat"><div class="v">${fmtDur(total)}</div><div class="k">налёт</div></div>
@@ -1206,8 +1231,9 @@ function viewWeather() {
       }).join('');
       h += '</div>';
       const wlat = wx.data.json.latitude, wlon = wx.data.json.longitude;
-      h += `<a class="btn" style="margin-top:8px" href="https://www.windy.com/?${wlat},${wlon},11"
-        target="_blank" rel="noopener noreferrer">Открыть в Windy <span class="badge online">online</span></a>`;
+      h += `<button class="btn" style="margin-top:8px" data-act="wx-windy" data-lat="${wlat}" data-lon="${wlon}">
+        Windy: карта ветра <span class="badge online">online</span></button>
+        <div class="windy-box" hidden></div>`;
       h += `<p class="small muted" style="margin-top:8px">Данные: Open-Meteo (бесплатно, без регистрации).
         Прогноз — ориентир, решение о вылете всегда за пилотом.</p>`;
     }
@@ -1310,7 +1336,7 @@ function viewBatteries() {
   h += '<div class="card flat">';
   h += S.batteries.map((b) => rowBtn(`data-act="edit-batt" data-id="${b.id}"`,
     `<span class="grow"><span class="t">${esc(b.label)}</span>
-     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов</span></span>
+     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${(() => { const o = battOwner(b.id); return o ? ` · в «${esc(o.name)}»` : ''; })()}</span></span>
      ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}`)).join('');
   h += '</div>';
   return h;
@@ -1619,6 +1645,19 @@ const ACTIONS = {
     box.hidden = false;
     openMapPicker(box, box.closest('form'));
   },
+  // Открыть точку из поля координат в Яндекс.Картах: на телефоне
+  // universal link поднимает установленное приложение.
+  'site-ya': () => {
+    const form = $('#modal-root form[data-form="site"]');
+    if (!form) return;
+    const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
+    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
+    const has = isFinite(lat) && isFinite(lon);
+    const url = has
+      ? `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`
+      : 'https://yandex.ru/maps/';
+    window.open(url, '_blank', 'noopener');
+  },
   // С чек-листа: открыть выбранную локацию (или новую) сразу с картой.
   'prep-site-map': () => {
     if (!UI.prep) return;
@@ -1640,6 +1679,26 @@ const ACTIONS = {
 
   /* --- Погода --- */
   'wx-help': () => openModal('Как считается окно', wxHelpHtml()),
+  // Превью Windy прямо на странице (embed-виджет; iframe через DOM —
+  // сборка сторожит литерал как офлайн-ресурс, а это online по кнопке).
+  'wx-windy': (el) => {
+    const box = $('.windy-box');
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+    const lat = el.dataset.lat, lon = el.dataset.lon;
+    const fr = document.createElement('iframe');
+    fr.src = 'https://embed.windy.com/embed2.html?lat=' + lat + '&lon=' + lon +
+      '&detailLat=' + lat + '&detailLon=' + lon +
+      '&zoom=10&overlay=wind&level=surface&menu=&message=true&marker=true' +
+      '&metricWind=m%2Fs&metricTemp=%C2%B0C';
+    fr.setAttribute('loading', 'lazy');
+    fr.style.cssText = 'width:100%;height:380px;border:0;border-radius:10px';
+    box.hidden = false;
+    box.innerHTML = '';
+    box.appendChild(fr);
+    box.insertAdjacentHTML('beforeend',
+      `<a class="small" style="display:block;margin-top:4px;text-align:right" href="https://www.windy.com/?${esc(lat)},${esc(lon)},11" target="_blank" rel="noopener noreferrer">Открыть Windy полностью</a>`);
+  },
   'weather-load': () => {
     UI.wx.loading = true;
     UI.wx.error = '';
@@ -1715,7 +1774,8 @@ function beginPrep(aircraftId) {
     tplId: tpl.id,
     items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null })),
     siteId: (S.sites.find((x) => x.isDefault) || {}).id || '',
-    batteryId: '',
+    // АКБ, установленный в модель, летит с ней
+    batteryId: (a.batteryId && S.batteries.some((b) => b.id === a.batteryId)) ? a.batteryId : '',
   };
 }
 
@@ -1745,10 +1805,8 @@ function openModelForm(a, presetId) {
       ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
     </div>
     ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
-    ${field('Аккумулятор модели', selectHtml('batteryId',
-      [['', '— не выбран —']].concat(S.batteries.filter((b) => b.status !== 'retired').map((b) =>
-        [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')])), a.batteryId),
-      'Вес АКБ прибавится к сухому весу в окнах погоды')}
+    ${field('Аккумулятор модели', selectHtml('batteryId', battFreeOptions(a.batteryId), a.batteryId || ''),
+      'Один АКБ — одна модель; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
       ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
@@ -1810,10 +1868,12 @@ function openMapPicker(box, form) {
       <button type="button" class="mp-go">Найти</button>
     </div>
     <div class="mp-found small muted" hidden></div>
-    <div class="mp-view"><div class="mp-layer"></div><div class="mp-pin" hidden>${ICONS.sites}</div></div>
+    <div class="mp-view"><div class="mp-layer"></div><div class="mp-pin" hidden>${ICONS.sites}</div>
+      <div class="mp-zoom">
+        <button type="button" class="mp-zi" aria-label="Ближе">+</button>
+        <button type="button" class="mp-zo" aria-label="Дальше">−</button>
+      </div></div>
     <div class="mp-bar">
-      <button type="button" class="mp-zo" aria-label="Дальше">−</button>
-      <button type="button" class="mp-zi" aria-label="Ближе">+</button>
       <span class="small muted mp-hint">Тап — поставить точку</span>
       <a class="small mp-ya" href="#" target="_blank" rel="noopener noreferrer">Я.Карты</a>
       <a class="small" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OSM</a>
@@ -1889,6 +1949,7 @@ function openMapPicker(box, form) {
   // Перетаскивание: слой едет transform'ом, центр фиксируется на отпускании.
   let drag = null;
   view.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.mp-zoom')) return; // кнопки зума — не перетаскивание
     drag = { x: e.clientX, y: e.clientY, moved: false };
     view.setPointerCapture(e.pointerId);
   });
@@ -1933,11 +1994,12 @@ function openSiteForm(s, showMap) {
     ${field('Координаты', `<input type="text" name="coords" inputmode="text" value="${s.lat != null ? s.lat + ', ' + s.lon : ''}" placeholder="55.7558, 37.6176">`,
       'Вставьте одной строкой из Яндекс.Карт или Google Maps (широта, долгота)')}
     <div class="btn-line">
-      <button class="btn" type="button" data-act="site-gps">Определить по GPS</button>
+      <button class="btn" type="button" data-act="site-gps">GPS</button>
       <button class="btn" type="button" data-act="site-map">Карта <span class="badge online">online</span></button>
+      <button class="btn" type="button" data-act="site-ya">Я.Карты <span class="badge online">online</span></button>
     </div>
     <div class="site-map-box" hidden></div>
-    <div class="hint" style="margin:-4px 0 10px">Координаты нужны для окон погоды. GPS работает без
+    <div class="hint" style="margin:6px 0 10px">Координаты нужны для окон погоды. GPS работает без
       интернета; на карте тапните точку — координаты впишутся сами.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
     ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
@@ -2084,6 +2146,12 @@ const FORMS = {
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
     a.batteryId = fd.get('batteryId') || null;
+    if (a.batteryId) {
+      for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
+        other.batteryId = null;
+        await put('aircraft', other);
+      }
+    }
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -2455,6 +2523,21 @@ document.addEventListener('change', (e) => {
   if (kind === 'status-manual') {
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (a) { a.statusManual = el.value; put('aircraft', a).then(() => render(true)); }
+  } else if (kind === 'model-batt') {
+    const a = S.aircraft.find((x) => x.id === el.dataset.id);
+    if (!a) return;
+    a.batteryId = el.value || null;
+    (async () => {
+      // страховка эксклюзивности: снять эту АКБ с других моделей
+      if (a.batteryId) {
+        for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
+          other.batteryId = null;
+          await put('aircraft', other);
+        }
+      }
+      await put('aircraft', a);
+      render(true);
+    })();
   } else if (kind === 'prep-template') {
     if (!UI.prep) return;
     const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
