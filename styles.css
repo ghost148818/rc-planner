@@ -445,6 +445,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .wxr.night .mono { color: var(--dim); }
 
 /* Мини-карта выбора точки (OSM) */
+.site-map-box:not([hidden]) { margin-top: 12px; }
 .mp { margin-bottom: 10px; }
 .map-btn {
   flex: none;

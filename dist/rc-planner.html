@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="f80f7423e5-single">
+  <meta name="build" content="8b20a4bdfa-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -464,6 +464,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .wxr.night .mono { color: var(--dim); }
 
 /* Мини-карта выбора точки (OSM) */
+.site-map-box:not([hidden]) { margin-top: 12px; }
 .mp { margin-bottom: 10px; }
 .map-btn {
   flex: none;
@@ -1281,6 +1282,18 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: '0.13',
+    date: '2026-08-25',
+    title: 'АКБ ставится отовсюду, вставка координат из буфера',
+    items: [
+      'Поставить или снять аккумулятор можно и из его формы («Стоит в модели»), и в карточке модели, и на чек-листе — всё синхронно.',
+      'В окнах для полётов выбираются только собранные модели — из блока «К вылету».',
+      'Кнопка «Я.Карты» в форме локации открывается как в списке локаций — iOS корректно возвращает в приложение.',
+      'У поля координат — кнопка «вставить из буфера»: скопировали в картах, нажали, готово.',
+      'Убран наезд строки поиска на кнопки в форме локации.',
+    ],
+  },
+  {
     v: '0.12',
     date: '2026-08-25',
     title: 'Собранные модели на «Сегодня» и Windy в приложении',
@@ -1410,21 +1423,6 @@ RC.CHANGELOG = [
       'Калькуляторы заменены на рабочие: подбор мотора, время полёта, центровка (два варианта), нагрузка на крыло, мощность и ток.',
       'Десктоп-приложения (INAV и ExpressLRS Configurator) перенесены в раздел «Прошивки».',
       'Все ссылки каталога проверены на доступность.',
-    ],
-  },
-  {
-    v: '0.1',
-    date: '2026-08-23',
-    title: 'Первый выпуск',
-    items: [
-      'Флот: модели с фото, компонентами и статусами готовности.',
-      'Полёт: предполётный чек-лист по типу модели, Flight Session и журнал полётов.',
-      'Сборы: наборы «что взять с собой» с отметками и своими пунктами.',
-      'Обслуживание: журнал ремонтов, замен и прошивок.',
-      'Хранилище конфигураций: CLI dump и файлы с версиями и сравнением.',
-      'Инструменты: конфигураторы, прошивки, калькуляторы и документация.',
-      'Экспорт, импорт и резервная копия — всё в один локальный файл.',
-      'Работает полностью офлайн, данные не покидают устройство.',
     ],
   },
 ];
@@ -1769,6 +1767,7 @@ const ICONS = {
   privacy: ic('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z"/>'),
   whatsnew: ic('<path d="M10 3.6 11.3 8a1.6 1.6 0 0 0 1.1 1.1l4.4 1.3-4.4 1.3a1.6 1.6 0 0 0-1.1 1.1L10 17.2l-1.3-4.4a1.6 1.6 0 0 0-1.1-1.1L3.2 10.4l4.4-1.3A1.6 1.6 0 0 0 8.7 8L10 3.6Z"/><path d="M18 13.5l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/>'),
   update: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
+  paste: ic('<rect x="5" y="4" width="14" height="17.5" rx="2"/><path d="M9 4.5V3.4A1.4 1.4 0 0 1 10.4 2h3.2A1.4 1.4 0 0 1 15 3.4v1.1"/><path d="M12 9.5v7M8.8 13.3 12 16.5l3.2-3.2"/>'),
 };
 
 const TABS = [
@@ -1985,6 +1984,22 @@ const COMPONENTS = [
 
 // АКБ ставится только в ОДНУ модель: занятые другими исчезают из выбора.
 function battOwner(bId) { return S.aircraft.find((x) => x.batteryId === bId); }
+
+// Единая установка/снятие: bId в модель aId (aId пустой — просто снять
+// отовсюду). Все места (карточка модели, форма модели, форма АКБ,
+// чек-лист) проходят через неё — состояние не расходится.
+async function installBattery(aId, bId) {
+  if (bId) {
+    for (const other of S.aircraft.filter((x) => x.batteryId === bId && x.id !== aId)) {
+      other.batteryId = null;
+      await put('aircraft', other);
+    }
+  }
+  if (aId) {
+    const a = S.aircraft.find((x) => x.id === aId);
+    if (a) { a.batteryId = bId || null; await put('aircraft', a); }
+  }
+}
 function battFreeOptions(keepId) {
   return [['', '— без аккумулятора —']].concat(
     S.batteries
@@ -2177,7 +2192,9 @@ function viewPrep() {
       ${selectHtml('prepSite', siteOptions(), UI.prep.siteId, 'data-change="prep-site" style="flex:1;min-width:0"')}
       <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
     </div>`)}
-    ${field('Аккумулятор', selectHtml('prepBatt', battOptions(), UI.prep.batteryId, 'data-change="prep-batt"'))}
+    ${field('Аккумулятор', selectHtml('prepBatt',
+      battFreeOptions(UI.prep.batteryId).concat([[NEW_OPT, '+ Добавить аккумулятор…']]),
+      UI.prep.batteryId, 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в модель')}
   </div>`;
   h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${doneCount} из ${items.length} · касание: ок → проблема → пропуск</div>`;
@@ -2579,16 +2596,22 @@ function viewWeather() {
   }
 
   h += `<div class="card">`;
+  // Только собранные модели (с установленным АКБ): окна считаются
+  // для того, что реально готово лететь.
+  const wxArmed = S.aircraft.filter((a) => a.batteryId && S.batteries.some((b) => b.id === a.batteryId));
+  if (wx.aircraftId && !wxArmed.some((a) => a.id === wx.aircraftId)) wx.aircraftId = '';
   h += field('Модель', selectHtml('wxmodel',
     [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
-      .concat(S.aircraft.map((a) => {
+      .concat(wxArmed.map((a) => {
         const bId = a.id === wx.aircraftId ? wx.batteryId : (a.batteryId || '');
         const w = a.maxWind || wxEstimate(a, (S.batteries.find((x) => x.id === bId) || {}).weight);
         const alt = a.maxAlt || WX_DEFAULT_ALT[a.type] || 100;
         return [a.id, `${a.name} · ${a.maxWind ? '' : '≈'}${w} м/с · до ${alt} м`];
       })),
     wx.aircraftId, 'data-change="weather-model"'),
-    'Порог и высота — из карточки модели; «≈» — оценка по весу с АКБ и габаритам');
+    wxArmed.length
+      ? 'Здесь только собранные модели («К вылету»); «≈» — оценка по весу с АКБ и габаритам'
+      : 'Соберите модель — установите АКБ в её карточке, и она появится здесь');
   if (wx.aircraftId && !(S.aircraft.find((a) => a.id === wx.aircraftId) || {}).maxWind) {
     h += field('Аккумулятор', selectHtml('wxbatt',
       [['', '— без АКБ (сухой вес) —']]
@@ -3077,18 +3100,25 @@ const ACTIONS = {
     box.hidden = false;
     openMapPicker(box, box.closest('form'));
   },
-  // Открыть точку из поля координат в Яндекс.Картах: на телефоне
-  // universal link поднимает установленное приложение.
-  'site-ya': () => {
+  // Вставить координаты из буфера обмена (нужен жест пользователя —
+  // кнопка и есть жест; на http/file буфер недоступен — честно скажем).
+  'site-paste': async () => {
     const form = $('#modal-root form[data-form="site"]');
-    if (!form) return;
-    const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
-    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
-    const has = isFinite(lat) && isFinite(lon);
-    const url = has
-      ? `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`
-      : 'https://yandex.ru/maps/';
-    window.open(url, '_blank', 'noopener');
+    const input = form && form.querySelector('input[name="coords"]');
+    if (!input) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      const nums = String(text).match(/-?\d+\.\d+|-?\d+/g) || [];
+      const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
+      if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+        input.value = lat + ', ' + lon;
+      } else {
+        input.value = String(text).trim().slice(0, 60);
+        input.focus();
+      }
+    } catch (e) {
+      alert('Не удалось прочитать буфер обмена — вставьте координаты вручную (долгое нажатие → Вставить).');
+    }
   },
   // С чек-листа: открыть выбранную локацию (или новую) сразу с картой.
   'prep-site-map': () => {
@@ -3423,12 +3453,15 @@ function openSiteForm(s, showMap) {
   openModal(isNew ? 'Новая локация' : 'Изменить локацию', `<form data-form="site" ${s.id ? `data-id="${s.id}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(s.name || '')}" placeholder="напр. Поле за деревней">`)}
     ${field('Где это', `<input type="text" name="place" value="${esc(s.place || '')}" placeholder="адрес или описание">`)}
-    ${field('Координаты', `<input type="text" name="coords" inputmode="text" value="${s.lat != null ? s.lat + ', ' + s.lon : ''}" placeholder="55.7558, 37.6176">`,
-      'Вставьте одной строкой из Яндекс.Карт или Google Maps (широта, долгота)')}
+    ${field('Координаты', `<div style="display:flex;gap:8px">
+      <input type="text" name="coords" inputmode="text" value="${s.lat != null ? s.lat + ', ' + s.lon : ''}" placeholder="55.7558, 37.6176" style="flex:1;min-width:0">
+      <button type="button" class="map-btn" data-act="site-paste" aria-label="Вставить из буфера">${ICONS.paste}</button>
+    </div>`, 'Скопируйте из карт (широта, долгота) и нажмите кнопку вставки')}
     <div class="btn-line">
       <button class="btn" type="button" data-act="site-gps">GPS</button>
       <button class="btn" type="button" data-act="site-map">Карта <span class="badge online">online</span></button>
-      <button class="btn" type="button" data-act="site-ya">Я.Карты <span class="badge online">online</span></button>
+      <a class="btn site-ya-link" href="https://yandex.ru/maps/${s.lat != null ? `?pt=${s.lon},${s.lat}&z=15&l=map` : ''}"
+        target="_blank" rel="noopener noreferrer">Я.Карты <span class="badge online">online</span></a>
     </div>
     <div class="site-map-box" hidden></div>
     <div class="hint" style="margin:6px 0 10px">Координаты нужны для окон погоды. GPS работает без
@@ -3479,6 +3512,10 @@ function openBattForm(b, presetId) {
       ${field('Циклы', `<input type="number" name="cycles" min="0" value="${b.cycles || 0}">`, 'Растут сами после каждого полёта')}
       ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
     </div>
+    ${field('Стоит в модели', selectHtml('inModel',
+      [['', '— не в модели —']].concat(S.aircraft.map((a) => [a.id, a.name])),
+      (battOwner(b.id) || {}).id || ''),
+      'Поставить или снять можно и здесь, и в карточке модели')}
     ${field('Заметки', `<textarea name="notes">${esc(b.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${b.id ? `<button class="btn btn-danger" type="button" data-act="del-batt" data-id="${b.id}">Удалить</button>` : ''}
@@ -3578,12 +3615,7 @@ const FORMS = {
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
     a.batteryId = fd.get('batteryId') || null;
-    if (a.batteryId) {
-      for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
-        other.batteryId = null;
-        await put('aircraft', other);
-      }
-    }
+    if (a.batteryId) await installBattery(a.id, a.batteryId); // снять с прежней модели
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -3656,6 +3688,13 @@ const FORMS = {
     b.status = fd.get('status');
     b.notes = fd.get('notes').trim();
     await put('batteries', b);
+    // «Стоит в модели»: снять с прежней и поставить в выбранную
+    const owner = (battOwner(b.id) || {}).id || '';
+    const target = fd.get('inModel') != null ? String(fd.get('inModel')) : owner;
+    if (target !== owner) {
+      if (!target) await installBattery(owner, null);
+      else await installBattery(target, b.id);
+    }
     if (afterNested('batt', b.id)) return;
     closeModal();
     render();
@@ -3931,6 +3970,17 @@ function render(keepScroll) {
 ============================================================ */
 
 document.addEventListener('click', (e) => {
+  // Я.Карты из формы локации: перед переходом подставить в href свежие
+  // координаты из поля. Обычная ссылка target=_blank — iOS корректно
+  // возвращает в приложение (в отличие от window.open).
+  const yaLink = e.target.closest('.site-ya-link');
+  if (yaLink) {
+    const form = yaLink.closest('form');
+    const nums = form ? String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [] : [];
+    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
+    if (isFinite(lat) && isFinite(lon)) yaLink.href = `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`;
+    return; // не preventDefault: пусть ссылка работает как в списке локаций
+  }
   const nav = e.target.closest('[data-nav]');
   if (nav) { e.preventDefault(); go(nav.dataset.nav); return; }
   const act = e.target.closest('[data-act]');
@@ -3956,20 +4006,7 @@ document.addEventListener('change', (e) => {
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (a) { a.statusManual = el.value; put('aircraft', a).then(() => render(true)); }
   } else if (kind === 'model-batt') {
-    const a = S.aircraft.find((x) => x.id === el.dataset.id);
-    if (!a) return;
-    a.batteryId = el.value || null;
-    (async () => {
-      // страховка эксклюзивности: снять эту АКБ с других моделей
-      if (a.batteryId) {
-        for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
-          other.batteryId = null;
-          await put('aircraft', other);
-        }
-      }
-      await put('aircraft', a);
-      render(true);
-    })();
+    installBattery(el.dataset.id, el.value).then(() => render(true));
   } else if (kind === 'prep-template') {
     if (!UI.prep) return;
     const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
@@ -3986,7 +4023,11 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'prep-batt') {
     if (!UI.prep) return;
     if (el.value === NEW_OPT) { el.value = UI.prep.batteryId || ''; openBattForm(null); }
-    else UI.prep.batteryId = el.value;
+    else {
+      UI.prep.batteryId = el.value;
+      // выбор на чек-листе = установка в модель (дублируется везде)
+      installBattery(UI.prep.aircraftId, el.value);
+    }
   } else if (kind === 'batt-preset') {
     const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
     if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
