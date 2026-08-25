@@ -221,11 +221,18 @@ function sessionsOf(id) {
   return S.sessions.filter((s) => s.aircraftId === id).sort((a, b) => b.start - a.start);
 }
 
+// Цепочка после краша/аварии очевидна: полёт с проблемой → «Обслуживание»
+// (создан осмотр) → осмотр отмечен выполненным → снова «Готова».
+// Поэтому «Проверить» держится только пока НЕТ закрытой работы,
+// сделанной после проблемного полёта.
 function statusOf(a) {
   if (a.statusManual && STATUS[a.statusManual]) return a.statusManual;
   if (S.maintenance.some((m) => m.aircraftId === a.id && !m.done)) return 'maintenance';
   const last = sessionsOf(a.id).find((s) => s.end);
-  if (last && last.result && last.result !== 'normal') return 'check';
+  if (last && last.result && last.result !== 'normal') {
+    const fixed = S.maintenance.some((m) => m.aircraftId === a.id && m.done && m.createdAt >= last.start);
+    if (!fixed) return 'check';
+  }
   if (last) return 'ready';
   if (S.runs.some((r) => r.aircraftId === a.id)) return 'ready';
   return 'unknown';
@@ -499,10 +506,29 @@ function viewToday() {
       <button class="btn-sm btn right" data-nav="#/session/${act.id}">Открыть</button></div>`;
   }
 
-  if (!S.aircraft.length) {
-    h += emptyState('Добавьте первую модель — и RC Planner поможет готовить её к полётам.', 'add-model', 'Добавить модель');
-    return h;
+  // «Начало работы»: четыре шага с галочками, ведут прямо к действию.
+  // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
+  const steps = [
+    ['Добавьте модель', 'во «Флоте»: готовая платформа или своя', S.aircraft.length > 0,
+      'data-act="add-model"', 'fleet'],
+    ['Заведите аккумулятор и поставьте в модель', 'модель с АКБ считается собранной к вылету', armedFleet().length > 0,
+      'data-nav="#/batteries"', 'batteries'],
+    ['Запомните локацию', 'координаты — для прогноза и окон полётов', S.sites.length > 0,
+      'data-act="add-site"', 'sites'],
+    ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам', S.sessions.some((s) => s.end),
+      'data-act="start-prep"', 'flight'],
+  ];
+  const todo = steps.filter((s) => !s[2]).length;
+  if (todo) {
+    h += `<div class="h2">Начало работы · осталось ${todo} из 4</div><div class="card flat">`;
+    h += steps.map(([t, d, ok2, attrs, icon]) => ok2
+      ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
+         <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
+      : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d">${d}</span></span>`, icon)).join('');
+    h += '</div>';
   }
+
+  if (!S.aircraft.length) return h;
 
   h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
 
@@ -512,19 +538,29 @@ function viewToday() {
       <span class="d">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
 
   // К вылету: только собранные модели (с установленным АКБ) — весь
-  // флот не дублируем, он живёт во вкладке «Флот».
+  // флот не дублируем, он живёт во вкладке «Флот». Пустой блок при
+  // видимом «Начале работы» не показываем — шаг 2 говорит то же самое.
   const armed = S.aircraft.map((a) => [a, armedBattery(a)]).filter(([, b]) => b);
+  if (armed.length || !todo) {
   h += '<div class="h2">К вылету</div><div class="card flat">';
   if (armed.length) {
-    h += armed.map(([a, b]) => rowBtn(`data-nav="#/model/${a.id}"`,
-      `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-       <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
-       ${chip(statusOf(a))}`)).join('');
+    h += armed.map(([a, b]) => a.prepared
+      ? `<div class="row">
+          <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:40px">
+            ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+            <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)} · чек-лист пройден</span></span></button>
+          <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}" style="min-height:40px">Взлёт</button>
+        </div>`
+      : rowBtn(`data-nav="#/model/${a.id}"`,
+        `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+         <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
+         ${chip(statusOf(a))}`)).join('');
   } else {
     h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите модель к вылету</span>
       <span class="d">Установите аккумулятор в карточке модели — она появится здесь</span></span>`, 'batteries');
   }
   h += '</div>';
+  }
 
   // Незакрытое обслуживание
   const open = S.maintenance.filter((m) => !m.done);
@@ -684,9 +720,13 @@ function viewModel() {
   const openM = maint.filter((m) => !m.done);
   h += `<div class="h2">Обслуживание</div><div class="card flat">`;
   if (openM.length) {
-    h += openM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
-      `<span class="grow"><span class="t">${esc(m.title)}</span>
-       <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`)).join('');
+    // «Выполнено» одним касанием — после краша это следующий очевидный шаг
+    h += openM.map((m) => `<div class="row">
+      <button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:40px">
+        <span class="t">${esc(m.title)}</span>
+        <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
+      <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}" style="min-height:40px">Выполнено</button>
+    </div>`).join('');
   } else {
     h += '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
   }
@@ -752,6 +792,18 @@ function viewFlight() {
   }
   if (!act) h += `<button class="btn btn-primary" data-act="start-prep">Начать подготовку</button>`;
 
+  // Подготовленные борта: чек-лист пройден, взлёт в одно нажатие.
+  const prepared = S.aircraft.filter((a) => a.prepared);
+  if (!act && prepared.length) {
+    h += '<div class="h2">Готовы к вылету</div><div class="card flat">';
+    h += prepared.map((a) => `<div class="row">
+      ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+      <span class="d">чек-лист пройден в ${new Date(a.prepared.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span></span>
+      <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}" style="min-height:40px">Взлёт</button>
+    </div>`).join('');
+    h += '</div>';
+  }
+
   const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
   if (done.length) {
     h += `<div class="h2">Журнал полётов</div><div class="card flat">` +
@@ -778,7 +830,7 @@ function viewPrep() {
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-       <span class="d">${TYPES[a.type] || ''}</span></span>${chip(statusOf(a))}`)).join('');
+       <span class="d">${TYPES[a.type] || ''}${a.prepared ? ` · подготовлен в ${new Date(a.prepared.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : ''}</span></span>${chip(statusOf(a))}`)).join('');
     h += '</div>';
     return h;
   }
@@ -819,6 +871,7 @@ function viewPrep() {
   h += '</div>';
   if (fails) h += `<div class="banner warn">Отмечены проблемы: ${fails}. Убедитесь, что лететь безопасно, или устраните их.</div>`;
   h += `<button class="btn btn-primary" data-act="start-flight">START FLIGHT</button>
+    <button class="btn" data-act="prep-done">Готов — подготовить следующий борт</button>
     <button class="btn" data-act="cancel-prep">Отменить подготовку</button>`;
   return h;
 }
@@ -1482,6 +1535,34 @@ const MAINT_KINDS = {
   inspection: 'Осмотр', task: 'Задача',
 };
 
+// Сохранить прогон чек-листа из UI.prep.
+async function savePrepRun(p) {
+  const run = {
+    id: uid(), aircraftId: p.aircraftId, date: todayISO(),
+    templateName: (templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {}).name || '',
+    items: p.items.map((i) => ({ t: i.t, state: i.state })),
+  };
+  await put('runs', run);
+  return run;
+}
+
+// Начать полёт: общая точка для «START FLIGHT» и взлёта подготовленного
+// борта. Снимает пометку «подготовлен» — она одноразовая.
+async function takeoff(aircraftId, runId, siteId) {
+  const a = S.aircraft.find((x) => x.id === aircraftId);
+  if (a && a.prepared) { a.prepared = null; await put('aircraft', a); }
+  const s = {
+    id: uid(), aircraftId, date: todayISO(),
+    start: Date.now(), end: null, durationMin: null,
+    flightNo: sessionsOf(aircraftId).length + 1,
+    batteryId: (armedBattery(a) || {}).id || '',
+    siteId: siteId || (S.sites.find((x) => x.isDefault) || {}).id || '',
+    weather: '', result: '', notes: '', problems: '', checklistRunId: runId,
+  };
+  await put('sessions', s);
+  go('#/session/' + s.id);
+}
+
 const ACTIONS = {
   'close-modal': () => dismissModal(),
   'dismiss-hi': () => { lsSet('rcp.hi', '1'); render(); },
@@ -1581,23 +1662,37 @@ const ACTIONS = {
   'start-flight': async () => {
     const p = UI.prep;
     if (!p) return;
-    const run = {
-      id: uid(), aircraftId: p.aircraftId, date: todayISO(),
-      templateName: (templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {}).name || '',
-      items: p.items.map((i) => ({ t: i.t, state: i.state })),
-    };
-    await put('runs', run);
-    const flightNo = sessionsOf(p.aircraftId).length + 1;
-    const s = {
-      id: uid(), aircraftId: p.aircraftId, date: todayISO(),
-      start: Date.now(), end: null, durationMin: null, flightNo,
-      batteryId: (armedBattery(S.aircraft.find((x) => x.id === p.aircraftId)) || {}).id || '',
-      siteId: p.siteId || '',
-      weather: '', result: '', notes: '', problems: '', checklistRunId: run.id,
-    };
-    await put('sessions', s);
+    const run = await savePrepRun(p);
     UI.prep = null;
-    go('#/session/' + s.id);
+    await takeoff(p.aircraftId, run.id, p.siteId);
+  },
+  // «Готов»: чек-лист сохраняется, борт помечен подготовленным, а мы
+  // возвращаемся к выбору модели — можно готовить несколько подряд.
+  // Взлёт подготовленного — со вкладки «Полёт», без повторного чек-листа.
+  'prep-done': async () => {
+    const p = UI.prep;
+    if (!p) return;
+    const run = await savePrepRun(p);
+    const a = S.aircraft.find((x) => x.id === p.aircraftId);
+    if (a) {
+      a.prepared = { runId: run.id, at: Date.now(), siteId: p.siteId || '' };
+      await put('aircraft', a);
+    }
+    UI.prep = null;
+    go('#/prep');
+  },
+  'maint-done': async (el) => {
+    const m = S.maintenance.find((x) => x.id === el.dataset.id);
+    if (!m) return;
+    m.done = true;
+    await put('maintenance', m);
+    render(true);
+  },
+  'takeoff-prepared': async (el) => {
+    const a = S.aircraft.find((x) => x.id === el.dataset.id);
+    if (!a || !a.prepared) return;
+    const pr = a.prepared;
+    await takeoff(a.id, pr.runId, pr.siteId);
   },
   'finish-flight': (el) => openFinishForm(el.dataset.id),
   'discard-flight': (el) => confirmModal('Удалить эту запись? Полёт не будет засчитан.',
@@ -2388,15 +2483,36 @@ const FORMS = {
     await put('sessions', s);
     const b = S.batteries.find((x) => x.id === s.batteryId);
     if (b) { b.cycles = (b.cycles || 0) + 1; await put('batteries', b); }
-    if (s.result === 'maintenance' || s.result === 'crash') {
+    const trouble = s.result === 'maintenance' || s.result === 'crash';
+    if (trouble) {
       await put('maintenance', {
         id: uid(), aircraftId: s.aircraftId, date: todayISO(), kind: 'inspection',
         title: s.result === 'crash' ? 'Осмотр после краша' : 'Обслуживание после полёта #' + s.flightNo,
         reason: s.problems || RESULTS[s.result], next: '', done: false, createdAt: Date.now(),
       });
+      // борт с проблемой не может оставаться «подготовленным»
+      const ta = S.aircraft.find((x) => x.id === s.aircraftId);
+      if (ta && ta.prepared) { ta.prepared = null; await put('aircraft', ta); }
     }
-    closeModal();
-    go('#/model/' + s.aircraftId);
+    if (!trouble) {
+      closeModal();
+      go('#/model/' + s.aircraftId);
+      return;
+    }
+    // Дорожная карта после проблемы — чтобы было очевидно, что дальше.
+    // Переход по кнопке (go() закрыл бы это окно через onRoute).
+    render();
+    const ta = S.aircraft.find((x) => x.id === s.aircraftId);
+    openModal('Что дальше', `<p>Борт переведён в <b>«Обслуживание»</b> — создан
+      ${s.result === 'crash' ? 'осмотр после краша' : 'осмотр после полёта'}.</p>
+      <p class="small muted" style="margin-top:8px">План простой:</p>
+      <ol class="small" style="padding-left:18px;margin-top:4px">
+        <li>Осмотрите «${esc(ta ? ta.name : '')}» и почините, что нужно.</li>
+        <li>Откройте работу в карточке борта и отметьте «Выполнено».</li>
+        <li>Статус сам вернётся в «Готова» — борт снова можно готовить к полёту.</li>
+      </ol>
+      <button class="btn btn-primary" data-nav="#/model/${s.aircraftId}" style="margin-top:12px">К карточке борта</button>
+      <button class="btn" data-act="close-modal">Позже</button>`);
   },
   'pack-item': async (form) => {
     const p = S.packing.find((x) => x.id === UI.arg);
