@@ -1714,6 +1714,11 @@ const ACTIONS = {
       alert('Не удалось прочитать буфер обмена — вставьте координаты вручную (долгое нажатие → Вставить).');
     }
   },
+  'prep-batt-clear': () => {
+    if (!UI.prep) return;
+    UI.prep.batteryId = '';
+    installBattery(UI.prep.aircraftId, '').then(() => { closeModal(); render(); });
+  },
   // С чек-листа: открыть выбранную локацию (или новую) сразу с картой.
   'prep-site-map': () => {
     if (!UI.prep) return;
@@ -2635,7 +2640,12 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'prep-batt') {
     if (!UI.prep) return;
     if (el.value === NEW_OPT) { el.value = UI.prep.batteryId || ''; openBattForm(null); }
-    else {
+    else if (el.value === '' && UI.prep.batteryId) {
+      // снятие тоже «дублируется везде», но не молча: случайный тап
+      // перед вылетом не должен незаметно разоружить модель
+      el.value = UI.prep.batteryId;
+      confirmModal('Снять аккумулятор с модели? Она уйдёт из «К вылету».', 'prep-batt-clear', '', 'Снять');
+    } else {
       UI.prep.batteryId = el.value;
       // выбор на чек-листе = установка в модель (дублируется везде)
       installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
