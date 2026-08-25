@@ -40,6 +40,12 @@ const UI = {
 
 const WX_DEFAULT_WIND = 16; // м/с, порог без выбранной модели
 const WX_DEFAULT_ALT = { quad: 60, plane: 150, wing: 150, other: 100 }; // м, типичная высота полёта
+// Коэффициенты вердикта и сложности — ЕДИНСТВЕННЫЙ источник и для
+// расчёта (wxVerdict/wxDifficulty), и для таблиц в wxHelpHtml.
+const WX_K = {
+  night: 0.8, fog: 0.75, drizzle: 0.85, snow: 0.8, // сложность условий
+  warn: 0.8, gustBad: 1.4, gustWarn: 1.15,          // пороги вердикта
+};
 const WX_API = 'https://api.open-meteo.com/v1/forecast';
 const WX_DAYS = 7;
 
@@ -291,16 +297,27 @@ async function seedIfNeeded() {
 // Разовые миграции данных. Шкала порогов ветра удвоена 2026-08-24
 // (пользователи — опытные пилоты); старые явные пороги подтягиваем один раз.
 async function migrateIfNeeded() {
+  let touched = false;
   if (!S.settings.migrWind2) {
+    // Пишем напрямую в RCDB (put() перечитывал бы весь store на каждой
+    // итерации — это стартовый путь), настройки сохраняем один раз.
     for (const a of S.aircraft) {
       if (a.maxWind) {
         a.maxWind = Math.min(60, a.maxWind * 2);
-        await put('aircraft', a);
+        await RCDB.put('aircraft', a);
       }
     }
     S.settings.migrWind2 = true;
-    await saveSettings();
+    touched = true;
   }
+  if (!S.settings.migrWx2) {
+    // Кэш прогноза, снятый до появления weather_code, выбрасываем один
+    // раз — дальше коду не нужны запасные ветки «а вдруг поля нет».
+    delete S.settings.weatherCache;
+    S.settings.migrWx2 = true;
+    touched = true;
+  }
+  if (touched) await saveSettings();
 }
 
 /* ============================================================
@@ -425,12 +442,22 @@ function closeModal() {
 // ВНИМАНИЕ: внутри openModal остаётся именно closeModal, иначе рекурсия.
 function dismissModal() {
   const r = UI.modalReturn;
-  if (r && r.kind === 'finish') {
+  if (r && r.reopen) {
     UI.modalReturn = null;
-    openFinishForm(r.sessionId, r.values);
+    r.reopen();
     return;
   }
   closeModal();
+}
+
+// Раскрывающийся online-блок (карта, Windy): повторное нажатие прячет
+// и ОЧИЩАЕТ содержимое — тайлы/iframe не живут в скрытом блоке.
+function toggleBox(box, fill) {
+  if (!box) return;
+  if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = '';
+  fill(box);
 }
 
 function confirmModal(text, act, dataAttrs, btnLabel) {
@@ -486,16 +513,13 @@ function viewToday() {
 
   // К вылету: только собранные модели (с установленным АКБ) — весь
   // флот не дублируем, он живёт во вкладке «Флот».
-  const armed = S.aircraft.filter((a) => armedBattery(a));
+  const armed = S.aircraft.map((a) => [a, armedBattery(a)]).filter(([, b]) => b);
   h += '<div class="h2">К вылету</div><div class="card flat">';
   if (armed.length) {
-    h += armed.map((a) => {
-      const b = S.batteries.find((x) => x.id === a.batteryId);
-      return rowBtn(`data-nav="#/model/${a.id}"`,
-        `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-         <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
-         ${chip(statusOf(a))}`);
-    }).join('');
+    h += armed.map(([a, b]) => rowBtn(`data-nav="#/model/${a.id}"`,
+      `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+       <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
+       ${chip(statusOf(a))}`)).join('');
   } else {
     h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите модель к вылету</span>
       <span class="d">Установите аккумулятор в карточке модели — она появится здесь</span></span>`, 'batteries');
@@ -576,26 +600,26 @@ function armedBattery(a) {
   return b && b.status !== 'retired' ? b : undefined;
 }
 
-// Единая установка/снятие: bId в модель aId (aId пустой — просто снять
-// отовсюду). Все места (карточка модели, форма модели, форма АКБ,
-// чек-лист) проходят через неё — состояние не расходится.
-async function installBattery(aId, bId) {
-  if (bId) {
-    for (const other of S.aircraft.filter((x) => x.batteryId === bId && x.id !== aId)) {
-      other.batteryId = null;
-      await put('aircraft', other);
-    }
-  }
-  if (aId) {
-    const a = S.aircraft.find((x) => x.id === aId);
-    if (a) { a.batteryId = bId || null; await put('aircraft', a); }
+function armedFleet() { return S.aircraft.filter((a) => armedBattery(a)); }
+
+// Снять АКБ со всех моделей, кроме exceptId. Пишет напрямую в RCDB —
+// вызывающий обязан обновить S.aircraft (или сделать это через put).
+async function releaseBattery(bId, exceptId) {
+  for (const other of S.aircraft.filter((x) => x.batteryId === bId && x.id !== exceptId)) {
+    other.batteryId = null;
+    await RCDB.put('aircraft', other);
   }
 }
-function battFreeOptions(keepId) {
-  return [['', '— без аккумулятора —']].concat(
-    S.batteries
-      .filter((b) => b.status !== 'retired' && (b.id === keepId || !battOwner(b.id)))
-      .map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')]));
+
+// Единая установка/снятие: bId в модель aId (aId пустой — просто снять
+// отовсюду). Все места (карточка модели, форма модели, форма АКБ,
+// чек-лист) проходят через неё либо через releaseBattery.
+// Store перечитывается ОДИН раз в конце, а не после каждой записи.
+async function installBattery(aId, bId) {
+  if (bId) await releaseBattery(bId, aId);
+  const a = aId && S.aircraft.find((x) => x.id === aId);
+  if (a) { a.batteryId = bId || null; await RCDB.put('aircraft', a); }
+  S.aircraft = await RCDB.all('aircraft');
 }
 
 function viewModel() {
@@ -604,6 +628,7 @@ function viewModel() {
   const flights = sessionsOf(a.id).filter((s) => s.end);
   const total = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
   const st = statusOf(a);
+  const bat = armedBattery(a);
 
   let h = pageHead(esc(a.name), { back: '#/fleet', act: 'edit-model', actLabel: 'Изменить' });
 
@@ -619,7 +644,7 @@ function viewModel() {
     </select></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
       <span class="row-ic">${ICONS.batteries}</span>
-      ${selectHtml('modelBatt', battFreeOptions(a.batteryId), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —' }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
     </div>
     <div class="hint" style="margin-top:4px">Модель с установленным АКБ считается собранной к вылету
       и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>
@@ -635,10 +660,7 @@ function viewModel() {
   const specs = [
     ['Тип', TYPES[a.type] || '—'], ['Производитель', a.manufacturer],
     ['Вес (сухой)', a.weight ? a.weight + ' г' : ''], ['Размах', a.wingspan ? a.wingspan + ' мм' : ''],
-    ['АКБ модели', (() => {
-      const b = S.batteries.find((x) => x.id === a.batteryId);
-      return b ? b.label + (b.weight && a.weight ? ` → взлётный ${a.weight + b.weight} г` : b.weight ? ` · ${b.weight} г` : '') : '';
-    })()],
+    ['АКБ модели', bat ? bat.label + (bat.weight && a.weight ? ` → взлётный ${a.weight + bat.weight} г` : bat.weight ? ` · ${bat.weight} г` : '') : ''],
   ].filter((x) => x[1]);
   if (specs.length) {
     h += '<div class="h2">Паспорт</div><div class="card">' +
@@ -784,8 +806,8 @@ function viewPrep() {
       <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
     </div>`)}
     ${field('Аккумулятор', selectHtml('prepBatt',
-      battFreeOptions(UI.prep.batteryId).concat([[NEW_OPT, '+ Добавить аккумулятор…']]),
-      UI.prep.batteryId, 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в модель')}
+      battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —', addNew: true }),
+      (armedBattery(a) || {}).id || '', 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в модель')}
   </div>`;
   h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${doneCount} из ${items.length} · касание: ок → проблема → пропуск</div>`;
@@ -943,24 +965,19 @@ function wxLevels(alt) {
 function wxIcon(hr) {
   const c = hr.code;
   let name;
-  if (c != null) {
-    if (c === 45 || c === 48) name = 'wxFog';
-    else if ((c >= 71 && c <= 77) || c === 85 || c === 86) name = 'wxSnow';
-    else if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95) name = 'wxRain';
-    else if (c === 3) name = 'wxCloud';
-    else if (c === 1 || c === 2) name = 'wxPartly';
-    else name = 'wxSun';
-  } else if (hr.pp >= 15 || hr.prec > 0.1) name = 'wxRain';
-  else if (hr.cloud >= 85) name = 'wxCloud';
-  else if (hr.cloud >= 40) name = 'wxPartly';
+  if (c === 45 || c === 48) name = 'wxFog';
+  else if ((c >= 71 && c <= 77) || c === 85 || c === 86) name = 'wxSnow';
+  else if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95) name = 'wxRain';
+  else if (c === 3) name = 'wxCloud';
+  else if (c === 1 || c === 2) name = 'wxPartly';
   else name = 'wxSun';
   // Ночью ясное и малооблачное небо — луна.
   if (!hr.light && (name === 'wxSun' || name === 'wxPartly')) name = 'wxMoon';
   return name;
 }
 
-// Окно «Как считается»: те же числа, что и в wxVerdict, — если правите
-// пороги, поправьте и таблицу, иначе объяснение разойдётся с расчётом.
+// Окно «Как считается»: коэффициенты берутся из WX_K — таблица и расчёт
+// разойтись не могут. Прозаические числа (0,2 мм, ветер > 8) — литералы.
 function wxHelpHtml() {
   const lim = wxLimits();
   const w = lim.maxW;
@@ -978,9 +995,9 @@ function wxHelpHtml() {
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Что смотрим</th><th>Не стоит</th><th>На пределе</th></tr></thead>
       <tbody>
-        ${row('Ветер у земли', `> ${w} м/с`, `> ${n(w * 0.8)} м/с`)}
-        ${row('Ветер на высоте полёта', `> ${w} м/с`, `> ${n(w * 0.8)} м/с`)}
-        ${row('Порывы', `> ${n(w * 1.4)} м/с`, `> ${n(w * 1.15)} м/с`)}
+        ${row('Ветер у земли', `> ${w} м/с`, `> ${n(w * WX_K.warn)} м/с`)}
+        ${row('Ветер на высоте полёта', `> ${w} м/с`, `> ${n(w * WX_K.warn)} м/с`)}
+        ${row('Порывы', `> ${n(w * WX_K.gustBad)} м/с`, `> ${n(w * WX_K.gustWarn)} м/с`)}
         ${row('Вероятность осадков', 'от 60 %', 'от 40 %')}
       </tbody>
     </table></div>
@@ -991,10 +1008,9 @@ function wxHelpHtml() {
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Условие</th><th></th><th>Порог для «${lim.name ? esc(lim.name) : 'модели'}»</th></tr></thead>
       <tbody>
-        <tr><td>Темнота (ночь)</td><td>× 0.8</td><td>${n(w * 0.8)} м/с</td></tr>
-        <tr><td>Туман днём</td><td>× 0.75</td><td>${n(w * 0.75)} м/с</td></tr>
-        <tr><td>Морось, слабый дождь</td><td>× 0.85</td><td>${n(w * 0.85)} м/с</td></tr>
-        <tr><td>Слабый снег</td><td>× 0.8</td><td>${n(w * 0.8)} м/с</td></tr>
+        ${[['Темнота (ночь)', WX_K.night], ['Туман днём', WX_K.fog],
+           ['Морось, слабый дождь', WX_K.drizzle], ['Слабый снег', WX_K.snow]]
+          .map(([t, k]) => `<tr><td>${t}</td><td>× ${k}</td><td>${n(w * k)} м/с</td></tr>`).join('')}
       </tbody>
     </table></div>
 
@@ -1025,12 +1041,10 @@ function wxDifficulty(hr) {
   let k = 1;
   const why = [];
   const c = hr.code;
-  if (!hr.light) { k *= 0.8; why.push('ночь'); }
-  if (c === 45 || c === 48) { k *= 0.75; why.push('туман'); }
-  const drizzle = (c >= 51 && c <= 61) || c === 80
-    || (c == null && hr.prec > 0 && hr.prec < 0.2);
-  if (drizzle) { k *= 0.85; why.push('морось'); }
-  else if (c === 71 || c === 85) { k *= 0.8; why.push('снег'); }
+  if (!hr.light) { k *= WX_K.night; why.push('ночь'); }
+  if (c === 45 || c === 48) { k *= WX_K.fog; why.push('туман'); }
+  if ((c >= 51 && c <= 61) || c === 80) { k *= WX_K.drizzle; why.push('морось'); }
+  else if (c === 71 || c === 85) { k *= WX_K.snow; why.push('снег'); }
   return { k, why };
 }
 
@@ -1039,7 +1053,6 @@ function wxDifficulty(hr) {
 function wxHardStop(hr) {
   const c = hr.code;
   if (hr.prec >= 0.2 || hr.pp >= 60) return 'осадки';
-  if (c == null) return '';
   if (c >= 95) return 'гроза';
   if (c === 63 || c === 65 || c === 66 || c === 67 || c === 81 || c === 82) return 'дождь';
   if (c === 73 || c === 75 || c === 77 || c === 86) return 'снегопад';
@@ -1052,10 +1065,11 @@ function wxHardStop(hr) {
 // порогом maxW × k (k — сложность условий: темнота, туман, осадки).
 // alt — максимальный ветер на уровнях в пределах высоты полёта.
 function wxVerdict(hr, maxW) {
-  if (wxHardStop(hr)) return 'bad';
-  const wEff = maxW * wxDifficulty(hr).k;
-  if (hr.w10 > wEff || hr.alt > wEff || hr.gust > wEff * 1.4) return 'bad';
-  if (hr.w10 > wEff * 0.8 || hr.alt > wEff * 0.8 || hr.gust > wEff * 1.15 || hr.pp >= 40) return 'warn';
+  const stop = hr.stop !== undefined ? hr.stop : wxHardStop(hr);
+  if (stop) return 'bad';
+  const wEff = maxW * (hr.diff || wxDifficulty(hr)).k;
+  if (hr.w10 > wEff || hr.alt > wEff || hr.gust > wEff * WX_K.gustBad) return 'bad';
+  if (hr.w10 > wEff * WX_K.warn || hr.alt > wEff * WX_K.warn || hr.gust > wEff * WX_K.gustWarn || hr.pp >= 40) return 'warn';
   return 'ok';
 }
 
@@ -1083,10 +1097,12 @@ function wxDay(json, dayIdx, maxW, altM) {
         : H.wind_speed_10m[i],
       prec: H.precipitation[i],
       pp: H.precipitation_probability[i] || 0,
-      cloud: H.cloud_cover[i],
-      // Сохранённый прогноз мог быть запрошен без weather_code — отсюда защита.
-      code: (H.weather_code || [])[i],
+      code: H.weather_code[i],
     };
+    // Запрет и сложность считаются один раз здесь; вердикт, иконка и
+    // строка часа читают готовое — ничего не расходится и не считается дважды.
+    hr.stop = wxHardStop(hr);
+    hr.diff = wxDifficulty(hr);
     hr.verdict = wxVerdict(hr, maxW);
     hours.push(hr);
   }
@@ -1135,7 +1151,7 @@ async function wxLoad() {
     lat = s.lat; lon = s.lon; place = s.name;
   }
   const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
-    '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,cloud_cover,weather_code' +
+    '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,weather_code' +
     '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) + '&forecast_days=' + WX_DAYS;
   try {
     const res = await fetch(url);
@@ -1193,11 +1209,14 @@ function viewWeather() {
   h += `<div class="card">`;
   // Только собранные модели (с установленным АКБ): окна считаются
   // для того, что реально готово лететь. wxArmed вычислен в начале view.
+  const wxSel = wxArmed.find((a) => a.id === wx.aircraftId);
   h += field('Модель', selectHtml('wxmodel',
     [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
       .concat(wxArmed.map((a) => {
-        const bId = a.id === wx.aircraftId ? wx.batteryId : (a.batteryId || '');
-        const w = a.maxWind || wxEstimate(a, (S.batteries.find((x) => x.id === bId) || {}).weight);
+        // для выбранной модели действует переопределение АКБ с экрана
+        const b = a === wxSel && wx.batteryId
+          ? S.batteries.find((x) => x.id === wx.batteryId) : armedBattery(a);
+        const w = a.maxWind || wxEstimate(a, (b || {}).weight);
         const alt = a.maxAlt || WX_DEFAULT_ALT[a.type] || 100;
         return [a.id, `${a.name} · ${a.maxWind ? '' : '≈'}${w} м/с · до ${alt} м`];
       })),
@@ -1205,18 +1224,15 @@ function viewWeather() {
     wxArmed.length
       ? 'Здесь только собранные модели («К вылету»); «≈» — оценка по весу с АКБ и габаритам'
       : 'Соберите модель — установите АКБ в её карточке, и она появится здесь');
-  if (wx.aircraftId && !(S.aircraft.find((a) => a.id === wx.aircraftId) || {}).maxWind) {
+  if (wxSel && !wxSel.maxWind) {
     h += field('Аккумулятор', selectHtml('wxbatt',
-      [['', '— без АКБ (сухой вес) —']]
-        .concat(S.batteries.filter((b) => b.status !== 'retired').map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')])),
+      battOptions({ emptyLabel: '— без АКБ (сухой вес) —' }),
       wx.batteryId, 'data-change="weather-batt"'),
       'Вес АКБ прибавляется к сухому весу модели в оценке порога');
   }
-  h += field('Место', selectHtml('wxsite',
-    [['', '— выберите —']]
-      .concat(sitesWithCoords.map((s) => [s.id, s.name]))
-      .concat([['gps', 'Моё местоположение (GPS)'], [NEW_OPT, '+ Добавить локацию…']]),
-    wx.siteId, 'data-change="weather-site"'),
+  h += field('Место', selectHtml('wxsite', siteOptions(sitesWithCoords, {
+      emptyLabel: '— выберите —', pre: [['gps', 'Моё местоположение (GPS)']],
+    }), wx.siteId, 'data-change="weather-site"'),
     sitesWithCoords.length ? '' : 'У локаций пока нет координат — выберите «+ Добавить локацию…»');
   h += field('Дата', selectHtml('wxday', wxDayOptions(), String(wx.day), 'data-change="weather-day"'));
   h += `<button class="btn btn-primary" data-act="weather-load" ${wx.loading ? 'disabled' : ''}>
@@ -1256,16 +1272,14 @@ function viewWeather() {
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
       h += day.hours.map((hr) => {
-        const diff = wxDifficulty(hr);
-        const stop = wxHardStop(hr);
-        const wEff = lim.maxW * diff.k;
-        const worst = Math.max(hr.w10, hr.alt, hr.gust / 1.4);
+        const wEff = lim.maxW * hr.diff.k;
+        const worst = Math.max(hr.w10, hr.alt, hr.gust / WX_K.gustBad);
         const load = Math.min(1.15, worst / wEff);
         const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
         const word = hr.verdict === 'ok' ? 'можно' : hr.verdict === 'warn' ? 'на пределе' : 'не стоит';
         const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
-        const rain = !stop && (hr.pp >= 15 || hr.prec > 0.1) ? ` · дождь ${hr.pp}%` : '';
-        const marks = (stop ? [stop] : diff.why).map((t) => ' · ' + t).join('');
+        const rain = !hr.stop && (hr.pp >= 15 || hr.prec > 0.1) ? ` · дождь ${hr.pp}%` : '';
+        const marks = (hr.stop ? [hr.stop] : hr.diff.why).map((t) => ' · ' + t).join('');
         return `<div class="wxr${hr.light ? '' : ' night'}">
           <div class="wxr-top">
             <span class="mono nowrap">${String(hr.hh).padStart(2, '0')}:00</span>
@@ -1352,11 +1366,24 @@ function viewTools() {
   return h;
 }
 
+// Первая пара чисел из произвольного текста (поле, буфер, ссылка карт)
+// с проверкой диапазонов — ЕДИНСТВЕННЫЙ разбор координат в приложении.
+function parseCoords(text) {
+  const nums = String(text || '').match(/-?\d+\.\d+|-?\d+/g) || [];
+  const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
+  return isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+    ? { lat, lon } : null;
+}
+
+// Один формат ссылки на Яндекс.Карты для всех кнопок (порядок lon,lat!).
+function yaMapUrl(lat, lon, z) {
+  return `https://yandex.ru/maps/?pt=${lon},${lat}&z=${z || 15}&l=map`;
+}
+
 function mapLinks(s) {
   if (s.lat == null || s.lon == null) return '';
-  const ya = `https://yandex.ru/maps/?pt=${s.lon},${s.lat}&z=15&l=map`;
   const osm = `https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}#map=15/${s.lat}/${s.lon}`;
-  return `<a class="btn btn-sm" href="${ya}" target="_blank" rel="noopener noreferrer">Я.Карты</a>
+  return `<a class="btn btn-sm" href="${yaMapUrl(s.lat, s.lon)}" target="_blank" rel="noopener noreferrer">Я.Карты</a>
     <a class="btn btn-sm" href="${osm}" target="_blank" rel="noopener noreferrer">OSM</a>`;
 }
 
@@ -1382,10 +1409,13 @@ function viewBatteries() {
   let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить' }) + fleetSeg('batteries');
   if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ');
   h += '<div class="card flat">';
-  h += S.batteries.map((b) => rowBtn(`data-act="edit-batt" data-id="${b.id}"`,
+  h += S.batteries.map((b) => {
+    const o = battOwner(b.id);
+    return rowBtn(`data-act="edit-batt" data-id="${b.id}"`,
     `<span class="grow"><span class="t">${esc(b.label)}</span>
-     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${(() => { const o = battOwner(b.id); return o ? ` · в «${esc(o.name)}»` : ''; })()}</span></span>
-     ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}`)).join('');
+     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · в «${esc(o.name)}»` : ''}</span></span>
+     ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}`);
+  }).join('');
   h += '</div>';
   return h;
 }
@@ -1561,7 +1591,8 @@ const ACTIONS = {
     const s = {
       id: uid(), aircraftId: p.aircraftId, date: todayISO(),
       start: Date.now(), end: null, durationMin: null, flightNo,
-      batteryId: p.batteryId || '', siteId: p.siteId || '',
+      batteryId: (armedBattery(S.aircraft.find((x) => x.id === p.aircraftId)) || {}).id || '',
+      siteId: p.siteId || '',
       weather: '', result: '', notes: '', problems: '', checklistRunId: run.id,
     };
     await put('sessions', s);
@@ -1688,10 +1719,7 @@ const ACTIONS = {
   // Мини-карта выбора точки в форме локации (online, тайлы OSM).
   'site-map': () => {
     const box = $('#modal-root .site-map-box');
-    if (!box) return;
-    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
-    box.hidden = false;
-    openMapPicker(box, box.closest('form'));
+    toggleBox(box, (b) => openMapPicker(b, b.closest('form')));
   },
   // Вставить координаты из буфера обмена (нужен жест пользователя —
   // кнопка и есть жест; на http/file буфер недоступен — честно скажем).
@@ -1701,10 +1729,9 @@ const ACTIONS = {
     if (!input) return;
     try {
       const text = await navigator.clipboard.readText();
-      const nums = String(text).match(/-?\d+\.\d+|-?\d+/g) || [];
-      const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
-      if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-        input.value = lat + ', ' + lon;
+      const c = parseCoords(text);
+      if (c) {
+        input.value = c.lat + ', ' + c.lon;
       } else {
         // не затирать уже введённое мусором из буфера
         alert('В буфере не нашлось координат (пары чисел «широта, долгота»).');
@@ -1716,7 +1743,6 @@ const ACTIONS = {
   },
   'prep-batt-clear': () => {
     if (!UI.prep) return;
-    UI.prep.batteryId = '';
     installBattery(UI.prep.aircraftId, '').then(() => { closeModal(); render(); });
   },
   // С чек-листа: открыть выбранную локацию (или новую) сразу с картой.
@@ -1743,22 +1769,19 @@ const ACTIONS = {
   // Превью Windy прямо на странице (embed-виджет; iframe через DOM —
   // сборка сторожит литерал как офлайн-ресурс, а это online по кнопке).
   'wx-windy': (el) => {
-    const box = $('.windy-box');
-    if (!box) return;
-    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; return; }
-    const lat = el.dataset.lat, lon = el.dataset.lon;
-    const fr = document.createElement('iframe');
-    fr.src = 'https://embed.windy.com/embed2.html?lat=' + lat + '&lon=' + lon +
-      '&detailLat=' + lat + '&detailLon=' + lon +
-      '&zoom=10&overlay=wind&level=surface&menu=&message=true&marker=true' +
-      '&metricWind=m%2Fs&metricTemp=%C2%B0C';
-    fr.setAttribute('loading', 'lazy');
-    fr.style.cssText = 'width:100%;height:380px;border:0;border-radius:10px';
-    box.hidden = false;
-    box.innerHTML = '';
-    box.appendChild(fr);
-    box.insertAdjacentHTML('beforeend',
-      `<a class="small" style="display:block;margin-top:4px;text-align:right" href="https://www.windy.com/?${esc(lat)},${esc(lon)},11" target="_blank" rel="noopener noreferrer">Открыть Windy полностью</a>`);
+    toggleBox($('.windy-box'), (box) => {
+      const lat = el.dataset.lat, lon = el.dataset.lon;
+      const fr = document.createElement('iframe');
+      fr.src = 'https://embed.windy.com/embed2.html?lat=' + lat + '&lon=' + lon +
+        '&detailLat=' + lat + '&detailLon=' + lon +
+        '&zoom=10&overlay=wind&level=surface&menu=&message=true&marker=true' +
+        '&metricWind=m%2Fs&metricTemp=%C2%B0C';
+      fr.setAttribute('loading', 'lazy');
+      fr.style.cssText = 'width:100%;height:380px;border:0;border-radius:10px';
+      box.appendChild(fr);
+      box.insertAdjacentHTML('beforeend',
+        `<a class="small" style="display:block;margin-top:4px;text-align:right" href="https://www.windy.com/?${esc(lat)},${esc(lon)},11" target="_blank" rel="noopener noreferrer">Открыть Windy полностью</a>`);
+    });
   },
   'weather-load': () => {
     UI.wx.loading = true;
@@ -1835,8 +1858,8 @@ function beginPrep(aircraftId) {
     tplId: tpl.id,
     items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null })),
     siteId: (S.sites.find((x) => x.isDefault) || {}).id || '',
-    // АКБ, установленный в модель, летит с ней
-    batteryId: (armedBattery(a) || {}).id || '',
+    // АКБ здесь не копируется: чек-лист и полёт читают её из модели
+    // (armedBattery) — источник истины один.
   };
 }
 
@@ -1866,7 +1889,7 @@ function openModelForm(a, presetId) {
       ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
     </div>
     ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
-    ${field('Аккумулятор модели', selectHtml('batteryId', battFreeOptions(a.batteryId), a.batteryId || ''),
+    ${field('Аккумулятор модели', selectHtml('batteryId', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —' }), a.batteryId || ''),
       'Один АКБ — одна модель; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
@@ -1915,13 +1938,13 @@ function mapY2lat(y, z) {
 }
 
 function openMapPicker(box, form) {
-  const nums = String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [];
-  const iLat = parseFloat(nums[0]), iLon = parseFloat(nums[1]);
-  const has = isFinite(iLat) && isFinite(iLon) && Math.abs(iLat) <= 85 && Math.abs(iLon) <= 180;
-  // центр и метка; без координат стартуем с Москвы
+  const c = parseCoords(new FormData(form).get('coords'));
+  // Меркатор не рисует |широту| > 85° — такие координаты валидны для
+  // сохранения, но карту центрируем на Москве.
+  const has = c && Math.abs(c.lat) <= 85;
   const st = {
-    lat: has ? iLat : 55.7558, lon: has ? iLon : 37.6176, z: has ? 15 : 11,
-    mLat: has ? iLat : null, mLon: has ? iLon : null,
+    lat: has ? c.lat : 55.7558, lon: has ? c.lon : 37.6176, z: has ? 15 : 11,
+    mLat: has ? c.lat : null, mLon: has ? c.lon : null,
   };
   box.innerHTML = `<div class="mp">
     <div class="mp-search">
@@ -1944,25 +1967,39 @@ function openMapPicker(box, form) {
   const pin = $('.mp-pin', box);
   const ya = $('.mp-ya', box);
 
+  // Кэш тайлов на время жизни карты: при панораме/зуме докладываются
+  // только недостающие картинки, уже декодированные не пересоздаются
+  // (без этого каждый жест мигал перерисовкой всей сетки).
+  const tiles = new Map(); // 'z/x/y' → img
   function draw() {
     const w = view.clientWidth, h = view.clientHeight;
     const cx = mapLon2x(st.lon, st.z), cy = mapLat2y(st.lat, st.z);
     const max = Math.pow(2, st.z);
     layer.style.transform = '';
-    layer.innerHTML = '';
     const x0 = Math.floor(cx - w / 2 / MAP_TILE), x1 = Math.floor(cx + w / 2 / MAP_TILE);
     const y0 = Math.floor(cy - h / 2 / MAP_TILE), y1 = Math.floor(cy + h / 2 / MAP_TILE);
+    const need = new Set();
     for (let x = x0; x <= x1; x++) {
       for (let y = Math.max(0, y0); y <= Math.min(max - 1, y1); y++) {
-        const img = document.createElement('img');
         const wx = ((x % max) + max) % max; // долгота заворачивается
-        img.src = MAP_TILES + '/' + st.z + '/' + wx + '/' + y + '.png';
-        img.width = MAP_TILE; img.height = MAP_TILE;
-        img.draggable = false; img.alt = '';
-        img.style.cssText = 'position:absolute;left:' + Math.round((x - cx) * MAP_TILE + w / 2) +
-          'px;top:' + Math.round((y - cy) * MAP_TILE + h / 2) + 'px';
-        layer.appendChild(img);
+        const key = st.z + '/' + wx + '/' + y + '@' + x;
+        need.add(key);
+        let img = tiles.get(key);
+        if (!img) {
+          img = document.createElement('img');
+          img.src = MAP_TILES + '/' + st.z + '/' + wx + '/' + y + '.png';
+          img.width = MAP_TILE; img.height = MAP_TILE;
+          img.draggable = false; img.alt = '';
+          img.style.position = 'absolute';
+          tiles.set(key, img);
+          layer.appendChild(img);
+        }
+        img.style.left = Math.round((x - cx) * MAP_TILE + w / 2) + 'px';
+        img.style.top = Math.round((y - cy) * MAP_TILE + h / 2) + 'px';
       }
+    }
+    for (const [key, img] of tiles) {
+      if (!need.has(key)) { img.remove(); tiles.delete(key); }
     }
     if (st.mLat != null) {
       pin.hidden = false;
@@ -1973,7 +2010,7 @@ function openMapPicker(box, form) {
     // сама поднимает установленное приложение, на десктопе — сайт.
     const yLat = st.mLat != null ? st.mLat : st.lat;
     const yLon = st.mLon != null ? st.mLon : st.lon;
-    ya.href = 'https://yandex.ru/maps/?pt=' + yLon.toFixed(5) + ',' + yLat.toFixed(5) + '&z=' + st.z + '&l=map';
+    ya.href = yaMapUrl(yLat.toFixed(5), yLon.toFixed(5), st.z);
   }
 
   // Поиск места — Nominatim (OSM), только по кнопке/Enter: политика
@@ -2059,7 +2096,7 @@ function openSiteForm(s, showMap) {
     <div class="btn-line">
       <button class="btn" type="button" data-act="site-gps">GPS</button>
       <button class="btn" type="button" data-act="site-map">Карта <span class="badge online">online</span></button>
-      <a class="btn site-ya-link" href="https://yandex.ru/maps/${s.lat != null ? `?pt=${s.lon},${s.lat}&z=15&l=map` : ''}"
+      <a class="btn site-ya-link" href="${s.lat != null ? yaMapUrl(s.lat, s.lon) : 'https://yandex.ru/maps/'}"
         target="_blank" rel="noopener noreferrer">Я.Карты <span class="badge online">online</span></a>
     </div>
     <div class="site-map-box" hidden></div>
@@ -2072,8 +2109,7 @@ function openSiteForm(s, showMap) {
     ${s.id ? `<button class="btn btn-danger" type="button" data-act="del-site" data-id="${s.id}">Удалить</button>` : ''}
   </form>`);
   if (showMap) {
-    const box = $('#modal-root .site-map-box');
-    if (box) { box.hidden = false; openMapPicker(box, box.closest('form')); }
+    toggleBox($('#modal-root .site-map-box'), (b) => openMapPicker(b, b.closest('form')));
   }
 }
 
@@ -2136,14 +2172,21 @@ function openTemplateForm(t) {
 // Списки локаций и батарей для селектов: последняя строка — «+ Добавить…»,
 // чтобы не уходить со страницы за новой записью.
 const NEW_OPT = '__new';
-function battOptions() {
-  return [['', '—']]
-    .concat(S.batteries.filter((b) => b.status !== 'retired').map((b) => [b.id, b.label]))
-    .concat([[NEW_OPT, '+ Добавить аккумулятор…']]);
+// Один строитель списка АКБ на все селекты: freeOnly скрывает занятые
+// (keepId — текущая остаётся), addNew добавляет «+ Добавить…».
+function battOptions(o) {
+  o = o || {};
+  return [['', o.emptyLabel || '—']]
+    .concat(S.batteries
+      .filter((b) => b.status !== 'retired' && (!o.freeOnly || b.id === o.keepId || !battOwner(b.id)))
+      .map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')]))
+    .concat(o.addNew ? [[NEW_OPT, '+ Добавить аккумулятор…']] : []);
 }
-function siteOptions(list) {
-  return [['', '—']]
+function siteOptions(list, o) {
+  o = o || {};
+  return [['', o.emptyLabel || '—']]
     .concat((list || S.sites).map((x) => [x.id, x.name]))
+    .concat(o.pre || [])
     .concat([[NEW_OPT, '+ Добавить локацию…']]);
 }
 
@@ -2158,7 +2201,7 @@ function openFinishForm(sessionId, saved) {
       ${field('Длительность, мин', `<input type="number" name="durationMin" min="0" value="${esc(mins)}">`)}
       ${field('Результат', selectHtml('result', Object.entries(RESULTS), v.result || 'normal'))}
     </div>
-    ${field('Аккумулятор', selectHtml('batteryId', battOptions(),
+    ${field('Аккумулятор', selectHtml('batteryId', battOptions({ addNew: true }),
       v.batteryId != null ? v.batteryId : s.batteryId, 'data-change="finish-batt"'),
       S.batteries.length ? 'Циклы выбранной АКБ вырастут на 1' : 'Парк батарей — во вкладке «Флот»')}
     ${field('Локация', selectHtml('siteId', siteOptions(),
@@ -2171,11 +2214,15 @@ function openFinishForm(sessionId, saved) {
 }
 
 // Открыть форму новой локации/АКБ, запомнив незаконченный «Итог полёта».
+// Стэш — замыкание «как переоткрыть прерванную форму»: dismissModal и
+// afterNested не знают, ЧТО за форма прервана, — новая прерываемая форма
+// добавляется одним таким замыканием, без веток по kind.
 function openFromFinish(form, which) {
+  const sessionId = form.dataset.id;
+  const values = Object.fromEntries(new FormData(form));
   UI.modalReturn = {
-    kind: 'finish',
-    sessionId: form.dataset.id,
-    values: Object.fromEntries(new FormData(form)),
+    field: which === 'site' ? 'siteId' : 'batteryId',
+    reopen: (patch) => openFinishForm(sessionId, Object.assign({}, values, patch)),
   };
   if (which === 'site') openSiteForm(null); else openBattForm(null);
 }
@@ -2184,20 +2231,16 @@ function openFromFinish(form, which) {
 // новую запись туда, откуда её вызвали. true — вернули форму сами.
 async function afterNested(what, id) {
   const r = UI.modalReturn;
-  if (r && r.kind === 'finish') {
+  if (r && r.reopen) {
     UI.modalReturn = null;
-    r.values[what === 'site' ? 'siteId' : 'batteryId'] = id;
-    openFinishForm(r.sessionId, r.values);
+    r.reopen({ [r.field]: id });
     return true;
   }
   if (UI.view === 'prep' && UI.prep) {
     if (what === 'site') UI.prep.siteId = id;
-    else {
-      UI.prep.batteryId = id;
-      // «+ Добавить…» с чек-листа тоже ставит АКБ в модель (если её
-      // не отдали другой модели прямо в форме через «Стоит в модели»)
-      if (!battOwner(id)) await installBattery(UI.prep.aircraftId, id);
-    }
+    // «+ Добавить…» с чек-листа тоже ставит АКБ в модель (если её
+    // не отдали другой модели прямо в форме через «Стоит в модели»)
+    else if (!battOwner(id)) await installBattery(UI.prep.aircraftId, id);
   } else if (UI.view === 'weather' && what === 'site') {
     const s = S.sites.find((x) => x.id === id);
     if (s && s.lat != null) UI.wx.siteId = id;
@@ -2220,14 +2263,8 @@ const FORMS = {
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
     a.batteryId = fd.get('batteryId') || null;
-    // Только снять АКБ с прежней модели: саму a запишет общий put ниже
-    // (installBattery(a.id,…) писал бы модель дважды с миганием полей).
-    if (a.batteryId) {
-      for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
-        other.batteryId = null;
-        await put('aircraft', other);
-      }
-    }
+    // releaseBattery пишет напрямую в RCDB; S.aircraft обновит общий put(a) ниже
+    if (a.batteryId) await releaseBattery(a.batteryId, a.id);
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -2268,12 +2305,9 @@ const FORMS = {
     s.name = fd.get('name').trim();
     s.place = fd.get('place').trim();
     // Одно поле «широта, долгота» — как копируется из карт.
-    const nums = String(fd.get('coords')).match(/-?\d+\.\d+|-?\d+/g) || [];
-    const lat = parseFloat(nums[0]);
-    const lon = parseFloat(nums[1]);
-    const valid = isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
-    s.lat = valid ? +lat.toFixed(5) : null;
-    s.lon = valid ? +lon.toFixed(5) : null;
+    const c = parseCoords(fd.get('coords'));
+    s.lat = c ? +c.lat.toFixed(5) : null;
+    s.lon = c ? +c.lon.toFixed(5) : null;
     s.notes = fd.get('notes').trim();
     s.isDefault = !!fd.get('isDefault');
     if (s.isDefault) {
@@ -2346,9 +2380,8 @@ const FORMS = {
     s.end = Date.now();
     s.durationMin = +fd.get('durationMin') || Math.round((s.end - s.start) / 60000);
     s.result = fd.get('result');
-    // «+ Добавить…» перехватывается на change; сюда попасть не должно.
-    s.batteryId = fd.get('batteryId') === NEW_OPT ? '' : fd.get('batteryId');
-    s.siteId = fd.get('siteId') === NEW_OPT ? '' : fd.get('siteId');
+    s.batteryId = fd.get('batteryId');
+    s.siteId = fd.get('siteId');
     s.weather = fd.get('weather').trim();
     s.notes = fd.get('notes').trim();
     s.problems = fd.get('problems').trim();
@@ -2591,10 +2624,8 @@ document.addEventListener('click', (e) => {
   const yaLink = e.target.closest('.site-ya-link');
   if (yaLink) {
     const form = yaLink.closest('form');
-    const nums = form ? String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [] : [];
-    const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
-    yaLink.href = (isFinite(lat) && isFinite(lon))
-      ? `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`
+    const c = form && parseCoords(new FormData(form).get('coords'));
+    yaLink.href = c ? yaMapUrl(c.lat, c.lon)
       : 'https://yandex.ru/maps/'; // поле очищено — не вести на старую точку
     return; // не preventDefault: пусть ссылка работает как в списке локаций
   }
@@ -2619,6 +2650,21 @@ document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-change]');
   if (!el) return;
   const kind = el.dataset.change;
+  // «+ Добавить…» обрабатывается ОДНИМ гардом для всех селектов:
+  // вернуть прежний выбор и открыть нужную форму. Ветки ниже про
+  // NEW_OPT знать не обязаны.
+  if (el.value === NEW_OPT) {
+    if (kind === 'finish-site' || kind === 'finish-batt') {
+      const form = el.closest('form');
+      if (form) openFromFinish(form, kind === 'finish-site' ? 'site' : 'batt');
+      return;
+    }
+    el.value = kind === 'prep-site' ? (UI.prep && UI.prep.siteId) || ''
+      : kind === 'prep-batt' ? (armedBattery(S.aircraft.find((x) => x.id === (UI.prep || {}).aircraftId)) || {}).id || ''
+      : kind === 'weather-site' ? UI.wx.siteId || '' : '';
+    (kind.endsWith('site') ? openSiteForm : openBattForm)(null);
+    return;
+  }
   if (kind === 'status-manual') {
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (a) { a.statusManual = el.value; put('aircraft', a).then(() => render(true)); }
@@ -2635,32 +2681,25 @@ document.addEventListener('change', (e) => {
     }
   } else if (kind === 'prep-site') {
     if (!UI.prep) return;
-    if (el.value === NEW_OPT) { el.value = UI.prep.siteId || ''; openSiteForm(null); }
-    else UI.prep.siteId = el.value;
+    UI.prep.siteId = el.value;
   } else if (kind === 'prep-batt') {
     if (!UI.prep) return;
-    if (el.value === NEW_OPT) { el.value = UI.prep.batteryId || ''; openBattForm(null); }
-    else if (el.value === '' && UI.prep.batteryId) {
+    const cur = (armedBattery(S.aircraft.find((x) => x.id === UI.prep.aircraftId)) || {}).id || '';
+    if (el.value === '' && cur) {
       // снятие тоже «дублируется везде», но не молча: случайный тап
       // перед вылетом не должен незаметно разоружить модель
-      el.value = UI.prep.batteryId;
+      el.value = cur;
       confirmModal('Снять аккумулятор с модели? Она уйдёт из «К вылету».', 'prep-batt-clear', '', 'Снять');
     } else {
-      UI.prep.batteryId = el.value;
       // выбор на чек-листе = установка в модель (дублируется везде)
       installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
     }
   } else if (kind === 'batt-preset') {
     const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
     if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
-  } else if (kind === 'finish-site' || kind === 'finish-batt') {
-    if (el.value !== NEW_OPT) return;
-    const form = el.closest('form');
-    if (form) openFromFinish(form, kind === 'finish-site' ? 'site' : 'batt');
   } else if (kind === 'import-file') {
     handleImportFile(el);
   } else if (kind === 'weather-site') {
-    if (el.value === NEW_OPT) { el.value = UI.wx.siteId || ''; openSiteForm(null); return; }
     UI.wx.siteId = el.value;
   } else if (kind === 'weather-model') {
     UI.wx.aircraftId = el.value;

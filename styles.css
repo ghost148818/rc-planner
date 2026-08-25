@@ -238,8 +238,7 @@ button.row:active, a.row:active { background: var(--card-2); }
 .btn-sm { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
 .btn + .btn { margin-top: 8px; }
 .btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
-.btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
-.btn-line .btn { margin-top: 0; }
+.btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
 
 /* ---------- Формы ---------- */
 .field { margin-bottom: 12px; }
@@ -447,27 +446,20 @@ details.fold .fold-body { padding: 0 2px 14px; }
 /* Мини-карта выбора точки (OSM) */
 .site-map-box:not([hidden]) { margin-top: 12px; }
 .mp { margin-bottom: 10px; }
-.map-btn {
-  flex: none;
-  width: 48px;
+/* Общий вид кнопок карты (иконка у поля, «Найти», зум) */
+.map-btn, .mp-search .mp-go, .mp-zoom button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
-  color: var(--mut);
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.map-btn { flex: none; width: 48px; color: var(--mut); }
 .map-btn svg { width: 22px; height: 22px; }
 .mp-search { display: flex; gap: 8px; margin-bottom: 8px; }
 .mp-search .mp-q { flex: 1; min-width: 0; }
-.mp-search .mp-go {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  padding: 0 14px;
-  min-height: 44px;
-}
+.mp-search .mp-go { padding: 0 14px; min-height: 44px; }
 .mp-found { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .windy-box { margin-top: 8px; }
 .mp-view {
@@ -505,9 +497,6 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .mp-zoom button {
   width: 48px;
   height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
   color: var(--text);
   font-size: 24px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
