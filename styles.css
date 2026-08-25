@@ -237,6 +237,8 @@ button.row:active, a.row:active { background: var(--card-2); }
 .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
 .btn-sm { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
 .btn + .btn { margin-top: 8px; }
+/* Кнопки в строке списка (Я.Карты/OSM у локации) стоят в ряд, не столбиком */
+.row .btn + .btn { margin-top: 0; }
 .btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
 

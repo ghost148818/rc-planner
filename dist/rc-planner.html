@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
+       приложения, не путь страницы. -->
+  <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="3414baca46-single">
+  <meta name="build" content="8f481aa41e-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -256,6 +259,8 @@ button.row:active, a.row:active { background: var(--card-2); }
 .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
 .btn-sm { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
 .btn + .btn { margin-top: 8px; }
+/* Кнопки в строке списка (Я.Карты/OSM у локации) стоят в ряд, не столбиком */
+.row .btn + .btn { margin-top: 0; }
 .btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
 
@@ -1271,6 +1276,17 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: '0.18',
+    date: '2026-08-25',
+    title: 'Приватность: точная геопозиция не покидает устройство',
+    items: [
+      'Координаты для прогноза огрубляются до ~1 км перед отправкой — на точность окон это не влияет, а точка взлёта остаётся вашей.',
+      'Внешние сервисы видят только домен приложения (referrer origin) — без пути и параметров страницы.',
+      'Страница «Приватность» переписана честно: полный список online-функций и что именно уходит по каждой.',
+      'Кнопки «Я.Карты» и «OSM» в списке локаций выровнены по высоте.',
+    ],
+  },
+  {
     v: '0.17',
     date: '2026-08-25',
     title: 'Несколько бортов подряд и понятный путь после краша',
@@ -1396,17 +1412,6 @@ RC.CHANGELOG = [
     items: [
       'Выбор готовой платформы открывает форму с заполненными ТТХ — вес, размах, порог ветра и высоту можно поправить под свою сборку ещё до создания.',
       'Типовая комплектация подставляется в компоненты после сохранения, как раньше.',
-    ],
-  },
-  {
-    v: '0.6',
-    date: '2026-08-24',
-    title: 'Понятный прогноз и готовые платформы',
-    items: [
-      'Прогноз читается с одного взгляда: у каждого часа полоска «сколько съедено от допустимого ветра модели» и слово — можно / на пределе / не стоит.',
-      'Цифры расшифрованы по-человечески: ветер у земли, на высоте полёта, порывы, температура, дождь.',
-      'Итог дня крупно: «Можно лететь: 08:00–14:00 и 15:00–20:00».',
-      'При добавлении модели — готовые платформы со снаряжённым весом (с АКБ): 5″ фристайл, 10″ долголёт, X-UAV Talon Pro, Skywalker X8, HeeWing T2 Cruza.',
     ],
   },
 ];
@@ -2598,8 +2603,8 @@ async function wxLoad() {
     try {
       const pos = await new Promise((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 12000, maximumAge: 60000 }));
-      lat = +pos.coords.latitude.toFixed(4);
-      lon = +pos.coords.longitude.toFixed(4);
+      lat = pos.coords.latitude;
+      lon = pos.coords.longitude;
       place = 'Моё местоположение';
     } catch (e) {
       wx.error = 'Не удалось получить местоположение. Разрешите доступ к геопозиции или выберите локацию.';
@@ -2617,6 +2622,11 @@ async function wxLoad() {
     }
     lat = s.lat; lon = s.lon; place = s.name;
   }
+  // Приватность: наружу уходят координаты, огрублённые до ~1 км
+  // (2 знака). Сетка прогнозных моделей всё равно крупнее — на точность
+  // окон это не влияет, а точное место (дом, точка взлёта) не уходит.
+  lat = +(+lat).toFixed(2);
+  lon = +(+lon).toFixed(2);
   const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
     '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,weather_code' +
     '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) + '&forecast_days=' + WX_DAYS;
@@ -2929,11 +2939,21 @@ function viewPrivacy() {
     <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Модели, полёты,
     чек-листы, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
     в интернет — в приложении просто нет кода, который бы это делал.</p>
-    <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. Единственный сетевой запрос —
-    проверка обновления самой страницы приложения.</p>
-    <p style="margin-top:8px">Раздел «Инструменты» — ссылки на сторонние сайты: они открываются
-    в браузере и работают по своим правилам. Такие функции помечены значком
-    <span class="badge online">online</span>.</p>
+    <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. В фоне приложение обращается
+    в сеть только за обновлением самой страницы.</p>
+    <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
+    (помечены <span class="badge online">online</span>). Что уходит наружу:</p>
+    <ul class="small" style="padding-left:18px;margin-top:4px">
+      <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
+      <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
+      <li><b>Поиск места</b> (Nominatim/OSM): введённый вами текст запроса.</li>
+      <li><b>Карта ветра</b> (Windy): координаты выбранного места — при раскрытии карты.</li>
+      <li><b>Ссылки</b> (Я.Карты, OSM, инструменты): открываются в браузере по своим правилам.</li>
+    </ul>
+    <p style="margin-top:8px"><strong>Геолокация</strong> запрашивается у браузера только по кнопкам
+    «GPS» и «Моё местоположение». Точные координаты остаются на устройстве (в вашей локации);
+    в интернет они не отправляются — прогноз получает точку с точностью ~1 км. Внешним сайтам
+    приложение передаёт только своё доменное имя, без каких-либо ваших данных.</p>
     <p style="margin-top:8px">Удаление данных в настройках стирает их безвозвратно: копий нигде нет.
     Резервная копия — файл, который вы сохраняете сами.</p>
   </div>`;

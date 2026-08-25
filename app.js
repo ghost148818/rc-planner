@@ -1184,8 +1184,8 @@ async function wxLoad() {
     try {
       const pos = await new Promise((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 12000, maximumAge: 60000 }));
-      lat = +pos.coords.latitude.toFixed(4);
-      lon = +pos.coords.longitude.toFixed(4);
+      lat = pos.coords.latitude;
+      lon = pos.coords.longitude;
       place = 'Моё местоположение';
     } catch (e) {
       wx.error = 'Не удалось получить местоположение. Разрешите доступ к геопозиции или выберите локацию.';
@@ -1203,6 +1203,11 @@ async function wxLoad() {
     }
     lat = s.lat; lon = s.lon; place = s.name;
   }
+  // Приватность: наружу уходят координаты, огрублённые до ~1 км
+  // (2 знака). Сетка прогнозных моделей всё равно крупнее — на точность
+  // окон это не влияет, а точное место (дом, точка взлёта) не уходит.
+  lat = +(+lat).toFixed(2);
+  lon = +(+lon).toFixed(2);
   const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
     '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,weather_code' +
     '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) + '&forecast_days=' + WX_DAYS;
@@ -1515,11 +1520,21 @@ function viewPrivacy() {
     <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Модели, полёты,
     чек-листы, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
     в интернет — в приложении просто нет кода, который бы это делал.</p>
-    <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. Единственный сетевой запрос —
-    проверка обновления самой страницы приложения.</p>
-    <p style="margin-top:8px">Раздел «Инструменты» — ссылки на сторонние сайты: они открываются
-    в браузере и работают по своим правилам. Такие функции помечены значком
-    <span class="badge online">online</span>.</p>
+    <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. В фоне приложение обращается
+    в сеть только за обновлением самой страницы.</p>
+    <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
+    (помечены <span class="badge online">online</span>). Что уходит наружу:</p>
+    <ul class="small" style="padding-left:18px;margin-top:4px">
+      <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
+      <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
+      <li><b>Поиск места</b> (Nominatim/OSM): введённый вами текст запроса.</li>
+      <li><b>Карта ветра</b> (Windy): координаты выбранного места — при раскрытии карты.</li>
+      <li><b>Ссылки</b> (Я.Карты, OSM, инструменты): открываются в браузере по своим правилам.</li>
+    </ul>
+    <p style="margin-top:8px"><strong>Геолокация</strong> запрашивается у браузера только по кнопкам
+    «GPS» и «Моё местоположение». Точные координаты остаются на устройстве (в вашей локации);
+    в интернет они не отправляются — прогноз получает точку с точностью ~1 км. Внешним сайтам
+    приложение передаёт только своё доменное имя, без каких-либо ваших данных.</p>
     <p style="margin-top:8px">Удаление данных в настройках стирает их безвозвратно: копий нигде нет.
     Резервная копия — файл, который вы сохраняете сами.</p>
   </div>`;
