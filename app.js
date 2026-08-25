@@ -246,6 +246,15 @@ async function loadAll() {
   });
   const st = snap.settings.find((x) => x.id === 'main');
   if (st) S.settings = Object.assign({ favTools: [] }, st);
+  // Координаты локаций — строго числа. Импортированная копия может
+  // принести в lat/lon произвольные строки; они попадают в value и href
+  // без esc() — нормализуем при каждой загрузке, а не надеемся на формы.
+  for (const s of S.sites || []) {
+    const num = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
+    s.lat = num(s.lat);
+    s.lon = num(s.lon);
+    if (s.lat == null || s.lon == null) { s.lat = null; s.lon = null; }
+  }
 }
 
 async function put(store, obj) {
@@ -477,7 +486,7 @@ function viewToday() {
 
   // К вылету: только собранные модели (с установленным АКБ) — весь
   // флот не дублируем, он живёт во вкладке «Флот».
-  const armed = S.aircraft.filter((a) => a.batteryId && S.batteries.some((b) => b.id === a.batteryId));
+  const armed = S.aircraft.filter((a) => armedBattery(a));
   h += '<div class="h2">К вылету</div><div class="card flat">';
   if (armed.length) {
     h += armed.map((a) => {
@@ -553,7 +562,19 @@ const COMPONENTS = [
 ];
 
 // АКБ ставится только в ОДНУ модель: занятые другими исчезают из выбора.
-function battOwner(bId) { return S.aircraft.find((x) => x.batteryId === bId); }
+function battOwner(bId) {
+  // без guard'а battOwner(undefined) находил модель с незаполненным batteryId
+  if (!bId) return undefined;
+  return S.aircraft.find((x) => x.batteryId === bId);
+}
+
+// «Собранная» модель: установленный АКБ существует и не списан.
+// Возвращает объект АКБ либо undefined — одна проверка для «Сегодня»,
+// окон погоды и чек-листа.
+function armedBattery(a) {
+  const b = a && S.batteries.find((x) => x.id === a.batteryId);
+  return b && b.status !== 'retired' ? b : undefined;
+}
 
 // Единая установка/снятие: bId в модель aId (aId пустой — просто снять
 // отовсюду). Все места (карточка модели, форма модели, форма АКБ,
@@ -1152,6 +1173,10 @@ function wxDayOptions() {
 function viewWeather() {
   const wx = UI.wx;
   if (!wx.data && S.settings.weatherCache) wx.data = S.settings.weatherCache;
+  // Сначала сбрасываем выбор разобранной модели, ПОТОМ считаем пороги —
+  // иначе вердикт этого рендера использует модель, которой нет в списке.
+  const wxArmed = S.aircraft.filter((a) => armedBattery(a));
+  if (wx.aircraftId && !wxArmed.some((a) => a.id === wx.aircraftId)) { wx.aircraftId = ''; wx.batteryId = ''; }
   const lim = wxLimits();
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
@@ -1167,9 +1192,7 @@ function viewWeather() {
 
   h += `<div class="card">`;
   // Только собранные модели (с установленным АКБ): окна считаются
-  // для того, что реально готово лететь.
-  const wxArmed = S.aircraft.filter((a) => a.batteryId && S.batteries.some((b) => b.id === a.batteryId));
-  if (wx.aircraftId && !wxArmed.some((a) => a.id === wx.aircraftId)) wx.aircraftId = '';
+  // для того, что реально готово лететь. wxArmed вычислен в начале view.
   h += field('Модель', selectHtml('wxmodel',
     [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
       .concat(wxArmed.map((a) => {
@@ -1683,7 +1706,8 @@ const ACTIONS = {
       if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
         input.value = lat + ', ' + lon;
       } else {
-        input.value = String(text).trim().slice(0, 60);
+        // не затирать уже введённое мусором из буфера
+        alert('В буфере не нашлось координат (пары чисел «широта, долгота»).');
         input.focus();
       }
     } catch (e) {
@@ -1807,7 +1831,7 @@ function beginPrep(aircraftId) {
     items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null })),
     siteId: (S.sites.find((x) => x.isDefault) || {}).id || '',
     // АКБ, установленный в модель, летит с ней
-    batteryId: (a.batteryId && S.batteries.some((b) => b.id === a.batteryId)) ? a.batteryId : '',
+    batteryId: (armedBattery(a) || {}).id || '',
   };
 }
 
@@ -2153,7 +2177,7 @@ function openFromFinish(form, which) {
 
 // После сохранения локации/АКБ, открытой из другого места: подставить
 // новую запись туда, откуда её вызвали. true — вернули форму сами.
-function afterNested(what, id) {
+async function afterNested(what, id) {
   const r = UI.modalReturn;
   if (r && r.kind === 'finish') {
     UI.modalReturn = null;
@@ -2162,7 +2186,13 @@ function afterNested(what, id) {
     return true;
   }
   if (UI.view === 'prep' && UI.prep) {
-    if (what === 'site') UI.prep.siteId = id; else UI.prep.batteryId = id;
+    if (what === 'site') UI.prep.siteId = id;
+    else {
+      UI.prep.batteryId = id;
+      // «+ Добавить…» с чек-листа тоже ставит АКБ в модель (если её
+      // не отдали другой модели прямо в форме через «Стоит в модели»)
+      if (!battOwner(id)) await installBattery(UI.prep.aircraftId, id);
+    }
   } else if (UI.view === 'weather' && what === 'site') {
     const s = S.sites.find((x) => x.id === id);
     if (s && s.lat != null) UI.wx.siteId = id;
@@ -2185,7 +2215,14 @@ const FORMS = {
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
     a.batteryId = fd.get('batteryId') || null;
-    if (a.batteryId) await installBattery(a.id, a.batteryId); // снять с прежней модели
+    // Только снять АКБ с прежней модели: саму a запишет общий put ниже
+    // (installBattery(a.id,…) писал бы модель дважды с миганием полей).
+    if (a.batteryId) {
+      for (const other of S.aircraft.filter((x) => x.batteryId === a.batteryId && x.id !== a.id)) {
+        other.batteryId = null;
+        await put('aircraft', other);
+      }
+    }
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -2241,7 +2278,7 @@ const FORMS = {
       }
     }
     await put('sites', s);
-    if (afterNested('site', s.id)) return;
+    if (await afterNested('site', s.id)) return;
     closeModal();
     render();
   },
@@ -2258,14 +2295,17 @@ const FORMS = {
     b.status = fd.get('status');
     b.notes = fd.get('notes').trim();
     await put('batteries', b);
-    // «Стоит в модели»: снять с прежней и поставить в выбранную
+    // «Стоит в модели»: снять с прежней и поставить в выбранную.
+    // Списанная АКБ в модели стоять не может — снимается принудительно
+    // (иначе модель с ней числилась бы «собранной» в окнах погоды).
     const owner = (battOwner(b.id) || {}).id || '';
-    const target = fd.get('inModel') != null ? String(fd.get('inModel')) : owner;
+    const target = b.status === 'retired' ? ''
+      : fd.get('inModel') != null ? String(fd.get('inModel')) : owner;
     if (target !== owner) {
       if (!target) await installBattery(owner, null);
       else await installBattery(target, b.id);
     }
-    if (afterNested('batt', b.id)) return;
+    if (await afterNested('batt', b.id)) return;
     closeModal();
     render();
   },
@@ -2548,7 +2588,9 @@ document.addEventListener('click', (e) => {
     const form = yaLink.closest('form');
     const nums = form ? String(new FormData(form).get('coords') || '').match(/-?\d+\.\d+|-?\d+/g) || [] : [];
     const lat = parseFloat(nums[0]), lon = parseFloat(nums[1]);
-    if (isFinite(lat) && isFinite(lon)) yaLink.href = `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`;
+    yaLink.href = (isFinite(lat) && isFinite(lon))
+      ? `https://yandex.ru/maps/?pt=${lon},${lat}&z=15&l=map`
+      : 'https://yandex.ru/maps/'; // поле очищено — не вести на старую точку
     return; // не preventDefault: пусть ссылка работает как в списке локаций
   }
   const nav = e.target.closest('[data-nav]');
@@ -2596,7 +2638,7 @@ document.addEventListener('change', (e) => {
     else {
       UI.prep.batteryId = el.value;
       // выбор на чек-листе = установка в модель (дублируется везде)
-      installBattery(UI.prep.aircraftId, el.value);
+      installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
     }
   } else if (kind === 'batt-preset') {
     const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
@@ -2614,7 +2656,7 @@ document.addEventListener('change', (e) => {
     UI.wx.aircraftId = el.value;
     // АКБ, привязанная к модели, подставляется сама (можно переопределить)
     const wa = S.aircraft.find((x) => x.id === el.value);
-    UI.wx.batteryId = (wa && wa.batteryId && S.batteries.some((b) => b.id === wa.batteryId)) ? wa.batteryId : '';
+    UI.wx.batteryId = (armedBattery(wa) || {}).id || '';
     render(true);
   } else if (kind === 'weather-batt') {
     UI.wx.batteryId = el.value;
