@@ -30,16 +30,28 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
     const h = document.querySelector('.head h1');
     return h && h.textContent === 'Test Wing';
   });
-  ok(true, 'модель создана, открыта карточка');
+  ok(true, 'борт создан, открыта карточка');
 
-  // 2. Подготовка: чек-лист крыла
+  // 2. Без АКБ лететь нельзя: на чек-листе нет кнопок полёта
   await page.click('[data-act="start-prep"]');
   await page.waitForSelector('.ck');
   const items = await page.locator('.ck').count();
   ok(items >= 5, 'чек-лист крыла показан (' + items + ' пунктов)');
+  ok((await page.locator('[data-act="start-flight"]').count()) === 0,
+    'без аккумулятора кнопки START FLIGHT нет');
   await page.click('.ck >> nth=0');
   const st = await page.getAttribute('.ck >> nth=0', 'data-state');
   ok(st === 'ok', 'касание отмечает пункт как «ок»');
+
+  // 2б. Ставим АКБ прямо с чек-листа через «+ Добавить аккумулятор…»
+  await page.selectOption('select[name="prepBatt"]', '__new');
+  await page.waitForSelector('dialog input[name="label"]');
+  await page.fill('dialog input[name="label"]', 'Test 6S');
+  await page.fill('dialog input[name="cells"]', '6');
+  await page.fill('dialog input[name="capacity"]', '1300');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('[data-act="start-flight"]');
+  ok(true, 'после установки АКБ кнопка START FLIGHT появилась');
 
   // 3. START FLIGHT
   await page.click('[data-act="start-flight"]');
@@ -93,7 +105,7 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.waitForTimeout(150);
   await page.evaluate(() => { location.hash = '#/fleet'; });
   await page.waitForTimeout(80);
-  ok((await page.textContent('#views')).includes('Пока нет ни одной модели'), 'данные стёрты');
+  ok((await page.textContent('#views')).includes('Пока нет ни одного борта'), 'данные стёрты');
 
   // 8. Импорт обратно
   await page.evaluate(() => { location.hash = '#/backup'; });

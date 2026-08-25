@@ -247,8 +247,31 @@ function chip(st) {
   return `<span class="chip ${s.cls}">${s.label}</span>`;
 }
 
-function activeSession() {
-  return S.sessions.find((s) => !s.end) || null;
+// Полётов может идти несколько (два пилота, два борта) — но у одного
+// борта только один открытый полёт.
+function activeSessions() {
+  return S.sessions.filter((s) => !s.end);
+}
+function activeSessionOf(aircraftId) {
+  return S.sessions.find((s) => !s.end && s.aircraftId === aircraftId) || null;
+}
+// Забытый полёт: открыт дольше 6 часов — почти наверняка не завершили.
+const STALE_FLIGHT_MIN = 360;
+function staleSession(s) {
+  return (Date.now() - s.start) / 60000 > STALE_FLIGHT_MIN;
+}
+// Общий блок баннеров об идущих полётах (Сегодня и «Полёт»).
+function activeFlightBanners() {
+  return activeSessions().map((s) => {
+    const a = S.aircraft.find((x) => x.id === s.aircraftId);
+    const mins = Math.round((Date.now() - s.start) / 60000);
+    return staleSession(s)
+      ? `<div class="banner warn">Полёт «${esc(a ? a.name : '')}» идёт уже ${fmtDur(mins)} — забыли завершить?
+          <button class="btn-sm btn right" data-act="finish-flight" data-id="${s.id}">Завершить</button>
+          <button class="btn-sm btn right" data-act="discard-flight" data-id="${s.id}">Удалить</button></div>`
+      : `<div class="banner warn">Идёт полёт: ${esc(a ? a.name : '')} · ${fmtDur(mins)}.
+          <button class="btn-sm btn right" data-nav="#/session/${s.id}">Открыть</button></div>`;
+  }).join('');
 }
 
 /* ============================================================
@@ -503,19 +526,14 @@ function viewToday() {
       их в интернет и работает без сети. <button class="btn-sm btn" data-act="dismiss-hi">Понятно</button></div>`;
   }
 
-  const act = activeSession();
-  if (act) {
-    const a = S.aircraft.find((x) => x.id === act.aircraftId);
-    h += `<div class="banner warn">Идёт полёт: ${esc(a ? a.name : '')}.
-      <button class="btn-sm btn right" data-nav="#/session/${act.id}">Открыть</button></div>`;
-  }
+  h += activeFlightBanners();
 
   // «Начало работы»: четыре шага с галочками, ведут прямо к действию.
   // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
   const steps = [
-    ['Добавьте модель', 'во «Флоте»: готовая платформа или своя', S.aircraft.length > 0,
+    ['Добавьте борт', 'во «Флоте»: готовая платформа или свой', S.aircraft.length > 0,
       'data-act="add-model"', 'fleet'],
-    ['Заведите аккумулятор и поставьте в модель', 'модель с АКБ считается собранной к вылету', armedFleet().length > 0,
+    ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету', armedFleet().length > 0,
       'data-nav="#/batteries"', 'batteries'],
     ['Запомните локацию', 'координаты — для прогноза и окон полётов', S.sites.length > 0,
       'data-act="add-site"', 'sites'],
@@ -552,16 +570,16 @@ function viewToday() {
       ? `<div class="row">
           <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:40px">
             ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-            <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)} · чек-лист пройден</span></span></button>
+            <span class="d">${TYPES[a.type] || ''} · ${battTag(b)} · чек-лист пройден</span></span></button>
           <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}" style="min-height:40px">Взлёт</button>
         </div>`
       : rowBtn(`data-nav="#/model/${a.id}"`,
         `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-         <span class="d">${TYPES[a.type] || ''} · ${esc(b.label)}</span></span>
+         <span class="d">${TYPES[a.type] || ''} · ${battTag(b)}</span></span>
          ${chip(statusOf(a))}`)).join('');
   } else {
-    h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите модель к вылету</span>
-      <span class="d">Установите аккумулятор в карточке модели — она появится здесь</span></span>`, 'batteries');
+    h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
+      <span class="d">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries');
   }
   h += '</div>';
   }
@@ -592,14 +610,14 @@ function viewToday() {
 function sessionRow(s) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
-    `<span class="grow"><span class="t"><span class="mono">#${String(s.flightNo).padStart(3, '0')}</span> ${esc(a ? a.name : 'Модель удалена')}</span>
+    `<span class="grow"><span class="t"><span class="mono">#${String(s.flightNo).padStart(3, '0')}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
      <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${RESULTS[s.result] || '—'}</span></span></span>`);
 }
 
 // Флот — это модели и батареи: два списка одной вкладки.
 function fleetSeg(active) {
   return `<div class="seg" style="margin-bottom:10px">
-    <button data-nav="#/fleet" aria-pressed="${active === 'fleet'}">Модели</button>
+    <button data-nav="#/fleet" aria-pressed="${active === 'fleet'}">Борта</button>
     <button data-nav="#/batteries" aria-pressed="${active === 'batteries'}">Аккумуляторы</button>
   </div>`;
 }
@@ -607,13 +625,16 @@ function fleetSeg(active) {
 function viewFleet() {
   let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить' }) + fleetSeg('fleet');
   if (!S.aircraft.length) {
-    return h + emptyState('Пока нет ни одной модели.', 'add-model', 'Добавить модель');
+    return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт');
   }
   h += '<div class="card flat">';
-  h += S.aircraft.map((a) => rowBtn(`data-nav="#/model/${a.id}"`,
+  h += S.aircraft.map((a) => {
+    const b = armedBattery(a);
+    return rowBtn(`data-nav="#/model/${a.id}"`,
     `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-     <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}</span></span>
-     ${chip(statusOf(a))}`)).join('');
+     <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span>
+     ${chip(statusOf(a))}`);
+  }).join('');
   h += '</div>';
   return h;
 }
@@ -642,6 +663,14 @@ function armedBattery(a) {
 
 function armedFleet() { return S.aircraft.filter((a) => armedBattery(a)); }
 
+// Подпись аккумулятора, светящаяся состоянием заряда: зелёная — заряжен,
+// синяя — после полёта (разряжен). Один вид на бортах и в списке АКБ.
+function battTag(b, text) {
+  const cls = b.charge === 'ready' ? 'bt-ready' : b.charge === 'flown' ? 'bt-flown' : '';
+  return `<span class="${cls}">${esc(text != null ? text : b.label)}</span>`;
+}
+const CHARGE_LABEL = { ready: 'заряжен', flown: 'после полёта' };
+
 // Подготовка действует до конца дня (МСК): недельная пометка «чек-лист
 // пройден» обесценила бы сам чек-лист.
 function preparedFresh(a) {
@@ -653,7 +682,7 @@ function preparedFresh(a) {
 // можно: подготовка свежая, нет запрета/открытого обслуживания и нет
 // уже идущего полёта.
 function takeoffReady(a) {
-  if (!preparedFresh(a) || activeSession()) return false;
+  if (!preparedFresh(a) || activeSessionOf(a.id) || !armedBattery(a)) return false;
   const st = statusOf(a);
   return st !== 'grounded' && st !== 'maintenance';
 }
@@ -680,7 +709,7 @@ async function installBattery(aId, bId) {
 
 function viewModel() {
   const a = S.aircraft.find((x) => x.id === UI.arg);
-  if (!a) return pageHead('Модель не найдена', { back: '#/fleet' });
+  if (!a) return pageHead('Борт не найден', { back: '#/fleet' });
   const flights = sessionsOf(a.id).filter((s) => s.end);
   const total = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
   const st = statusOf(a);
@@ -700,9 +729,11 @@ function viewModel() {
     </select></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
       <span class="row-ic">${ICONS.batteries}</span>
-      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —' }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —' }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+      ${bat && bat.status !== 'retired' ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
+        data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
     </div>
-    <div class="hint" style="margin-top:4px">Модель с установленным АКБ считается собранной к вылету
+    <div class="hint" style="margin-top:4px">Борт с установленным АКБ считается собранным к вылету
       и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>
     <div class="stat-line" style="margin-bottom:0">
       <div class="stat"><div class="v">${flights.length}</div><div class="k">${plural(flights.length, 'полёт', 'полёта', 'полётов')}</div></div>
@@ -716,7 +747,7 @@ function viewModel() {
   const specs = [
     ['Тип', TYPES[a.type] || '—'], ['Производитель', a.manufacturer],
     ['Вес (сухой)', a.weight ? a.weight + ' г' : ''], ['Размах', a.wingspan ? a.wingspan + ' мм' : ''],
-    ['АКБ модели', bat ? bat.label + (bat.weight && a.weight ? ` → взлётный ${a.weight + bat.weight} г` : bat.weight ? ` · ${bat.weight} г` : '') : ''],
+    ['АКБ борта', bat ? bat.label + (bat.weight && a.weight ? ` → взлётный ${a.weight + bat.weight} г` : bat.weight ? ` · ${bat.weight} г` : '') : ''],
   ].filter((x) => x[1]);
   if (specs.length) {
     h += '<div class="h2">Паспорт</div><div class="card">' +
@@ -790,7 +821,7 @@ function viewModel() {
 
   h += `<hr class="sep">
     <div class="btn-line">
-      <button class="btn" data-act="export-model" data-id="${a.id}">Экспорт модели</button>
+      <button class="btn" data-act="export-model" data-id="${a.id}">Экспорт борта</button>
       <button class="btn btn-danger" data-act="del-model" data-id="${a.id}">Удалить</button>
     </div>`;
   return h;
@@ -800,21 +831,17 @@ function viewModel() {
 
 function viewFlight() {
   let h = pageHead('Полёт');
-  const act = activeSession();
-  if (act) {
-    const a = S.aircraft.find((x) => x.id === act.aircraftId);
-    h += `<div class="banner warn">Идёт полёт: ${esc(a ? a.name : '')}.
-      <button class="btn-sm btn right" data-nav="#/session/${act.id}">Открыть</button></div>`;
-  } else if (UI.prep) {
+  h += activeFlightBanners();
+  if (UI.prep && !activeSessionOf(UI.prep.aircraftId)) {
     const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
     h += `<div class="banner">Подготовка не закончена: ${esc(a ? a.name : '')}.
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
-  if (!act) h += `<button class="btn btn-primary" data-act="start-prep">Начать подготовку</button>`;
+  h += `<button class="btn btn-primary" data-act="start-prep">Начать подготовку</button>`;
 
   // Подготовленные борта: чек-лист пройден, взлёт в одно нажатие.
   const prepared = S.aircraft.filter((a) => takeoffReady(a));
-  if (!act && prepared.length) {
+  if (prepared.length) {
     h += '<div class="h2">Готовы к вылету</div><div class="card flat">';
     h += prepared.map((a) => `<div class="row">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
@@ -829,8 +856,8 @@ function viewFlight() {
     h += `<div class="h2">Журнал полётов</div><div class="card flat">` +
       done.slice(0, 10).map(sessionRow).join('') + '</div>';
     if (done.length > 10) h += `<button class="btn" data-nav="#/log">Весь журнал (${done.length})</button>`;
-  } else if (!act && !S.aircraft.length) {
-    h += emptyState('Сначала добавьте модель во «Флоте».', 'add-model', 'Добавить модель');
+  } else if (!activeSessions().length && !S.aircraft.length) {
+    h += emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
   }
   return h;
 }
@@ -845,8 +872,8 @@ function templatesFor(type) {
 function viewPrep() {
   // Шаг 1 — выбрать модель.
   if (!UI.prep) {
-    let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите модель' });
-    if (!S.aircraft.length) return h + emptyState('Нет моделей.', 'add-model', 'Добавить модель');
+    let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите борт' });
+    if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт');
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
@@ -865,7 +892,7 @@ function viewPrep() {
 
   let h = pageHead('Чек-лист', { back: '#/flight', sub: esc(a.name) });
   if (statusOf(a) === 'grounded') {
-    h += `<div class="banner warn">Полёты этой модели запрещены вами. Снимите запрет в карточке модели, если готовы летать.</div>`;
+    h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
   if (tpls.length > 1) {
     h += field('Шаблон', selectHtml('tpl',
@@ -878,8 +905,8 @@ function viewPrep() {
       <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
     </div>`)}
     ${field('Аккумулятор', selectHtml('prepBatt',
-      battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —', addNew: true }),
-      (armedBattery(a) || {}).id || '', 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в модель')}
+      battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }),
+      (armedBattery(a) || {}).id || '', 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в борт')}
   </div>`;
   h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${doneCount} из ${items.length} · касание: ок → проблема → пропуск</div>`;
@@ -890,9 +917,13 @@ function viewPrep() {
     </button>`).join('');
   h += '</div>';
   if (fails) h += `<div class="banner warn">Отмечены проблемы: ${fails}. Убедитесь, что лететь безопасно, или устраните их.</div>`;
-  h += `<button class="btn btn-primary" data-act="start-flight">START FLIGHT</button>
-    <button class="btn" data-act="prep-done">Готов — подготовить следующий борт</button>
-    <button class="btn" data-act="cancel-prep">Отменить подготовку</button>`;
+  if (armedBattery(a)) {
+    h += `<button class="btn btn-primary" data-act="start-flight">START FLIGHT</button>
+      <button class="btn" data-act="prep-done">Готов — подготовить следующий борт</button>`;
+  } else {
+    h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — и кнопки появятся.</div>`;
+  }
+  h += `<button class="btn" data-act="cancel-prep">Отменить подготовку</button>`;
   return h;
 }
 
@@ -919,7 +950,7 @@ function sessionDetailHtml(s) {
   const run = S.runs.find((r) => r.id === s.checklistRunId);
   const rows = [
     ['Дата', fmtDate(s.date)],
-    ['Модель', a ? a.name : '—'],
+    ['Борт', a ? a.name : '—'],
     ['Длительность', fmtDur(s.durationMin)],
     ['Аккумулятор', b ? b.label : '—'],
     ['Локация', site ? site.name : '—'],
@@ -1056,11 +1087,11 @@ function wxHelpHtml() {
   const w = lim.maxW;
   const n = (x) => (Math.round(x * 10) / 10);
   const row = (what, bad, warn) => `<tr><td>${what}</td><td class="wx-bad">${bad}</td><td class="wx-warn">${warn}</td></tr>`;
-  return `<p class="small muted">Порядок такой: <b>модель → место → дата</b>. Ограничения берутся
-    из карточки модели, а не из общей константы.</p>
-    <p class="small">Сейчас считаем для: <b>${lim.name ? esc(lim.name) : 'без модели'}</b>${lim.battName ? ' + <b>' + esc(lim.battName) + '</b>' : ''} —
+  return `<p class="small muted">Порядок такой: <b>борт → место → дата</b>. Ограничения берутся
+    из карточки борта, а не из общей константы.</p>
+    <p class="small">Сейчас считаем для: <b>${lim.name ? esc(lim.name) : 'без борта'}</b>${lim.battName ? ' + <b>' + esc(lim.battName) + '</b>' : ''} —
     порог ${lim.est && lim.name ? 'примерно ' : ''}<b>${w} м/с</b>, высота полёта <b>${lim.alt} м</b>.
-    ${lim.est && lim.name ? 'Порог оценён по полному весу (сухая модель + АКБ) и габаритам: задайте «Макс. ветер» в карточке, чтобы считать по-своему.' : ''}</p>
+    ${lim.est && lim.name ? 'Порог оценён по полному весу (сухой борт + АКБ) и габаритам: задайте «Макс. ветер» в карточке, чтобы считать по-своему.' : ''}</p>
 
     <div class="h2">Вердикт часа</div>
     <p class="small muted">Достаточно одного сработавшего условия — берётся худшее.
@@ -1079,7 +1110,7 @@ function wxHelpHtml() {
     <p class="small">Ночь не запрещает полёт, но управлять сложнее. В непростых условиях
     порог ветра умножается на коэффициент (условия перемножаются: ночь + морось = 0.8 × 0.85 ≈ 0.7):</p>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Условие</th><th></th><th>Порог для «${lim.name ? esc(lim.name) : 'модели'}»</th></tr></thead>
+      <thead><tr><th>Условие</th><th></th><th>Порог для «${lim.name ? esc(lim.name) : 'борта'}»</th></tr></thead>
       <tbody>
         ${[['Темнота (ночь)', WX_K.night], ['Туман днём', WX_K.fog],
            ['Морось, слабый дождь', WX_K.drizzle], ['Слабый снег', WX_K.snow]]
@@ -1094,7 +1125,7 @@ function wxHelpHtml() {
 
     <div class="h2">Ветер на высоте</div>
     <p class="small">Прогноз даёт ветер на 10, 80, 120 и 180 м. Берём только уровни в пределах
-    высоты полёта модели и худший из них: выше 40 м — добавляется 80 м, выше 90 м — ещё 120 м,
+    высоты полёта борта и худший из них: выше 40 м — добавляется 80 м, выше 90 м — ещё 120 м,
     выше 140 м — ещё 180 м. Поэтому низколетящий квад не бракуется ветром на 180 метрах.</p>
 
     <div class="h2">Как складывается окно</div>
@@ -1275,7 +1306,7 @@ function viewWeather() {
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
   let h = pageHead('Окна для полётов', {
-    back: '#/today', sub: 'Модель · место · дата · <span class="badge online">online</span>',
+    back: '#/today', sub: 'Борт · место · дата · <span class="badge online">online</span>',
     act: 'wx-help', actLabel: 'Пояснение',
   });
 
@@ -1288,8 +1319,8 @@ function viewWeather() {
   // Только собранные модели (с установленным АКБ): окна считаются
   // для того, что реально готово лететь. wxArmed вычислен в начале view.
   const wxSel = wxArmed.find((a) => a.id === wx.aircraftId);
-  h += field('Модель', selectHtml('wxmodel',
-    [['', `Без модели (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
+  h += field('Борт', selectHtml('wxmodel',
+    [['', `Без борта (порог ${WX_DEFAULT_WIND} м/с, высота 100 м)`]]
       .concat(wxArmed.map((a) => {
         // для выбранной модели действует переопределение АКБ с экрана
         const b = a === wxSel && wx.batteryId
@@ -1300,13 +1331,13 @@ function viewWeather() {
       })),
     wx.aircraftId, 'data-change="weather-model"'),
     wxArmed.length
-      ? 'Здесь только собранные модели («К вылету»); «≈» — оценка по весу с АКБ и габаритам'
-      : 'Соберите модель — установите АКБ в её карточке, и она появится здесь');
+      ? 'Здесь только собранные борта («К вылету»); «≈» — оценка по весу с АКБ и габаритам'
+      : 'Соберите борт — установите АКБ в его карточке, и он появится здесь');
   if (wxSel && !wxSel.maxWind) {
     h += field('Аккумулятор', selectHtml('wxbatt',
       battOptions({ emptyLabel: '— без АКБ (сухой вес) —' }),
       wx.batteryId, 'data-change="weather-batt"'),
-      'Вес АКБ прибавляется к сухому весу модели в оценке порога');
+      'Вес АКБ прибавляется к сухому весу борта в оценке порога');
   }
   h += field('Место', selectHtml('wxsite', siteOptions(sitesWithCoords, {
       emptyLabel: '— выберите —', pre: [['gps', 'Моё местоположение (GPS)']],
@@ -1346,7 +1377,7 @@ function viewWeather() {
 
       h += `<div class="h2">Час за часом</div>
         <p class="small muted" style="margin-bottom:8px">Полоска — сколько «съедено» от допустимого ветра
-        модели: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
+        борта: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
       h += day.hours.map((hr) => {
@@ -1489,10 +1520,16 @@ function viewBatteries() {
   h += '<div class="card flat">';
   h += S.batteries.map((b) => {
     const o = battOwner(b.id);
-    return rowBtn(`data-act="edit-batt" data-id="${b.id}"`,
-    `<span class="grow"><span class="t">${esc(b.label)}</span>
-     <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · в «${esc(o.name)}»` : ''}</span></span>
-     ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}`);
+    const chargeChip = b.status === 'retired' ? '' :
+      `<button class="chip ${b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
+        data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
+    return `<div class="row">
+      <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:40px">
+        <span class="t">${esc(b.label)}</span>
+        <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
+      ${chargeChip}
+      ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}
+    </div>`;
   }).join('');
   h += '</div>';
   return h;
@@ -1511,13 +1548,13 @@ function viewTemplates() {
        <span class="d">${t.items.length} пунктов · ${t.type === 'any' ? 'любой тип' : TYPES[t.type] || ''}</span></span>`)).join('');
     h += '</div>';
   } else {
-    h += '<p class="small muted" style="margin-top:10px">Свой шаблон появится в списке при подготовке к полёту подходящей модели.</p>';
+    h += '<p class="small muted" style="margin-top:10px">Свой шаблон появится в списке при подготовке к полёту подходящего борта.</p>';
   }
   return h;
 }
 
 function viewBackup() {
-  const counts = `${S.aircraft.length} ${plural(S.aircraft.length, 'модель', 'модели', 'моделей')}, ` +
+  const counts = `${S.aircraft.length} ${plural(S.aircraft.length, 'борт', 'борта', 'бортов')}, ` +
     `${S.sessions.filter((s) => s.end).length} ${plural(S.sessions.length, 'полёт', 'полёта', 'полётов')}, ` +
     `${S.configs.length} ${plural(S.configs.length, 'конфигурация', 'конфигурации', 'конфигураций')}`;
   let h = pageHead('Данные', { back: '#/more', sub: counts });
@@ -1537,7 +1574,7 @@ function viewPrivacy() {
   let h = pageHead('Приватность', { back: '#/more' });
   h += `<div class="card">
     <p><strong>Ваши данные хранятся на этом устройстве.</strong></p>
-    <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Модели, полёты,
+    <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Борта, полёты,
     чек-листы, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
     в интернет — в приложении просто нет кода, который бы это делал.</p>
     <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. В фоне приложение обращается
@@ -1585,6 +1622,11 @@ async function savePrepRun(p) {
 // борта. Снимает пометку «подготовлен» — она одноразовая.
 async function takeoff(aircraftId, runId, siteId) {
   const a = S.aircraft.find((x) => x.id === aircraftId);
+  // Полёт без аккумулятора невозможен: и вес не учтён, и циклы не
+  // посчитаются. Кнопки эту ситуацию не показывают, гард — страховка.
+  if (!armedBattery(a)) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); return; }
+  const dup = activeSessionOf(aircraftId);
+  if (dup) { go('#/session/' + dup.id); return; }
   if (a && a.prepared) { a.prepared = null; await put('aircraft', a); }
   const s = {
     id: uid(), aircraftId, date: todayISO(),
@@ -1618,9 +1660,9 @@ const ACTIONS = {
 
   /* --- Модели --- */
   'add-model': () => {
-    openModal('Новая модель', `<div class="card flat">` +
+    openModal('Новый борт', `<div class="card flat">` +
       rowBtn('data-act="model-empty"',
-        `<span class="grow"><span class="t">Пустая модель</span><span class="d">Заполню сам</span></span>`) +
+        `<span class="grow"><span class="t">Пустой борт</span><span class="d">Заполню сам</span></span>`) +
       RC.AIRCRAFT_PRESETS.map((p, i) => rowBtn(`data-act="model-preset" data-i="${i}"`,
         `<span class="grow"><span class="t">${esc(p.name)}</span><span class="d">${esc(p.desc)}</span></span>`,
         ICONS[p.type] ? p.type : 'plane')).join('') +
@@ -1641,7 +1683,7 @@ const ACTIONS = {
   },
   'edit-model': () => openModelForm(S.aircraft.find((a) => a.id === UI.arg)),
   'del-model': (el) => confirmModal(
-    'Удалить модель вместе с историей полётов, обслуживанием и конфигурациями? Это нельзя отменить.',
+    'Удалить борт вместе с историей полётов, обслуживанием и конфигурациями? Это нельзя отменить.',
     'del-model-yes', `data-id="${el.dataset.id}"`),
   'del-model-yes': async (el) => {
     const id = el.dataset.id;
@@ -1680,12 +1722,18 @@ const ACTIONS = {
 
   /* --- Подготовка и полёт --- */
   'start-prep': (el) => {
-    if (activeSession()) { go('#/session/' + activeSession().id); return; }
+    const act = el.dataset.id && activeSessionOf(el.dataset.id);
+    if (act) { go('#/session/' + act.id); return; }
     if (el.dataset.id) beginPrep(el.dataset.id);
     else UI.prep = null;
     go('#/prep');
   },
-  'prep-model': (el) => { beginPrep(el.dataset.id); render(); },
+  'prep-model': (el) => {
+    const act = activeSessionOf(el.dataset.id);
+    if (act) { go('#/session/' + act.id); return; }
+    beginPrep(el.dataset.id);
+    render();
+  },
   'ck-toggle': (el) => {
     const it = UI.prep && UI.prep.items[+el.dataset.i];
     if (!it) return;
@@ -1716,6 +1764,15 @@ const ACTIONS = {
     }
     go('#/prep');
   },
+  // Тап по чипу заряда: «после полёта»/«заряд?» → «заряжен», и обратно
+  // (если отметили заряд по ошибке).
+  'batt-charge': async (el) => {
+    const b = S.batteries.find((x) => x.id === el.dataset.id);
+    if (!b) return;
+    b.charge = b.charge === 'ready' ? 'flown' : 'ready';
+    await put('batteries', b);
+    render(true);
+  },
   'maint-done': async (el) => {
     const m = S.maintenance.find((x) => x.id === el.dataset.id);
     if (!m) return;
@@ -1724,8 +1781,8 @@ const ACTIONS = {
     render(true);
   },
   'takeoff-prepared': async (el) => {
-    const act = activeSession();
-    if (act) { go('#/session/' + act.id); return; } // один полёт за раз
+    const act = activeSessionOf(el.dataset.id);
+    if (act) { go('#/session/' + act.id); return; } // у борта один полёт за раз
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (!a || !takeoffReady(a)) { render(); return; }
     const pr = a.prepared;
@@ -1870,7 +1927,10 @@ const ACTIONS = {
         input.focus();
       }
     } catch (e) {
-      alert('Не удалось прочитать буфер обмена — вставьте координаты вручную (долгое нажатие → Вставить).');
+      // iOS: системная плашка «Вставить» или отказ. Фокусируем поле —
+      // нативная вставка (долгое нажатие) перехватывается ниже и сама
+      // разберёт координаты из любого текста.
+      input.focus();
     }
   },
   'prep-batt-clear': () => {
@@ -2012,7 +2072,7 @@ function typePicker(current) {
 function openModelForm(a, presetId) {
   const isNew = !a || !a.id;
   a = a || { type: 'quad' };
-  const title = a.id ? 'Изменить модель' : presetId ? 'Новая модель · проверьте ТТХ' : 'Новая модель';
+  const title = a.id ? 'Изменить борт' : presetId ? 'Новый борт · проверьте ТТХ' : 'Новый борт';
   openModal(title, `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''} ${presetId ? `data-preset="${presetId}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(a.name || '')}" placeholder="напр. Mini Talon">`)}
     ${field('Тип', typePicker(a.type))}
@@ -2021,8 +2081,8 @@ function openModelForm(a, presetId) {
       ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
     </div>
     ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
-    ${field('Аккумулятор модели', selectHtml('batteryId', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без аккумулятора —' }), a.batteryId || ''),
-      'Один АКБ — одна модель; занятые в списке не показываются')}
+    ${field('Аккумулятор борта', selectHtml('batteryId', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —' }), a.batteryId || ''),
+      'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
       ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
@@ -2279,10 +2339,10 @@ function openBattForm(b, presetId) {
       ${field('Циклы', `<input type="number" name="cycles" min="0" value="${b.cycles || 0}">`, 'Растут сами после каждого полёта')}
       ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
     </div>
-    ${field('Стоит в модели', selectHtml('inModel',
-      [['', '— не в модели —']].concat(S.aircraft.map((a) => [a.id, a.name])),
+    ${field('Стоит в борте', selectHtml('inModel',
+      [['', '— не в борте —']].concat(S.aircraft.map((a) => [a.id, a.name])),
       (battOwner(b.id) || {}).id || ''),
-      'Поставить или снять можно и здесь, и в карточке модели')}
+      'Поставить или снять можно и здесь, и в карточке борта')}
     ${field('Заметки', `<textarea name="notes">${esc(b.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${b.id ? `<button class="btn btn-danger" type="button" data-act="del-batt" data-id="${b.id}">Удалить</button>` : ''}
@@ -2327,10 +2387,15 @@ function openFinishForm(sessionId, saved) {
   const s = S.sessions.find((x) => x.id === sessionId);
   if (!s) return;
   const v = saved || {};
-  const mins = v.durationMin != null ? v.durationMin : Math.max(1, Math.round((Date.now() - s.start) / 60000));
+  const elapsed = Math.round((Date.now() - s.start) / 60000);
+  // Забытый полёт: не подставляем абсурдные «480 мин» — пусть пилот
+  // впишет фактическую длительность сам.
+  const forgotten = elapsed > STALE_FLIGHT_MIN;
+  const mins = v.durationMin != null ? v.durationMin : forgotten ? '' : Math.max(1, elapsed);
   openModal('Итог полёта', `<form data-form="finish" data-id="${s.id}">
     <div class="grid2">
-      ${field('Длительность, мин', `<input type="number" name="durationMin" min="0" value="${esc(mins)}">`)}
+      ${field('Длительность, мин', `<input type="number" name="durationMin" min="0" value="${esc(mins)}" ${forgotten ? 'placeholder="сколько летали?"' : ''}>`,
+        forgotten ? 'полёт выглядит забытым — впишите фактическое время' : '')}
       ${field('Результат', selectHtml('result', Object.entries(RESULTS), v.result || 'normal'))}
     </div>
     ${field('Аккумулятор', selectHtml('batteryId', battOptions({ addNew: true }),
@@ -2510,7 +2575,8 @@ const FORMS = {
     const s = S.sessions.find((x) => x.id === form.dataset.id);
     if (!s) return;
     s.end = Date.now();
-    s.durationMin = +fd.get('durationMin') || Math.round((s.end - s.start) / 60000);
+    const elapsedMin = Math.round((s.end - s.start) / 60000);
+    s.durationMin = +fd.get('durationMin') || (elapsedMin > STALE_FLIGHT_MIN ? null : elapsedMin);
     s.result = fd.get('result');
     s.batteryId = fd.get('batteryId');
     s.siteId = fd.get('siteId');
@@ -2519,7 +2585,11 @@ const FORMS = {
     s.problems = fd.get('problems').trim();
     await put('sessions', s);
     const b = S.batteries.find((x) => x.id === s.batteryId);
-    if (b) { b.cycles = (b.cycles || 0) + 1; await put('batteries', b); }
+    if (b) {
+      b.cycles = (b.cycles || 0) + 1;
+      b.charge = 'flown'; // разряжен полётом — подпись станет синей
+      await put('batteries', b);
+    }
     // Любой не-нормальный итог (краш, аварийная, проблема, обслуживание)
     // запускает одну и ту же цепочку: осмотр → «Выполнено» → «Готова».
     const trouble = s.result && s.result !== 'normal';
@@ -2688,7 +2758,7 @@ function handleImportFile(input) {
     UI.importData = parsed;
     const n = Object.values(parsed.data).reduce((s, arr) => s + arr.length, 0);
     openModal('Импорт данных', `<p>В файле ${n} ${plural(n, 'запись', 'записи', 'записей')}
-      (${parsed.scope === 'aircraft' ? 'экспорт одной модели' : 'полная копия'} от ${esc((parsed.exported || '').slice(0, 10))}).</p>
+      (${parsed.scope === 'aircraft' ? 'экспорт одного борта' : 'полная копия'} от ${esc((parsed.exported || '').slice(0, 10))}).</p>
       <div class="spacer"></div>
       ${parsed.scope === 'aircraft'
         ? '<button class="btn btn-primary" data-act="import-merge">Добавить к моим данным</button>'
@@ -2843,7 +2913,7 @@ document.addEventListener('change', (e) => {
       // снятие тоже «дублируется везде», но не молча: случайный тап
       // перед вылетом не должен незаметно разоружить модель
       el.value = cur;
-      confirmModal('Снять аккумулятор с модели? Она уйдёт из «К вылету».', 'prep-batt-clear', '', 'Снять');
+      confirmModal('Снять аккумулятор с борта? Он уйдёт из «К вылету».', 'prep-batt-clear', '', 'Снять');
     } else {
       // выбор на чек-листе = установка в модель (дублируется везде)
       installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
@@ -2867,6 +2937,19 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'weather-day') {
     UI.wx.day = +el.value || 0;
     render(true);
+  }
+});
+
+// Нативная вставка в поле координат (долгое нажатие → «Вставить»
+// на телефоне, Ctrl/Cmd+V): вычленяем пару чисел из любого текста —
+// работает даже там, где кнопка чтения буфера упирается в систему.
+document.addEventListener('paste', (e) => {
+  const inp = e.target && e.target.closest && e.target.closest('input[name="coords"]');
+  if (!inp || !e.clipboardData) return;
+  const c = parseCoords(e.clipboardData.getData('text'));
+  if (c) {
+    e.preventDefault();
+    inp.value = c.lat + ', ' + c.lon;
   }
 });
 

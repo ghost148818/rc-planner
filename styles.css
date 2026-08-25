@@ -24,6 +24,8 @@
   --maint-bg: rgba(224, 123, 57, 0.16);
   --bad-bg: rgba(229, 72, 77, 0.14);
   --unk-bg: rgba(138, 145, 155, 0.16);
+  --info: #6aa8ff;
+  --info-bg: rgba(106, 168, 255, 0.14);
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 12px;
@@ -52,6 +54,8 @@
   --maint-bg: rgba(181, 90, 26, 0.12);
   --bad-bg: rgba(207, 50, 55, 0.1);
   --unk-bg: rgba(107, 116, 128, 0.12);
+  --info: #0b62c4;
+  --info-bg: rgba(11, 98, 196, 0.1);
 }
 
 /* ---------- База ---------- */
@@ -198,6 +202,10 @@ button.row:active, a.row:active { background: var(--card-2); }
 .st-maintenance { color: var(--maint); background: var(--maint-bg); }
 .st-grounded { color: var(--bad); background: var(--bad-bg); }
 .st-unknown { color: var(--unk); background: var(--unk-bg); }
+/* Заряд АКБ: зелёный — заряжен, синий — после полёта */
+.st-flown { color: var(--info); background: var(--info-bg); }
+.bt-ready { color: var(--ok); }
+.bt-flown { color: var(--info); }
 
 .badge {
   display: inline-block;
