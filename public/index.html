@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="1a308b098d">
+  <meta name="build" content="778ea38ab2">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1316,6 +1316,16 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: '1.1.1',
+    date: '2026-08-26',
+    title: 'Обновления и обучение под рукой',
+    items: [
+      'Ваши сборы обновились сами: «Аппаратура управления (заряжена)» и «VRX-нашлёпка» дописаны в существующие наборы.',
+      'В «Ещё» — «Проверить обновления»: если вышла новая версия, появится кнопка «Обновить приложение».',
+      'Там же — «Пройти обучение заново»: приветствие и шаги «Начала работы» вернутся на «Сегодня».',
+    ],
+  },
+  {
     v: '1.1',
     date: '2026-08-26',
     title: 'Группы во флоте',
@@ -1439,15 +1449,6 @@ RC.CHANGELOG = [
       'У модели появился свой аккумулятор: выбирается в форме, взлётный вес виден в паспорте, окна погоды берут его сами.',
       'На мини-карте — поиск места (город, деревня) и ссылка «Я.Карты»: на телефоне открывается установленное приложение.',
       'Кнопка карты прямо на чек-листе перед вылетом — рядом с выбором локации.',
-    ],
-  },
-  {
-    v: '0.10',
-    date: '2026-08-25',
-    title: 'Точка на карте — прямо в форме локации',
-    items: [
-      'В форме локации встроенная карта (OSM, online): тапните точку — координаты впишутся в поле сами, копировать больше нечего.',
-      'Перетаскивание, зум, метка выбранной точки; стартует с текущих координат локации или GPS-точки.',
     ],
   },
 ];
@@ -1802,6 +1803,31 @@ async function migrateIfNeeded() {
     S.settings.migrWind2 = true;
     touched = true;
   }
+  if (!S.settings.migrPack1) {
+    // Обновление стартовых сборов доезжает и до уже засеянных наборов:
+    // старые формулировки переименовываются, новые пункты дописываются
+    // в наборы с пресетными именами (свои наборы и правки не трогаем).
+    const renames = {
+      'Передатчик (заряжен)': 'Аппаратура управления (заряжена)',
+      'Передатчик': 'Аппаратура управления (заряжена)',
+    };
+    for (const p of S.packing) {
+      let changed = false;
+      for (const it of p.items) {
+        if (renames[it.t]) { it.t = renames[it.t]; changed = true; }
+      }
+      const preset = RC.PACKING_PRESETS.find((x) => x.name === p.name);
+      if (preset) {
+        for (const t of preset.items) {
+          if (!p.items.some((it) => it.t === t)) { p.items.push({ t, done: false }); changed = true; }
+        }
+      }
+      if (changed) await RCDB.put('packing', p);
+    }
+    S.packing = await RCDB.all('packing');
+    S.settings.migrPack1 = true;
+    touched = true;
+  }
   if (!S.settings.migrWx2) {
     // Кэш прогноза, снятый до появления weather_code, выбрасываем один
     // раз — дальше коду не нужны запасные ветки «а вдруг поля нет».
@@ -2000,12 +2026,13 @@ function viewToday() {
       'data-act="start-prep"', 'flight'],
   ];
   const todo = steps.filter((s) => !s[2]).length;
-  if (todo) {
-    h += `<div class="h2">Начало работы · осталось ${todo} из 4</div><div class="card flat">`;
+  if (todo || lsGet('rcp.tour')) {
+    h += `<div class="h2">Начало работы${todo ? ` · осталось ${todo} из 4` : ' · всё пройдено'}</div><div class="card flat">`;
     h += steps.map(([t, d, ok2, attrs, icon]) => ok2
       ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
          <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
       : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d">${d}</span></span>`, icon)).join('');
+    if (!todo) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Скрыть обучение</span><span class="d">Все шаги пройдены — блок больше не нужен</span></span>`);
     h += '</div>';
   }
 
@@ -2985,8 +3012,11 @@ function viewMore() {
   h += '<div class="card flat">';
   if (UI.updateReady) {
     h += rowBtn('data-act="update-app"', `<span class="grow"><span class="t" style="color:var(--ok)">Обновить приложение</span><span class="d">Новая версия готова</span></span>`, 'update');
+  } else {
+    h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления <span class="badge online">online</span></span><span class="d">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')}</span></span>`, 'update');
   }
   h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d">История изменений</span></span>`, 'whatsnew');
+  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'templates');
   h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d">Где живут ваши данные</span></span>`, 'privacy');
   h += '</div>';
 
@@ -3190,6 +3220,35 @@ async function takeoff(aircraftId, runId, siteId) {
 const ACTIONS = {
   'close-modal': () => dismissModal(),
   'dismiss-hi': () => { lsSet('rcp.hi', '1'); render(); },
+  // Проверка обновлений по кнопке: SW сходит за свежим sw.js; если есть
+  // новая версия — появится привычная кнопка «Обновить приложение».
+  'check-updates': async () => {
+    if (!SWREG) {
+      alert('Обновления проверяются в установленном приложении (PWA). В офлайн-файле обновите файл вручную.');
+      return;
+    }
+    UI.checkingUpdate = true;
+    render(true);
+    try {
+      await SWREG.update();
+      // даём воркеру секунду-другую установиться
+      await new Promise((r) => setTimeout(r, 2000));
+      if (SWREG.waiting && navigator.serviceWorker.controller) UI.updateReady = true;
+      if (!UI.updateReady) alert('У вас последняя версия — ' + ((RC.CHANGELOG[0] || {}).v || ''));
+    } catch (e) {
+      alert('Не удалось проверить обновления. Похоже, нет сети.');
+    }
+    UI.checkingUpdate = false;
+    render(true);
+  },
+  // Обучение заново: приветствие + блок «Начало работы» показываются
+  // снова, даже если все шаги давно пройдены (галочки будут зелёными).
+  'restart-tour': () => {
+    lsSet('rcp.hi', '');
+    lsSet('rcp.tour', '1');
+    go('#/today');
+  },
+  'dismiss-tour': () => { lsSet('rcp.tour', ''); render(); },
   // «Назад» ведёт туда, откуда пришли; на глубокой ссылке — по запасному маршруту.
   'nav-back': (el) => {
     if (UI.navCount > 1) history.back();
