@@ -1032,9 +1032,9 @@ function viewFlight() {
 
   const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
   if (done.length) {
-    h += `<div class="h2">Журнал полётов</div><div class="card flat">` +
-      done.slice(0, 10).map(sessionRow).join('') + '</div>';
-    if (done.length > 10) h += `<button class="btn" data-nav="#/log">Весь журнал (${done.length})</button>`;
+    h += `<div class="h2" style="margin-bottom:0">Последние полёты</div>`;
+    h += logGroupedHtml(done.slice(0, 10), done);
+    h += `<button class="btn" data-nav="#/log">Журнал полётов и печать (${done.length})</button>`;
   } else if (!activeSessions().length && !S.aircraft.length) {
     h += emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
   }
@@ -1156,21 +1156,19 @@ function sessionDetailHtml(s) {
   return h;
 }
 
-function viewLog() {
-  const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
-  let h = pageHead('Журнал полётов', {
-    back: '#/flight', sub: `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')}`,
-    act: 'print-log', actLabel: 'Печать',
-  });
-  if (!done.length) return h + emptyState('Полётов пока не было.');
-  // Группировка по датам: заголовок дня, под ним полёты.
+// Список полётов, сгруппированный по датам: заголовок дня с числом
+// полётов и налётом. Используется в журнале и на вкладке «Полёт».
+function logGroupedHtml(list, totalsFrom) {
+  // totalsFrom: полный журнал для честных итогов дня, когда list обрезан
+  const full = totalsFrom || list;
+  let h = '';
   let cur = null;
   let open = false;
-  for (const sess of done) {
+  for (const sess of list) {
     if (sess.date !== cur) {
       if (open) h += '</div>';
       cur = sess.date;
-      const dayList = done.filter((x) => x.date === cur);
+      const dayList = full.filter((x) => x.date === cur);
       h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>
         <span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span></div><div class="card flat">`;
       open = true;
@@ -1179,6 +1177,16 @@ function viewLog() {
   }
   if (open) h += '</div>';
   return h;
+}
+
+function viewLog() {
+  const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
+  let h = pageHead('Журнал полётов', {
+    back: '#/flight', sub: `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')}`,
+    act: 'print-log', actLabel: 'Печать',
+  });
+  if (!done.length) return h + emptyState('Полётов пока не было.');
+  return h + logGroupedHtml(done);
 }
 
 // Кнопка правки итога — в деталях завершённого полёта (finish-flight
@@ -2459,7 +2467,7 @@ function openModelForm(a, presetId, saved) {
     ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
     ${field('Аккумулятор борта', selectHtml('batteryId',
       battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }),
-      a.batteryId || '', 'data-change="form-model-batt"'),
+      a.batteryId || '', `data-change="form-model-batt" data-prev="${esc(a.batteryId || '')}"`),
       'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
@@ -2840,11 +2848,21 @@ const FORMS = {
     a.manufacturer = fd.get('manufacturer').trim();
     a.weight = +fd.get('weight') || null;
     a.wingspan = +fd.get('wingspan') || null;
-    a.batteryId = fd.get('batteryId') || null;
-    if (a.batteryId === NEW_OPT) a.batteryId = null; // страховка от застрявшего «__new»
-    // releaseBattery пишет напрямую в RCDB; S.aircraft обновит общий put(a) ниже
-    if (a.batteryId && battLockedBy(a.id, a.batteryId)) a.batteryId = (id && (S.aircraft.find((x) => x.id === id) || {}).batteryId) || null;
-    else if (a.batteryId) await releaseBattery(a.batteryId, a.id);
+    // Замок летящего борта проверяем ДО мутации: a — живой объект из
+    // S.aircraft, и преждевременное присваивание ломало и проверку,
+    // и «откат» (battOwner видел уже изменённое значение).
+    let newBatt = fd.get('batteryId') || null;
+    if (newBatt === NEW_OPT) newBatt = null; // страховка от застрявшего «__new»
+    if (newBatt !== (a.batteryId || null)) {
+      const lock = battLockedBy(a.id, newBatt);
+      if (lock) {
+        alert(`«${lock}» сейчас в полёте — аккумулятор останется прежним до посадки.`);
+      } else {
+        a.batteryId = newBatt;
+        // releaseBattery пишет напрямую в RCDB; S.aircraft обновит общий put(a) ниже
+        if (newBatt) await releaseBattery(newBatt, a.id);
+      }
+    }
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
@@ -2978,9 +2996,9 @@ const FORMS = {
     const fd = new FormData(form);
     const s = S.sessions.find((x) => x.id === form.dataset.id);
     if (!s) return;
+    const firstFinish = !s.end; // ДО присваивания end, иначе всегда false
     s.end = s.end || s.landedAt || Date.now(); // правка итога не сдвигает конец
     s.landedAt = null;
-    const firstFinish = !s.end;
     const elapsedMin = Math.round((s.end - s.start) / 60000);
     // Явный «0» — валидная длительность (прервали на взлёте); пустое
     // поле у забытого полёта — честное «неизвестно» (правится позже).
@@ -3314,8 +3332,9 @@ document.addEventListener('change', (e) => {
       const preset = form.dataset.preset || null;
       const values = Object.fromEntries(new FormData(form));
       delete values.photo;
-      // отмена диалога АКБ не должна вернуть форму с застрявшим «__new»
-      values.batteryId = (orig && orig.batteryId) || '';
+      // отмена диалога АКБ возвращает ПОСЛЕДНИЙ выбор в форме
+      // (data-prev), а не сохранённое значение и не «__new»
+      values.batteryId = el.dataset.prev || (orig && orig.batteryId) || '';
       UI.modalReturn = {
         field: 'batteryId',
         reopen: (patch) => openModelForm(orig, preset, Object.assign({}, values, patch)),
@@ -3335,7 +3354,9 @@ document.addEventListener('change', (e) => {
     (kind.endsWith('site') ? openSiteForm : openBattForm)(null);
     return;
   }
-  if (kind === 'status-manual') {
+  if (kind === 'form-model-batt') {
+    el.dataset.prev = el.value; // на случай «+ Добавить…» с отменой
+  } else if (kind === 'status-manual') {
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (a) { a.statusManual = el.value; put('aircraft', a).then(() => render(true)); }
   } else if (kind === 'model-batt') {
