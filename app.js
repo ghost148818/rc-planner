@@ -1635,24 +1635,71 @@ function viewSites() {
   return h;
 }
 
+function battRow(b) {
+  const o = battOwner(b.id);
+  const chargeChip = b.status === 'retired' ? '' :
+    `<button class="chip ${b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
+      data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
+  return `<div class="row">
+    <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:40px">
+      <span class="t">${esc(b.label)}</span>
+      <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
+    ${chargeChip}
+    ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}
+  </div>`;
+}
+
+function battSortCmp() {
+  const mode = S.settings.battSort || 'name';
+  const chOrder = { ready: 0, flown: 1 };
+  return (x, y) => {
+    if (mode === 'charge') {
+      const d = (chOrder[x.charge] != null ? chOrder[x.charge] : 2) - (chOrder[y.charge] != null ? chOrder[y.charge] : 2);
+      if (d) return d;
+    } else if (mode === 'chem') {
+      const d = String(x.chem || '').localeCompare(String(y.chem || ''), 'ru');
+      if (d) return d;
+    } else if (mode === 'cycles') {
+      const d = (y.cycles || 0) - (x.cycles || 0); // изношенные сверху
+      if (d) return d;
+    }
+    return (x.label || '').localeCompare(y.label || '', 'ru');
+  };
+}
+
 function viewBatteries() {
   let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить' }) + fleetSeg('batteries');
   if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ');
-  h += '<div class="card flat">';
-  h += S.batteries.map((b) => {
+  const groups = fleetGroups();
+  h += `<div class="fleet-bar">
+    ${selectHtml('battSort', [['name', 'По названию'], ['charge', 'По заряду'], ['chem', 'По химии'], ['cycles', 'По циклам']],
+      S.settings.battSort || 'name', 'data-change="batt-sort" style="flex:1;min-height:40px"')}
+  </div>`;
+  const cmp = battSortCmp();
+  // АКБ живёт там же, где её борт: группа борта-владельца. Свободные
+  // и АКБ бортов без группы — в «Без группы».
+  const battGid = (b) => {
     const o = battOwner(b.id);
-    const chargeChip = b.status === 'retired' ? '' :
-      `<button class="chip ${b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
-        data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
-    return `<div class="row">
-      <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:40px">
-        <span class="t">${esc(b.label)}</span>
-        <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
-      ${chargeChip}
-      ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}
-    </div>`;
-  }).join('');
-  h += '</div>';
+    return (o && o.groupId) || '';
+  };
+  const inGroup = (gid) => S.batteries.filter((b) => battGid(b) === gid).sort(cmp);
+  const block = (g, sub) => {
+    const list = inGroup(g.id);
+    if (!list.length) return '';
+    return `<div class="grp-head${sub ? ' grp-sub' : ''}">
+      <span class="grow">${esc(g.name)} <span class="muted small">(${list.length})</span></span></div>
+      <div class="card flat${sub ? ' grp-sub' : ''}">${list.map(battRow).join('')}</div>`;
+  };
+  const loose = inGroup('');
+  const grouped = S.batteries.length - loose.length;
+  if (loose.length) {
+    if (grouped) h += `<div class="grp-head"><span class="grow muted">Без группы</span></div>`;
+    h += `<div class="card flat">${loose.map(battRow).join('')}</div>`;
+  }
+  for (const g of groups.filter((x) => !x.parentId)) {
+    h += block(g, false);
+    for (const sg of groups.filter((x) => x.parentId === g.id)) h += block(sg, true);
+  }
   return h;
 }
 
@@ -3132,6 +3179,9 @@ document.addEventListener('change', (e) => {
     if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
   } else if (kind === 'fleet-sort') {
     S.settings.fleetSort = el.value;
+    saveSettings().then(() => render(true));
+  } else if (kind === 'batt-sort') {
+    S.settings.battSort = el.value;
     saveSettings().then(() => render(true));
   } else if (kind === 'import-file') {
     handleImportFile(el);
