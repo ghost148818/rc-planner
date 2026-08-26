@@ -242,9 +242,12 @@ function statusOf(a) {
   return 'unknown';
 }
 
-function chip(st) {
+// gotoHash: чип «Обслуживание» становится ссылкой к работам борта —
+// клик перехватывается делегатом раньше родительской кнопки строки.
+function chip(st, gotoHash) {
   const s = STATUS[st] || STATUS.unknown;
-  return `<span class="chip ${s.cls}">${s.label}</span>`;
+  const link = st === 'maintenance' && gotoHash;
+  return `<span class="chip ${s.cls}${link ? ' chip-link' : ''}"${link ? ` data-goto="${gotoHash}"` : ''}>${s.label}</span>`;
 }
 
 // Полётов может идти несколько (два пилота, два борта) — но у одного
@@ -397,6 +400,7 @@ const ICONS = {
   privacy: ic('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z"/>'),
   whatsnew: ic('<path d="M10 3.6 11.3 8a1.6 1.6 0 0 0 1.1 1.1l4.4 1.3-4.4 1.3a1.6 1.6 0 0 0-1.1 1.1L10 17.2l-1.3-4.4a1.6 1.6 0 0 0-1.1-1.1L3.2 10.4l4.4-1.3A1.6 1.6 0 0 0 8.7 8L10 3.6Z"/><path d="M18 13.5l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/>'),
   update: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
+  move: ic('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M3.5 12h17"/>'),
   paste: ic('<rect x="5" y="4" width="14" height="17.5" rx="2"/><path d="M9 4.5V3.4A1.4 1.4 0 0 1 10.4 2h3.2A1.4 1.4 0 0 1 15 3.4v1.1"/><path d="M12 9.5v7M8.8 13.3 12 16.5l3.2-3.2"/>'),
 };
 
@@ -576,7 +580,7 @@ function viewToday() {
       : rowBtn(`data-nav="#/model/${a.id}"`,
         `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
          <span class="d">${TYPES[a.type] || ''} · ${battTag(b)}</span></span>
-         ${chip(statusOf(a))}`)).join('');
+         ${chip(statusOf(a), '#/model/' + a.id)}`)).join('');
   } else {
     h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
       <span class="d">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries');
@@ -622,21 +626,109 @@ function fleetSeg(active) {
   </div>`;
 }
 
+/* ---------- Группы флота ----------
+   Группы лежат в settings.fleetGroups [{id, name, parentId|null}],
+   у борта — a.groupId. Один уровень вложенности: подгруппой может
+   стать только группа без своих подгрупп, родителем — только корневая.
+   Перенос борта — кнопкой на строке (два касания): на тач-экране в поле
+   это надёжнее перетаскивания пальцем. */
+function fleetGroups() { return S.settings.fleetGroups || []; }
+
+// Сортировка внутри групп; группы порядок не меняют и не сбрасываются.
+function fleetSortCmp() {
+  const mode = S.settings.fleetSort || 'name';
+  const stOrder = { ready: 0, check: 1, maintenance: 2, grounded: 3, unknown: 4 };
+  const tOrder = { quad: 0, plane: 1, wing: 2, other: 3 };
+  return (x, y) => {
+    if (mode === 'status') {
+      const d = (stOrder[statusOf(x)] || 0) - (stOrder[statusOf(y)] || 0);
+      if (d) return d;
+    } else if (mode === 'type') {
+      const d = (tOrder[x.type] != null ? tOrder[x.type] : 9) - (tOrder[y.type] != null ? tOrder[y.type] : 9);
+      if (d) return d;
+    }
+    return (x.name || '').localeCompare(y.name || '', 'ru');
+  };
+}
+
+function fleetRow(a) {
+  const b = armedBattery(a);
+  return `<div class="row">
+    <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:44px;min-width:0">
+      ${aircraftThumb(a)}<span class="grow" style="min-width:0"><span class="t">${esc(a.name)}</span>
+      <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
+    ${chip(statusOf(a), '#/model/' + a.id)}
+    <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
+  </div>`;
+}
+
 function viewFleet() {
   let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить' }) + fleetSeg('fleet');
   if (!S.aircraft.length) {
     return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт');
   }
-  h += '<div class="card flat">';
-  h += S.aircraft.map((a) => {
-    const b = armedBattery(a);
-    return rowBtn(`data-nav="#/model/${a.id}"`,
-    `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-     <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span>
-     ${chip(statusOf(a))}`);
-  }).join('');
-  h += '</div>';
+  const groups = fleetGroups();
+  h += `<div class="fleet-bar">
+    ${selectHtml('fleetSort', [['name', 'По названию'], ['status', 'По статусу'], ['type', 'По типу']],
+      S.settings.fleetSort || 'name', 'data-change="fleet-sort" style="flex:1;min-height:40px"')}
+    <button class="btn btn-sm" data-act="add-group" style="min-height:40px">+ Группа</button>
+  </div>`;
+  const cmp = fleetSortCmp();
+  const inGroup = (gid) => S.aircraft.filter((a) => (a.groupId || '') === gid).sort(cmp);
+  const block = (g, sub) => {
+    const list = inGroup(g.id);
+    return `<div class="grp-head${sub ? ' grp-sub' : ''}">
+      <span class="grow">${esc(g.name)} <span class="muted small">(${list.length})</span></span>
+      <button class="grp-edit" data-act="edit-group" data-id="${g.id}" aria-label="Настроить группу">${ICONS.more}</button></div>
+      ${list.length
+        ? `<div class="card flat${sub ? ' grp-sub' : ''}">${list.map(fleetRow).join('')}</div>`
+        : `<div class="small dim grp-empty${sub ? ' grp-sub' : ''}">пока пусто — перенесите борт кнопкой на его строке</div>`}`;
+  };
+  const loose = inGroup('');
+  if (loose.length) {
+    if (groups.length) h += `<div class="grp-head"><span class="grow muted">Без группы</span></div>`;
+    h += `<div class="card flat">${loose.map(fleetRow).join('')}</div>`;
+  }
+  for (const g of groups.filter((x) => !x.parentId)) {
+    h += block(g, false);
+    for (const sg of groups.filter((x) => x.parentId === g.id)) h += block(sg, true);
+  }
   return h;
+}
+
+// Форма группы: имя, родитель (для «сделать подгруппой»), удаление.
+function openGroupForm(g, moveAid) {
+  const isNew = !g;
+  g = g || {};
+  const groups = fleetGroups();
+  const hasSubs = groups.some((x) => x.parentId === g.id);
+  const parents = groups.filter((x) => !x.parentId && x.id !== g.id);
+  openModal(isNew ? 'Новая группа' : 'Группа', `<form data-form="group" ${g.id ? `data-id="${g.id}"` : ''} ${moveAid ? `data-move-aid="${moveAid}"` : ''}>
+    ${field('Название', `<input type="text" name="name" required value="${esc(g.name || '')}" placeholder="напр. Резерв или Поле у реки">`)}
+    ${hasSubs
+      ? `<div class="hint" style="margin-bottom:10px">У группы есть подгруппы — сделать её подгруппой нельзя.</div>`
+      : parents.length
+        ? field('Внутри группы', selectHtml('parentId', [['', '— корневая —']].concat(parents.map((p) => [p.id, p.name])), g.parentId || ''), 'подгруппа — один уровень вложенности')
+        : ''}
+    <button class="btn btn-primary" type="submit">Сохранить</button>
+    ${g.id ? `<button class="btn btn-danger" type="button" data-act="del-group" data-id="${g.id}">Удалить группу</button>` : ''}
+  </form>`);
+}
+
+// Перенос борта: список групп в модалке — два касания вместо drag-n-drop.
+function openMoveModal(a) {
+  const groups = fleetGroups();
+  const row = (gid, label, sub) => rowBtn(`data-act="move-model-to" data-id="${a.id}" data-gid="${gid}" ${sub ? 'style="padding-left:28px"' : ''}`,
+    `<span class="grow"><span class="t">${label}</span></span>`);
+  let h = '<div class="card flat">';
+  h += row('', 'Без группы');
+  for (const g of groups.filter((x) => !x.parentId)) {
+    h += row(g.id, esc(g.name));
+    for (const sg of groups.filter((x) => x.parentId === g.id)) h += row(sg.id, esc(sg.name), true);
+  }
+  h += rowBtn(`data-act="move-new-group" data-id="${a.id}"`, `<span class="grow"><span class="t">+ Новая группа…</span></span>`);
+  h += '</div>';
+  openModal(`«${esc(a.name)}» — в группу`, h);
 }
 
 const COMPONENTS = [
@@ -729,7 +821,7 @@ function viewModel() {
     </select></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
       <span class="row-ic">${ICONS.batteries}</span>
-      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —' }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
       ${bat && bat.status !== 'retired' ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
         data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
     </div>
@@ -877,7 +969,7 @@ function viewPrep() {
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-       <span class="d">${TYPES[a.type] || ''}${preparedFresh(a) ? ` · подготовлен в ${fmtTime(a.prepared.at)}` : ''}</span></span>${chip(statusOf(a))}`)).join('');
+       <span class="d">${TYPES[a.type] || ''}${preparedFresh(a) ? ` · подготовлен в ${fmtTime(a.prepared.at)}` : ''}</span></span>${chip(statusOf(a), '#/model/' + a.id)}`)).join('');
     h += '</div>';
     return h;
   }
@@ -1773,6 +1865,37 @@ const ACTIONS = {
     await put('batteries', b);
     render(true);
   },
+  /* --- Группы флота --- */
+  'add-group': () => openGroupForm(null),
+  'edit-group': (el) => openGroupForm(fleetGroups().find((g) => g.id === el.dataset.id)),
+  'move-model': (el) => {
+    const a = S.aircraft.find((x) => x.id === el.dataset.id);
+    if (a) openMoveModal(a);
+  },
+  'move-model-to': async (el) => {
+    const a = S.aircraft.find((x) => x.id === el.dataset.id);
+    if (!a) return;
+    a.groupId = el.dataset.gid || null;
+    await put('aircraft', a);
+    closeModal();
+    render();
+  },
+  'move-new-group': (el) => openGroupForm(null, el.dataset.id),
+  'del-group': (el) => confirmModal('Удалить группу? Борта останутся во флоте (без группы), подгруппы станут корневыми.',
+    'del-group-yes', `data-id="${el.dataset.id}"`),
+  'del-group-yes': async (el) => {
+    const id = el.dataset.id;
+    S.settings.fleetGroups = fleetGroups().filter((g) => g.id !== id);
+    for (const g of S.settings.fleetGroups) if (g.parentId === id) g.parentId = null;
+    await saveSettings();
+    for (const a of S.aircraft.filter((x) => x.groupId === id)) {
+      a.groupId = null;
+      await RCDB.put('aircraft', a);
+    }
+    S.aircraft = await RCDB.all('aircraft');
+    closeModal();
+    render();
+  },
   'maint-done': async (el) => {
     const m = S.maintenance.find((x) => x.id === el.dataset.id);
     if (!m) return;
@@ -2435,9 +2558,12 @@ async function afterNested(what, id) {
   }
   if (UI.view === 'prep' && UI.prep) {
     if (what === 'site') UI.prep.siteId = id;
-    // «+ Добавить…» с чек-листа тоже ставит АКБ в модель (если её
-    // не отдали другой модели прямо в форме через «Стоит в модели»)
+    // «+ Добавить…» с чек-листа тоже ставит АКБ в борт (если её
+    // не отдали другому борту прямо в форме через «Стоит в борте»)
     else if (!battOwner(id)) await installBattery(UI.prep.aircraftId, id);
+  } else if (UI.view === 'model' && what === 'batt') {
+    // «+ Добавить…» из карточки борта: новая АКБ ставится в этот борт
+    if (!battOwner(id)) await installBattery(UI.arg, id);
   } else if (UI.view === 'weather' && what === 'site') {
     const s = S.sites.find((x) => x.id === id);
     if (s && s.lat != null) UI.wx.siteId = id;
@@ -2515,6 +2641,26 @@ const FORMS = {
     }
     await put('sites', s);
     if (await afterNested('site', s.id)) return;
+    closeModal();
+    render();
+  },
+  group: async (form) => {
+    const fd = new FormData(form);
+    const name = String(fd.get('name') || '').trim();
+    if (!name) return;
+    const groups = S.settings.fleetGroups || (S.settings.fleetGroups = []);
+    const g = form.dataset.id ? groups.find((x) => x.id === form.dataset.id) : { id: uid(), parentId: null };
+    if (!g) return;
+    g.name = name;
+    if (fd.get('parentId') != null) g.parentId = fd.get('parentId') || null;
+    if (!form.dataset.id) groups.push(g);
+    await saveSettings();
+    // «+ Новая группа…» из переноса борта: сразу переносим его сюда
+    const aid = form.dataset.moveAid;
+    if (aid) {
+      const a = S.aircraft.find((x) => x.id === aid);
+      if (a) { a.groupId = g.id; await put('aircraft', a); }
+    }
     closeModal();
     render();
   },
@@ -2842,6 +2988,10 @@ function render(keepScroll) {
 ============================================================ */
 
 document.addEventListener('click', (e) => {
+  // Чип «Обслуживание» — ссылка к работам борта (лежит внутри кнопки
+  // строки, поэтому перехватываем до data-nav/data-act).
+  const cl = e.target.closest('.chip-link');
+  if (cl) { e.preventDefault(); go(cl.dataset.goto); return; }
   // Я.Карты из формы локации: перед переходом подставить в href свежие
   // координаты из поля. Обычная ссылка target=_blank — iOS корректно
   // возвращает в приложение (в отличие от window.open).
@@ -2885,6 +3035,7 @@ document.addEventListener('change', (e) => {
     }
     el.value = kind === 'prep-site' ? (UI.prep && UI.prep.siteId) || ''
       : kind === 'prep-batt' ? (armedBattery(S.aircraft.find((x) => x.id === (UI.prep || {}).aircraftId)) || {}).id || ''
+      : kind === 'model-batt' ? ((S.aircraft.find((x) => x.id === el.dataset.id) || {}).batteryId || '')
       : kind === 'weather-site' ? UI.wx.siteId || '' : '';
     (kind.endsWith('site') ? openSiteForm : openBattForm)(null);
     return;
@@ -2921,6 +3072,9 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'batt-preset') {
     const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
     if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
+  } else if (kind === 'fleet-sort') {
+    S.settings.fleetSort = el.value;
+    saveSettings().then(() => render(true));
   } else if (kind === 'import-file') {
     handleImportFile(el);
   } else if (kind === 'weather-site') {

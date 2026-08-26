@@ -453,6 +453,35 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .wxr.night { background: rgba(0, 0, 0, 0.22); }
 .wxr.night .mono { color: var(--dim); }
 
+/* ---------- Флот: группы ---------- */
+.fleet-bar { display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch; }
+.grp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.grp-head.grp-sub, .card.grp-sub, .grp-empty.grp-sub { margin-left: 16px; }
+.grp-head .grp-edit {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim);
+  border-radius: 8px;
+}
+.grp-head .grp-edit svg { width: 18px; height: 18px; }
+.grp-empty { margin: 2px 0 8px; }
+.row .row-move {
+  width: 40px; min-height: 40px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim);
+  border-radius: 8px;
+}
+.row .row-move svg { width: 20px; height: 20px; }
+.chip-link { cursor: pointer; }
+.chip-link:active { opacity: 0.7; }
+
 /* Мини-карта выбора точки (OSM) */
 .site-map-box:not([hidden]) { margin-top: 12px; }
 .mp { margin-bottom: 10px; }
