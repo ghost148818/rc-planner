@@ -621,3 +621,20 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Печать журнала ---------- */
+#print-area { display: none; }
+@media print {
+  body > *:not(#print-area) { display: none !important; }
+  #print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
+  #print-area h1 { font-size: 16pt; margin-bottom: 4pt; }
+  #print-area p { margin-bottom: 8pt; }
+  #print-area table { width: 100%; border-collapse: collapse; }
+  #print-area th, #print-area td {
+    border: 1pt solid #444;
+    padding: 3pt 5pt;
+    text-align: left;
+    font-size: 10pt;
+  }
+  #print-area th { background: #eee; }
+}
