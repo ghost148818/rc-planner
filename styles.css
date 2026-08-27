@@ -365,6 +365,36 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
 }
 .stat .v { font-family: var(--mono); font-size: 20px; font-weight: 600; }
 .stat .k { color: var(--mut); font-size: 12px; margin-top: 2px; }
+/* Четыре плитки: на телефоне 2×2 вместо «3 + 1» вразнобой. */
+.stat-line.four .stat { flex: 1 1 130px; }
+
+/* Полоски статистики: подпись — дорожка — значение. */
+.bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.bar-row .n {
+  flex: 0 0 88px;
+  color: var(--mut);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--card-2);
+  overflow: hidden;
+}
+.bar-track i { display: block; height: 100%; background: var(--info); border-radius: 4px; }
+.bar-row .v {
+  flex: 0 0 auto;
+  min-width: 76px;
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
 
 /* ---------- Сворачиваемые блоки ---------- */
 details.fold { border-top: 1px solid var(--line); }

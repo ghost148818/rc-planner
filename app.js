@@ -242,6 +242,19 @@ function statusOf(a) {
   return 'unknown';
 }
 
+// Регламент осмотра: a.svcEvery — «осматривать каждые N полётов».
+// Счёт идёт от последней ЗАКРЫТОЙ работы (m.doneAt, у записей до 1.3 —
+// m.createdAt): отметили работу выполненной — счётчик пошёл заново.
+// Статус борта регламент не меняет: это напоминание, а не запрет.
+function svcState(a) {
+  const every = Math.round(+a.svcEvery) || 0;
+  if (every < 1) return null;
+  const since = S.maintenance.reduce((t, m) =>
+    m.aircraftId === a.id && m.done ? Math.max(t, m.doneAt || m.createdAt || 0) : t, 0);
+  const flights = sessionsOf(a.id).filter((s) => s.end && s.start >= since).length;
+  return { every, flights, left: every - flights, due: flights >= every, since };
+}
+
 // gotoHash: чип «Обслуживание» становится ссылкой к работам борта —
 // клик перехватывается делегатом раньше родительской кнопки строки.
 // aircraftId: чип «Обслуживание» кликабелен — открывает запись работы
@@ -471,7 +484,7 @@ const TABS = [
 const TAB_OF = {
   today: 'today', weather: 'today',
   fleet: 'fleet', model: 'fleet', batteries: 'fleet',
-  flight: 'flight', prep: 'flight', session: 'flight', log: 'flight',
+  flight: 'flight', prep: 'flight', session: 'flight', log: 'flight', stats: 'flight',
   packing: 'packing', pack: 'packing',
   more: 'more', tools: 'more', sites: 'more',
   backup: 'more', privacy: 'more', templates: 'more',
@@ -568,6 +581,13 @@ function aircraftThumb(a) {
     : `<span class="thumb ph">${ICONS[a.type] || ICONS.plane}</span>`;
 }
 
+// Фото повреждения к записи обслуживания. Кэш object URL общий с фото
+// бортов — id записей уникальны на всё хранилище.
+function maintThumb(m) {
+  const u = photoURL(m);
+  return u ? `<img class="thumb" src="${u}" alt="">` : '';
+}
+
 /* ============================================================
    6. ЭКРАНЫ
 ============================================================ */
@@ -647,10 +667,14 @@ function viewToday() {
   h += '</div>';
   }
 
-  // Незакрытое обслуживание
+  // Незакрытое обслуживание и подошедший регламент осмотра
   const open = S.maintenance.filter((m) => !m.done);
-  if (open.length) {
+  const due = S.aircraft.map((a) => [a, svcState(a)]).filter(([, sv]) => sv && sv.due);
+  if (open.length || due.length) {
     h += '<div class="h2">Обслуживание</div><div class="card flat">';
+    h += due.map(([a, sv]) => rowBtn(`data-nav="#/model/${a.id}"`,
+      `<span class="grow"><span class="t" style="color:var(--maint)">Пора осмотреть: ${esc(a.name)}</span>
+       <span class="d">${sv.flights} ${plural(sv.flights, 'полёт', 'полёта', 'полётов')} с последнего обслуживания · регламент каждые ${sv.every}</span></span>`)).join('');
     h += open.slice(0, 5).map((m) => {
       const a = S.aircraft.find((x) => x.id === m.aircraftId);
       return rowBtn(`data-nav="#/model/${m.aircraftId}"`,
@@ -909,6 +933,17 @@ function viewModel() {
       <div class="stat"><div class="v">${flights[0] ? fmtDate(flights[0].date) : '—'}</div><div class="k">последний полёт</div></div>
     </div></div>`;
 
+  // Регламент осмотра (a.svcEvery) — напоминание, полёты не запрещает.
+  const svc = svcState(a);
+  if (svc) {
+    h += svc.due
+      ? `<div class="banner warn">Пора осмотреть борт: ${svc.flights} ${plural(svc.flights, 'полёт', 'полёта', 'полётов')}
+         с последнего обслуживания при регламенте каждые ${svc.every}.
+         <button class="btn-sm btn right" data-act="add-maint" data-id="${a.id}">Записать осмотр</button></div>`
+      : `<div class="small muted" style="margin:-2px 0 10px">До осмотра ${svc.left} ${plural(svc.left, 'полёт', 'полёта', 'полётов')}
+         · регламент каждые ${svc.every}, пройдено ${svc.flights}.</div>`;
+  }
+
   h += `<button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">Подготовка к полёту</button>`;
 
   // Паспорт
@@ -952,7 +987,7 @@ function viewModel() {
   if (openM.length) {
     // «Выполнено» одним касанием — после краша это следующий очевидный шаг
     h += openM.map((m) => `<div class="row">
-      <button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:40px">
+      ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:40px">
         <span class="t">${esc(m.title)}</span>
         <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
       <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}" style="min-height:40px">Выполнено</button>
@@ -966,7 +1001,7 @@ function viewModel() {
   if (doneM.length) {
     h += `<details class="fold"><summary>История обслуживания (${doneM.length})</summary><div class="fold-body"><div class="card flat">`;
     h += doneM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
-      `<span class="grow"><span class="t" style="color:var(--mut)">${esc(m.title)}</span>
+      `${maintThumb(m)}<span class="grow"><span class="t" style="color:var(--mut)">${esc(m.title)}</span>
        <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}</span></span>`)).join('');
     h += '</div></div></details>';
   }
@@ -1035,6 +1070,7 @@ function viewFlight() {
     h += `<div class="h2" style="margin-bottom:0">Последние полёты</div>`;
     h += logGroupedHtml(done.slice(0, 10), done);
     h += `<button class="btn" data-nav="#/log">Журнал полётов и печать (${done.length})</button>`;
+    h += `<button class="btn" data-nav="#/stats">Статистика налёта</button>`;
   } else if (!activeSessions().length && !S.aircraft.length) {
     h += emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
   }
@@ -1072,6 +1108,11 @@ function viewPrep() {
   let h = pageHead('Чек-лист', { back: '#/flight', sub: esc(a.name) });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
+  }
+  const svcPrep = svcState(a);
+  if (svcPrep && svcPrep.due) {
+    h += `<div class="banner warn">Подошёл регламент: ${svcPrep.flights} ${plural(svcPrep.flights, 'полёт', 'полёта', 'полётов')}
+      с последнего обслуживания (каждые ${svcPrep.every}). Осмотрите борт внимательнее.</div>`;
   }
   if (tpls.length > 1) {
     h += field('Шаблон', selectHtml('tpl',
@@ -1186,7 +1227,12 @@ function viewLog() {
     act: 'print-log', actLabel: 'Печать',
   });
   if (!done.length) return h + emptyState('Полётов пока не было.');
-  return h + logGroupedHtml(done);
+  h += logGroupedHtml(done);
+  h += `<div class="btn-line">
+    <button class="btn" data-nav="#/stats">Статистика</button>
+    <button class="btn" data-act="export-log-csv">Экспорт в CSV</button>
+  </div>`;
+  return h;
 }
 
 // Кнопка правки итога — в деталях завершённого полёта (finish-flight
@@ -1218,6 +1264,138 @@ function printLog() {
   window.addEventListener('afterprint', cleanup);
   window.print();
   setTimeout(cleanup, 60000); // страховка, если afterprint не пришёл
+}
+
+/* ---------- Статистика ---------- */
+
+// Всё считается на лету из журнала: своего хранилища у статистики нет,
+// наружу ничего не уходит. Полоски — доля от максимума в списке.
+function statBars(rows) {
+  const max = rows.reduce((n, r) => Math.max(n, r.v), 0) || 1;
+  return '<div class="card">' + rows.map((r) => `<div class="bar-row">
+    <span class="n">${esc(r.k)}</span>
+    <span class="bar-track"><i style="width:${Math.max(2, Math.round(r.v / max * 100))}%"></i></span>
+    <span class="v">${esc(r.label)}</span></div>`).join('') + '</div>';
+}
+
+// Свод по ключу: [{k, v, label}] — полёты и налёт, крупные сверху.
+function statGroup(list, keyFn, nameFn) {
+  const by = new Map();
+  list.forEach((s) => {
+    const k = keyFn(s);
+    const o = by.get(k) || { n: 0, min: 0 };
+    o.n++;
+    o.min += s.durationMin || 0;
+    by.set(k, o);
+  });
+  return [...by.entries()]
+    .sort((x, y) => y[1].min - x[1].min || y[1].n - x[1].n)
+    .map(([k, o]) => ({ k: nameFn(k), v: o.min, label: `${o.n} · ${fmtDur(o.min)}` }));
+}
+
+// Месяцы от первого полёта до текущего, включая пустые: провалы видно.
+// Последние двенадцать — экран не должен расти без предела.
+function statMonths(list) {
+  const first = new Date(list[0].date + 'T00:00:00');
+  if (isNaN(first.getTime())) return [];
+  const now = new Date();
+  const keys = [];
+  let y = first.getFullYear(), m = first.getMonth();
+  while (keys.length < 600 && (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth()))) {
+    keys.push(y + '-' + String(m + 1).padStart(2, '0'));
+    if (++m > 11) { m = 0; y++; }
+  }
+  const by = new Map();
+  list.forEach((s) => {
+    const k = String(s.date || '').slice(0, 7);
+    const o = by.get(k) || { n: 0, min: 0 };
+    o.n++;
+    o.min += s.durationMin || 0;
+    by.set(k, o);
+  });
+  return keys.slice(-12).map((k) => {
+    const o = by.get(k) || { n: 0, min: 0 };
+    // «авг 26» — коротко и без «г.»: подпись живёт в узкой колонке.
+    const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1);
+    const mon = d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '');
+    return { k: mon + ' ' + k.slice(2, 4), v: o.min,
+      label: o.n ? `${o.n} · ${fmtDur(o.min)}` : '—' };
+  });
+}
+
+function viewStats() {
+  const done = S.sessions.filter((s) => s.end).sort((a, b) => a.start - b.start);
+  let h = pageHead('Статистика', { back: '#/flight', sub: 'Считается из журнала на этом устройстве' });
+  if (!done.length) return h + emptyState('Полётов пока не было — считать нечего.');
+
+  const total = done.reduce((n, s) => n + (s.durationMin || 0), 0);
+  const days = new Set(done.map((s) => s.date)).size;
+  h += `<div class="stat-line four">
+    <div class="stat"><div class="v">${done.length}</div><div class="k">${plural(done.length, 'полёт', 'полёта', 'полётов')}</div></div>
+    <div class="stat"><div class="v">${fmtDur(total)}</div><div class="k">общий налёт</div></div>
+    <div class="stat"><div class="v">${fmtDur(total / done.length)}</div><div class="k">средний полёт</div></div>
+    <div class="stat"><div class="v">${days}</div><div class="k">${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}</div></div>
+  </div>`;
+
+  // Месяцы пропадают только если у всех полётов битая дата — пустую карточку не рисуем.
+  const months = statMonths(done);
+  if (months.length) h += '<div class="h2">По месяцам</div>' + statBars(months);
+
+  h += '<div class="h2">По бортам</div>' + statBars(statGroup(done, (s) => s.aircraftId, (id) => {
+    const a = S.aircraft.find((x) => x.id === id);
+    return a ? a.name : 'Борт удалён';
+  }));
+
+  h += '<div class="h2">По локациям</div>' + statBars(statGroup(done, (s) => s.siteId || '', (id) => {
+    const site = S.sites.find((x) => x.id === id);
+    return site ? site.name : 'Без локации';
+  }));
+
+  // Итоги: доля нормальных полётов — честный показатель, а не «рейтинг».
+  const okCount = done.filter((s) => !s.result || s.result === 'normal').length;
+  h += `<div class="h2">Чем заканчивались</div>` + statBars(
+    Object.keys(RESULTS).map((k) => ({
+      k: RESULTS[k],
+      v: done.filter((s) => (s.result || 'normal') === k).length,
+      label: String(done.filter((s) => (s.result || 'normal') === k).length),
+    })).filter((r) => r.v));
+  h += `<p class="small muted">Без происшествий ${Math.round(okCount / done.length * 100)}% полётов.</p>`;
+
+  // Аккумуляторы: циклы = износ, изношенные сверху.
+  const batts = S.batteries.filter((b) => b.cycles).sort((x, y) => y.cycles - x.cycles).slice(0, 10);
+  if (batts.length) {
+    h += '<div class="h2">Износ аккумуляторов</div>' + statBars(batts.map((b) => ({
+      k: b.label, v: b.cycles, label: b.cycles + ' ' + plural(b.cycles, 'цикл', 'цикла', 'циклов'),
+    })));
+  }
+
+  h += `<div class="btn-line" style="margin-top:12px">
+    <button class="btn" data-nav="#/log">Журнал полётов</button>
+    <button class="btn" data-act="export-log-csv">Экспорт в CSV</button>
+  </div>`;
+  return h;
+}
+
+// Журнал в CSV для таблиц: разделитель «;» и BOM — так файл открывается
+// в Excel/Numbers с русской локалью без «мастера импорта». Собирается
+// в памяти и сохраняется на устройство, никуда не отправляется.
+function exportLogCsv() {
+  const done = S.sessions.filter((x) => x.end).sort((a, b) => a.start - b.start);
+  if (!done.length) return;
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['№', 'Дата', 'Борт', 'Минуты', 'Аккумулятор', 'Локация', 'Итог', 'Погода', 'Заметки', 'Проблемы'];
+  const rows = done.map((x) => {
+    const a = S.aircraft.find((y) => y.id === x.aircraftId);
+    const b = S.batteries.find((y) => y.id === x.batteryId);
+    const site = S.sites.find((y) => y.id === x.siteId);
+    return [
+      String(x.flightNo == null ? '' : x.flightNo), x.date, a ? a.name : '',
+      x.durationMin == null ? '' : x.durationMin, b ? b.label : '', site ? site.name : '',
+      RESULTS[x.result] || '', x.weather || '', x.notes || '', x.problems || '',
+    ].map(q).join(';');
+  });
+  const csv = '\ufeff' + [head.map(q).join(';')]  // BOM — иначе Excel читает кириллицу как крокозябры.concat(rows).join('\r\n') + '\r\n';
+  download('rc-planner-log-' + todayISO() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
 }
 
 /* ---------- Сборы ---------- */
@@ -1883,6 +2061,8 @@ function viewPrivacy() {
     «GPS» и «Моё местоположение». Точные координаты остаются на устройстве (в вашей локации);
     в интернет они не отправляются — прогноз получает точку с точностью ~1 км. Внешним сайтам
     приложение передаёт только своё доменное имя, без каких-либо ваших данных.</p>
+    <p style="margin-top:8px">Статистика, печать журнала и экспорт в CSV считаются и собираются прямо
+    в браузере: файл сохраняется на устройство, никуда не отправляется.</p>
     <p style="margin-top:8px">Удаление данных в настройках стирает их безвозвратно: копий нигде нет.
     Резервная копия — файл, который вы сохраняете сами.</p>
   </div>`;
@@ -2141,6 +2321,7 @@ const ACTIONS = {
     const m = S.maintenance.find((x) => x.id === el.dataset.id);
     if (!m) return;
     m.done = true;
+    m.doneAt = Date.now(); // от неё считается регламент осмотра (svcState)
     await put('maintenance', m);
     render(true);
   },
@@ -2155,6 +2336,7 @@ const ACTIONS = {
   // «Завершить полёт» фиксирует момент посадки (landedAt): таймер
   // останавливается сразу, даже если итог заполняют позже.
   'print-log': () => printLog(),
+  'export-log-csv': () => exportLogCsv(),
   'finish-flight': async (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
     if (s && !s.end && !s.landedAt) {
@@ -2190,7 +2372,12 @@ const ACTIONS = {
   'add-maint': (el) => openMaintForm(null, el.dataset.id),
   'edit-maint': (el) => openMaintForm(S.maintenance.find((m) => m.id === el.dataset.id)),
   'del-maint': (el) => confirmModal('Удалить запись обслуживания?', 'del-maint-yes', `data-id="${el.dataset.id}"`),
-  'del-maint-yes': async (el) => { await del('maintenance', el.dataset.id); closeModal(); render(); },
+  'del-maint-yes': async (el) => {
+    dropPhotoURL(el.dataset.id);
+    await del('maintenance', el.dataset.id);
+    closeModal();
+    render();
+  },
 
   /* --- Конфигурации --- */
   'add-config': (el) => {
@@ -2473,6 +2660,8 @@ function openModelForm(a, presetId, saved) {
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
       ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
     </div>
+    ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${a.svcEvery || ''}" placeholder="напр. 10">`,
+      'Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы. Пусто — без напоминаний')}
     ${field('Фото', `<input type="file" name="photo" accept="image/*">`, a.photo ? 'Фото уже есть — новое заменит его' : '')}
     ${field('Заметки', `<textarea name="notes">${esc(a.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">${isNew ? 'Добавить' : 'Сохранить'}</button>
@@ -2489,7 +2678,12 @@ function openMaintForm(m, aircraftId) {
       ${field('Дата', `<input type="date" name="date" value="${esc(m.date || todayISO())}">`)}
     </div>
     ${field('Причина', `<input type="text" name="reason" value="${esc(m.reason || '')}" placeholder="напр. шум подшипника">`)}
-    ${field('Следующее действие', `<input type="text" name="next" value="${esc(m.next || '')}" placeholder="напр. осмотр через 10 полётов">`)}
+    ${field('Следующее действие', `<input type="text" name="next" value="${esc(m.next || '')}" placeholder="напр. заказать подшипники">`)}
+    ${m.photo ? `<img src="${photoURL(m)}" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:8px">` : ''}
+    ${field('Фото повреждения', `<input type="file" name="photo" accept="image/*">`,
+      m.photo ? 'Фото уже есть — новое заменит его' : 'Снимок хранится на устройстве и попадает в резервную копию')}
+    ${m.photo ? field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
+      <input type="checkbox" name="dropPhoto" style="width:22px;height:22px"> Удалить фото</label>`) : ''}
     ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
       <input type="checkbox" name="done" ${m.done ? 'checked' : ''} style="width:22px;height:22px"> Выполнено</label>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -2866,6 +3060,8 @@ const FORMS = {
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
+    const svcEvery = Math.round(+fd.get('svcEvery'));
+    a.svcEvery = svcEvery > 0 ? Math.min(999, svcEvery) : null;
     a.notes = fd.get('notes').trim();
     const photo = fd.get('photo');
     if (photo && photo.size) { a.photo = photo; dropPhotoURL(a.id); }
@@ -2893,7 +3089,15 @@ const FORMS = {
     m.date = fd.get('date') || todayISO();
     m.reason = fd.get('reason').trim();
     m.next = fd.get('next').trim();
+    // m — живой объект из S.maintenance: старое значение читаем ДО присваивания,
+    // иначе «когда закрыли» затрётся при каждом сохранении записи.
+    const wasDone = !!m.done;
     m.done = !!fd.get('done');
+    if (m.done && !wasDone) m.doneAt = Date.now();
+    if (!m.done) m.doneAt = null;
+    const photo = fd.get('photo');
+    if (photo && photo.size) { m.photo = photo; dropPhotoURL(m.id); }
+    else if (fd.get('dropPhoto')) { m.photo = null; dropPhotoURL(m.id); }
     await put('maintenance', m);
     closeModal();
     render();
@@ -3210,7 +3414,7 @@ function handleImportFile(input) {
 
 const RENDERERS = {
   today: viewToday, fleet: viewFleet, model: viewModel,
-  flight: viewFlight, prep: viewPrep, session: viewSession, log: viewLog,
+  flight: viewFlight, prep: viewPrep, session: viewSession, log: viewLog, stats: viewStats,
   packing: viewPacking, pack: viewPack, weather: viewWeather,
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,

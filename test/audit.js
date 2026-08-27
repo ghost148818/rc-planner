@@ -11,7 +11,7 @@ const DIST = path.join(__dirname, '..', 'dist', 'rc-planner.html');
 
 // Экраны без обязательного аргумента. Должен совпадать со списком в app.js —
 // новый экран добавлять и туда, и сюда, иначе его никто не проверит.
-const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'packing', 'weather',
+const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'stats', 'packing', 'weather',
   'more', 'tools', 'sites', 'batteries', 'templates', 'backup', 'privacy'];
 
 (async () => {
