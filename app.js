@@ -1970,6 +1970,37 @@ function viewMore() {
   return h;
 }
 
+// Прошивки Walksnail: показываем ТОЛЬКО последнюю известную версию —
+// вместе с датой сверки, потому что данные ручные (почему именно так —
+// в шапке data/firmware.js). Файлы лежат у производителя, мы их не
+// копируем: наружу ведут обычные ссылки, никаких запросов из приложения.
+function firmwareHtml() {
+  const fw = RC.FIRMWARE;
+  if (!fw || !fw.items || !fw.items.length) return '';
+  const link = (url, label, primary) =>
+    `<a class="btn btn-sm${primary ? ' btn-primary' : ''}" href="${esc(url)}"
+      target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+  let h = `<details class="fold"><summary>Прошивки Walksnail (${fw.items.length})</summary><div class="fold-body">`;
+  if (fw.warn) h += `<div class="banner warn">${esc(fw.warn)}</div>`;
+  // Кнопки отдельной строкой под текстом: на телефоне название с номером
+  // версии иначе ломается на три строки, зажатое кнопками справа.
+  h += '<div class="card flat">' + fw.items.map((f) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <span><span class="t">${esc(f.name)} · ${esc(f.version)}</span> <span class="badge online">online</span></span>
+      ${f.note ? `<span class="d">${esc(f.note)}</span>` : ''}
+      <span class="d muted">Последняя известная версия, проверено ${esc(fmtDate(fw.checked))}. Файлы на Google Диске.</span>
+      <span class="btn-line">${link(f.url, 'Скачать', true)}${f.all ? link(f.all, 'Все версии') : ''}</span>
+    </div>`).join('') + '</div>';
+  // Источник — через гард: инварианты в test/checks.js его требуют, но
+  // забытое поле не должно ронять весь экран «Инструменты» вместе с каталогом.
+  const src = fw.source && fw.source.url && fw.source.name
+    ? `<br>Источник: <a href="${esc(fw.source.url)}" target="_blank" rel="noopener noreferrer">${esc(fw.source.name)}</a>.`
+    : '';
+  h += `<p class="small muted">Версии сверяются вручную: Google Диск не позволяет
+    приложению прочитать список файлов. Свежее списка может быть только сама папка —
+    загляните в «Все версии», если дата проверки давняя.${src}</p>`;
+  return h + '</div></details>';
+}
+
 function viewTools() {
   let h = pageHead('Инструменты', { back: '#/more' });
   h += `<div class="banner">Инструменты открываются в браузере и требуют интернет.
@@ -1987,6 +2018,7 @@ function viewTools() {
   if (favTools.length) {
     h += '<div class="h2">Избранное</div><div class="card flat">' + favTools.map(toolRow).join('') + '</div>';
   }
+  h += firmwareHtml();
   RC.TOOL_CATS.forEach((cat) => {
     const list = RC.TOOLS.filter((t) => t.cat === cat.id);
     h += `<details class="fold"><summary>${esc(cat.name)} (${list.length})</summary>

@@ -6,7 +6,9 @@
 // документацией (Context7) и проверить САМУ СТРАНИЦУ, а не только код ответа:
 // HTTP 200 + заголовок/содержимое соответствуют назначению + ресурс известен
 // сообществу. HTTP 200 у припаркованного или вредоносного домена — не проверка.
-// Последняя проверка всех ссылок: 2026-08-24.
+// Последняя проверка всех ссылок: 2026-08-30.
+// Прошивки Walksnail (Avatar / Ascent) живут отдельно — в data/firmware.js,
+// потому что там показывается номер последней версии, а не просто ссылка.
 window.RC = window.RC || {};
 
 RC.TOOLS = [
@@ -269,6 +271,259 @@ RC.TOOLS = [
     url: 'https://oscarliang.com/',
     src: 'oscarliang.com — известный блог сообщества',
   },
+
+  // --- Добавлено 2026-08-30 из закладок владельца; каждая ссылка открыта
+  // и сверена по содержимому страницы, а не по коду ответа. Битые и
+  // недоступные из текущей сети в каталог не попали (список — в отчёте).
+  {
+    id: 'db-technobee',
+    cat: 'db',
+    name: 'Технобиблиотека (рабочие конспекты)',
+    desc: 'Русскоязычные конспекты и обзоры: прошивка ESC, ELRS, стеки, аппаратура, разборы новинок.',
+    url: 'https://technobee.ru/index.php',
+    src: 'technobee.ru — «Рабочие конспекты. БПЛА и роботы»',
+  },
+  {
+    id: 'db-propwash',
+    cat: 'db',
+    name: 'Справочник по FPV хобби',
+    desc: 'Русскоязычный справочник новичка: термины, выбор железа, первые шаги.',
+    url: 'https://propwashservice.com/ru/',
+    src: 'propwashservice.com — справочник сообщества',
+  },
+  {
+    id: 'db-fpvcompare',
+    cat: 'db',
+    name: 'FPVcompare',
+    desc: 'Сравнение готовых дронов, очков, аккумуляторов и пропеллеров по характеристикам.',
+    url: 'https://fpvcompare.com/',
+    src: 'fpvcompare.com — база сравнений сообщества',
+  },
+  {
+    id: 'db-aos',
+    cat: 'db',
+    name: 'AOS RC — сборка 5″ фристайл',
+    desc: 'Рекомендованные комплектующие под фристайл-сборку 5 дюймов от автора рам AOS.',
+    url: 'https://www.aos-rc.com/recommended-parts/5in-freestyle',
+    src: 'aos-rc.com — официальный сайт разработчика рам',
+  },
+  {
+    id: 'db-twgo',
+    cat: 'db',
+    name: 'Tiny Whoop Club — TWGO',
+    desc: 'Клубная база по вупам: сборки, настройки, площадки и мероприятия (англ.).',
+    url: 'https://www.tinywhoopclubnetwork.com/twgo',
+    src: 'tinywhoopclubnetwork.com — клуб Tiny Whoop',
+  },
+  {
+    id: 'db-fpvmap',
+    cat: 'db',
+    name: 'FPV map',
+    desc: 'Карта площадок и споттов, отмеченных пилотами.',
+    url: 'https://fpvmap.m1p.me/',
+    src: 'fpvmap.m1p.me — карта сообщества',
+  },
+  {
+    id: 'db-cellmapper',
+    cat: 'db',
+    name: 'CellMapper — карта вышек',
+    desc: 'Расположение базовых станций и покрытие: пригодится, когда связь идёт через LTE.',
+    url: 'https://www.cellmapper.net/map',
+    src: 'cellmapper.net — краудсорсинговая карта сети',
+  },
+  {
+    id: 'calc-ecalc',
+    cat: 'calc',
+    name: 'eCalc — расчёт силовой установки',
+    desc: 'Подбор мотора, пропеллера и АКБ с оценкой тяги, тока и времени полёта.',
+    url: 'https://www.ecalc.ch/motorcalc.php',
+    src: 'ecalc.ch — известный отраслевой калькулятор',
+  },
+  {
+    id: 'calc-pidcalc',
+    cat: 'calc',
+    name: 'PID Calc — UAV Tech',
+    desc: 'Пересчёт ПИД-коэффициентов при смене рамы, моторов или пропеллеров.',
+    url: 'https://theuavtech.com/pidcalc/',
+    src: 'theuavtech.com — UAV Tech, автор методик тюнинга',
+  },
+  {
+    id: 'calc-fresnel',
+    cat: 'calc',
+    name: 'Зона Френеля для радиоканала',
+    desc: 'Расчёт зоны Френеля и профиля трассы: где рельеф съест дальность связи.',
+    url: 'https://www.radiofresnel.com/',
+    src: 'radiofresnel.com — расчёт радиотрассы',
+  },
+  {
+    id: 'fw-blheli',
+    cat: 'firmware',
+    name: 'BLHeliSuite (регуляторы)',
+    desc: 'Настройка и прошивка регуляторов BLHeli — десктоп-приложение.',
+    url: 'https://github.com/4712/BLHeliSuite/releases',
+    src: 'GitHub 4712 — официальный репозиторий BLHeliSuite',
+  },
+  {
+    id: 'fw-zadig',
+    cat: 'firmware',
+    name: 'Zadig (драйверы USB)',
+    desc: 'Установка драйверов USB для прошивки полётников и приёмников в Windows.',
+    url: 'https://zadig.akeo.ie/',
+    src: 'zadig.akeo.ie — официальный сайт проекта',
+  },
+  // Постановление Правительства РФ от 21.06.2023 (закладка владельца)
+  // в каталог НЕ добавлено: publication.pravo.gov.ru из нашей сети
+  // отвечает только по http, а каталог держит правило «только https»
+  // (см. проверку в test/checks.js). Нужна проверенная https-ссылка
+  // от владельца — тогда добавим.
+  {
+    id: 'doc-skyarc',
+    cat: 'docs',
+    name: 'Небосвод — приложение пилота',
+    desc: 'Подача заявок на полёты и разрешительные процедуры в России.',
+    url: 'https://skyarc.ru/',
+    src: 'skyarc.ru — сервис подачи планов полёта',
+  },
+  {
+    id: 'doc-pid-habr',
+    cat: 'docs',
+    name: 'ПИД-регулятор простыми словами',
+    desc: 'Разбор того, что делают P, I и D — чтобы тюнинг перестал быть шаманством.',
+    url: 'https://habr.com/ru/articles/1016090/',
+    src: 'habr.com — разбор с примерами',
+  },
+  {
+    id: 'doc-bambu-wiki',
+    cat: 'docs',
+    name: 'Bambu Lab Wiki (3D-печать)',
+    desc: 'Печать деталей и креплений: материалы, настройки, обслуживание принтера.',
+    url: 'https://wiki.bambulab.com/en/home',
+    src: 'wiki.bambulab.com — официальная база знаний производителя',
+  },
+
+  // Магазины и подбор комплектующих
+  {
+    id: 'shop-rcsearch',
+    cat: 'shop',
+    name: 'RCSearch',
+    desc: 'Поиск RC-товаров сразу по российским магазинам со сравнением цен.',
+    url: 'https://rcsearch.ru/',
+    src: 'rcsearch.ru — агрегатор магазинов',
+  },
+  {
+    id: 'shop-flydepo',
+    cat: 'shop',
+    name: 'Fly Depo',
+    desc: 'Готовые дроны, комплектующие и аксессуары.',
+    url: 'https://flydepo.ru/',
+    src: 'flydepo.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-mydrone',
+    cat: 'shop',
+    name: 'MyDrone',
+    desc: 'Дроны, квадрокоптеры и запчасти.',
+    url: 'https://mydrone.ru/',
+    src: 'mydrone.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-idrone',
+    cat: 'shop',
+    name: 'iDrone',
+    desc: 'Готовые FPV-дроны и комплектующие, в том числе iFlight.',
+    url: 'https://idrone.ru/',
+    src: 'idrone.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-warpfly',
+    cat: 'shop',
+    name: 'WARP',
+    desc: 'Карбоновые рамы для FPV-дронов и магазин сообщества пилотов.',
+    url: 'https://warpfly.ru/',
+    src: 'warpfly.ru — магазин и сообщество',
+  },
+  {
+    id: 'shop-beastfpv',
+    cat: 'shop',
+    name: 'BeastFPV',
+    desc: 'Видеопередатчики, антенны и комплектующие FPV.',
+    url: 'https://beastfpv.ru/',
+    src: 'beastfpv.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-fixfly',
+    cat: 'shop',
+    name: 'FixFly',
+    desc: 'Радиоуправляемые модели и запчасти к ним.',
+    url: 'https://fixfly.ru/',
+    src: 'fixfly.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-skyindustry',
+    cat: 'shop',
+    name: 'SkyIndustry',
+    desc: 'Продажа квадрокоптеров и обучение операторов БПЛА.',
+    url: 'https://skyindustry.ru/',
+    src: 'skyindustry.ru — магазин и учебный центр',
+  },
+  {
+    id: 'shop-squidstick',
+    cat: 'shop',
+    name: 'Squid Stick (ELRS-донгл для симулятора)',
+    desc: 'Донгл ExpressLRS, чтобы летать в симуляторе со своей аппаратуры.',
+    url: 'https://elrsquidstick.com/products/elrs-simulator-dongle-squid-stick',
+    src: 'elrsquidstick.com — сайт производителя донгла',
+  },
+
+  // Гонки и сообщество
+  {
+    id: 'race-fgdr',
+    cat: 'race',
+    name: 'Федерация гонок дронов России',
+    desc: 'Официальная федерация: соревнования, регламенты, новости дрон-рейсинга.',
+    url: 'https://fgdr.ru/',
+    src: 'fgdr.ru — Федерация гонок дронов России',
+  },
+  {
+    id: 'race-rdr',
+    cat: 'race',
+    name: 'Календарь соревнований RDR',
+    desc: 'Единый календарь стартов по гонкам дронов и дрон-рейсингу.',
+    url: 'https://rdr.aero/calendar',
+    src: 'rdr.aero — календарь соревнований',
+  },
+  {
+    id: 'race-rdmfpv',
+    cat: 'race',
+    name: 'Random FPV',
+    desc: 'Сайт о дрон-рейсинге и системе хронометража RotorHazard.',
+    url: 'https://rdmfpv.ru/',
+    src: 'rdmfpv.ru — сообщество дрон-рейсинга',
+  },
+  {
+    id: 'race-hackfast',
+    cat: 'race',
+    name: 'HackFast',
+    desc: 'Инструменты и материалы по гонкам: настройки, таймингу и трассам.',
+    url: 'https://hackfa.st/',
+    src: 'hackfa.st — проект сообщества',
+  },
+  {
+    id: 'race-vdt',
+    cat: 'race',
+    name: 'VDT — виртуальные гонки',
+    desc: 'Справка и сервисы виртуальных гонок дронов.',
+    url: 'https://vdt.tg/',
+    src: 'vdt.tg — платформа виртуальных гонок',
+  },
+  {
+    id: 'race-flytribe',
+    cat: 'race',
+    name: 'Fly Tribe Magazine',
+    desc: 'Журнал сообщества пилотов: сборки, интервью, репортажи с соревнований (англ.).',
+    url: 'https://www.flytribemagazine.com/',
+    src: 'flytribemagazine.com — журнал сообщества',
+  },
 ];
 
 RC.TOOL_CATS = [
@@ -276,6 +531,8 @@ RC.TOOL_CATS = [
   { id: 'firmware', name: 'Прошивки и десктоп-приложения' },
   { id: 'calc', name: 'Калькуляторы' },
   { id: 'db', name: 'Подбор и базы данных' },
+  { id: 'shop', name: 'Магазины и комплектующие' },
+  { id: 'race', name: 'Гонки и сообщество' },
   { id: 'weather', name: 'Погода' },
   { id: 'docs', name: 'Документация' },
 ];

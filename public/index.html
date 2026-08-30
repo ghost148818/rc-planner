@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="e730132dba">
+  <meta name="build" content="e39fbb5fc8">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1022,7 +1022,9 @@ RC.BATTERY_PRESETS = [
 // документацией (Context7) и проверить САМУ СТРАНИЦУ, а не только код ответа:
 // HTTP 200 + заголовок/содержимое соответствуют назначению + ресурс известен
 // сообществу. HTTP 200 у припаркованного или вредоносного домена — не проверка.
-// Последняя проверка всех ссылок: 2026-08-24.
+// Последняя проверка всех ссылок: 2026-08-30.
+// Прошивки Walksnail (Avatar / Ascent) живут отдельно — в data/firmware.js,
+// потому что там показывается номер последней версии, а не просто ссылка.
 window.RC = window.RC || {};
 
 RC.TOOLS = [
@@ -1285,6 +1287,259 @@ RC.TOOLS = [
     url: 'https://oscarliang.com/',
     src: 'oscarliang.com — известный блог сообщества',
   },
+
+  // --- Добавлено 2026-08-30 из закладок владельца; каждая ссылка открыта
+  // и сверена по содержимому страницы, а не по коду ответа. Битые и
+  // недоступные из текущей сети в каталог не попали (список — в отчёте).
+  {
+    id: 'db-technobee',
+    cat: 'db',
+    name: 'Технобиблиотека (рабочие конспекты)',
+    desc: 'Русскоязычные конспекты и обзоры: прошивка ESC, ELRS, стеки, аппаратура, разборы новинок.',
+    url: 'https://technobee.ru/index.php',
+    src: 'technobee.ru — «Рабочие конспекты. БПЛА и роботы»',
+  },
+  {
+    id: 'db-propwash',
+    cat: 'db',
+    name: 'Справочник по FPV хобби',
+    desc: 'Русскоязычный справочник новичка: термины, выбор железа, первые шаги.',
+    url: 'https://propwashservice.com/ru/',
+    src: 'propwashservice.com — справочник сообщества',
+  },
+  {
+    id: 'db-fpvcompare',
+    cat: 'db',
+    name: 'FPVcompare',
+    desc: 'Сравнение готовых дронов, очков, аккумуляторов и пропеллеров по характеристикам.',
+    url: 'https://fpvcompare.com/',
+    src: 'fpvcompare.com — база сравнений сообщества',
+  },
+  {
+    id: 'db-aos',
+    cat: 'db',
+    name: 'AOS RC — сборка 5″ фристайл',
+    desc: 'Рекомендованные комплектующие под фристайл-сборку 5 дюймов от автора рам AOS.',
+    url: 'https://www.aos-rc.com/recommended-parts/5in-freestyle',
+    src: 'aos-rc.com — официальный сайт разработчика рам',
+  },
+  {
+    id: 'db-twgo',
+    cat: 'db',
+    name: 'Tiny Whoop Club — TWGO',
+    desc: 'Клубная база по вупам: сборки, настройки, площадки и мероприятия (англ.).',
+    url: 'https://www.tinywhoopclubnetwork.com/twgo',
+    src: 'tinywhoopclubnetwork.com — клуб Tiny Whoop',
+  },
+  {
+    id: 'db-fpvmap',
+    cat: 'db',
+    name: 'FPV map',
+    desc: 'Карта площадок и споттов, отмеченных пилотами.',
+    url: 'https://fpvmap.m1p.me/',
+    src: 'fpvmap.m1p.me — карта сообщества',
+  },
+  {
+    id: 'db-cellmapper',
+    cat: 'db',
+    name: 'CellMapper — карта вышек',
+    desc: 'Расположение базовых станций и покрытие: пригодится, когда связь идёт через LTE.',
+    url: 'https://www.cellmapper.net/map',
+    src: 'cellmapper.net — краудсорсинговая карта сети',
+  },
+  {
+    id: 'calc-ecalc',
+    cat: 'calc',
+    name: 'eCalc — расчёт силовой установки',
+    desc: 'Подбор мотора, пропеллера и АКБ с оценкой тяги, тока и времени полёта.',
+    url: 'https://www.ecalc.ch/motorcalc.php',
+    src: 'ecalc.ch — известный отраслевой калькулятор',
+  },
+  {
+    id: 'calc-pidcalc',
+    cat: 'calc',
+    name: 'PID Calc — UAV Tech',
+    desc: 'Пересчёт ПИД-коэффициентов при смене рамы, моторов или пропеллеров.',
+    url: 'https://theuavtech.com/pidcalc/',
+    src: 'theuavtech.com — UAV Tech, автор методик тюнинга',
+  },
+  {
+    id: 'calc-fresnel',
+    cat: 'calc',
+    name: 'Зона Френеля для радиоканала',
+    desc: 'Расчёт зоны Френеля и профиля трассы: где рельеф съест дальность связи.',
+    url: 'https://www.radiofresnel.com/',
+    src: 'radiofresnel.com — расчёт радиотрассы',
+  },
+  {
+    id: 'fw-blheli',
+    cat: 'firmware',
+    name: 'BLHeliSuite (регуляторы)',
+    desc: 'Настройка и прошивка регуляторов BLHeli — десктоп-приложение.',
+    url: 'https://github.com/4712/BLHeliSuite/releases',
+    src: 'GitHub 4712 — официальный репозиторий BLHeliSuite',
+  },
+  {
+    id: 'fw-zadig',
+    cat: 'firmware',
+    name: 'Zadig (драйверы USB)',
+    desc: 'Установка драйверов USB для прошивки полётников и приёмников в Windows.',
+    url: 'https://zadig.akeo.ie/',
+    src: 'zadig.akeo.ie — официальный сайт проекта',
+  },
+  // Постановление Правительства РФ от 21.06.2023 (закладка владельца)
+  // в каталог НЕ добавлено: publication.pravo.gov.ru из нашей сети
+  // отвечает только по http, а каталог держит правило «только https»
+  // (см. проверку в test/checks.js). Нужна проверенная https-ссылка
+  // от владельца — тогда добавим.
+  {
+    id: 'doc-skyarc',
+    cat: 'docs',
+    name: 'Небосвод — приложение пилота',
+    desc: 'Подача заявок на полёты и разрешительные процедуры в России.',
+    url: 'https://skyarc.ru/',
+    src: 'skyarc.ru — сервис подачи планов полёта',
+  },
+  {
+    id: 'doc-pid-habr',
+    cat: 'docs',
+    name: 'ПИД-регулятор простыми словами',
+    desc: 'Разбор того, что делают P, I и D — чтобы тюнинг перестал быть шаманством.',
+    url: 'https://habr.com/ru/articles/1016090/',
+    src: 'habr.com — разбор с примерами',
+  },
+  {
+    id: 'doc-bambu-wiki',
+    cat: 'docs',
+    name: 'Bambu Lab Wiki (3D-печать)',
+    desc: 'Печать деталей и креплений: материалы, настройки, обслуживание принтера.',
+    url: 'https://wiki.bambulab.com/en/home',
+    src: 'wiki.bambulab.com — официальная база знаний производителя',
+  },
+
+  // Магазины и подбор комплектующих
+  {
+    id: 'shop-rcsearch',
+    cat: 'shop',
+    name: 'RCSearch',
+    desc: 'Поиск RC-товаров сразу по российским магазинам со сравнением цен.',
+    url: 'https://rcsearch.ru/',
+    src: 'rcsearch.ru — агрегатор магазинов',
+  },
+  {
+    id: 'shop-flydepo',
+    cat: 'shop',
+    name: 'Fly Depo',
+    desc: 'Готовые дроны, комплектующие и аксессуары.',
+    url: 'https://flydepo.ru/',
+    src: 'flydepo.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-mydrone',
+    cat: 'shop',
+    name: 'MyDrone',
+    desc: 'Дроны, квадрокоптеры и запчасти.',
+    url: 'https://mydrone.ru/',
+    src: 'mydrone.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-idrone',
+    cat: 'shop',
+    name: 'iDrone',
+    desc: 'Готовые FPV-дроны и комплектующие, в том числе iFlight.',
+    url: 'https://idrone.ru/',
+    src: 'idrone.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-warpfly',
+    cat: 'shop',
+    name: 'WARP',
+    desc: 'Карбоновые рамы для FPV-дронов и магазин сообщества пилотов.',
+    url: 'https://warpfly.ru/',
+    src: 'warpfly.ru — магазин и сообщество',
+  },
+  {
+    id: 'shop-beastfpv',
+    cat: 'shop',
+    name: 'BeastFPV',
+    desc: 'Видеопередатчики, антенны и комплектующие FPV.',
+    url: 'https://beastfpv.ru/',
+    src: 'beastfpv.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-fixfly',
+    cat: 'shop',
+    name: 'FixFly',
+    desc: 'Радиоуправляемые модели и запчасти к ним.',
+    url: 'https://fixfly.ru/',
+    src: 'fixfly.ru — интернет-магазин',
+  },
+  {
+    id: 'shop-skyindustry',
+    cat: 'shop',
+    name: 'SkyIndustry',
+    desc: 'Продажа квадрокоптеров и обучение операторов БПЛА.',
+    url: 'https://skyindustry.ru/',
+    src: 'skyindustry.ru — магазин и учебный центр',
+  },
+  {
+    id: 'shop-squidstick',
+    cat: 'shop',
+    name: 'Squid Stick (ELRS-донгл для симулятора)',
+    desc: 'Донгл ExpressLRS, чтобы летать в симуляторе со своей аппаратуры.',
+    url: 'https://elrsquidstick.com/products/elrs-simulator-dongle-squid-stick',
+    src: 'elrsquidstick.com — сайт производителя донгла',
+  },
+
+  // Гонки и сообщество
+  {
+    id: 'race-fgdr',
+    cat: 'race',
+    name: 'Федерация гонок дронов России',
+    desc: 'Официальная федерация: соревнования, регламенты, новости дрон-рейсинга.',
+    url: 'https://fgdr.ru/',
+    src: 'fgdr.ru — Федерация гонок дронов России',
+  },
+  {
+    id: 'race-rdr',
+    cat: 'race',
+    name: 'Календарь соревнований RDR',
+    desc: 'Единый календарь стартов по гонкам дронов и дрон-рейсингу.',
+    url: 'https://rdr.aero/calendar',
+    src: 'rdr.aero — календарь соревнований',
+  },
+  {
+    id: 'race-rdmfpv',
+    cat: 'race',
+    name: 'Random FPV',
+    desc: 'Сайт о дрон-рейсинге и системе хронометража RotorHazard.',
+    url: 'https://rdmfpv.ru/',
+    src: 'rdmfpv.ru — сообщество дрон-рейсинга',
+  },
+  {
+    id: 'race-hackfast',
+    cat: 'race',
+    name: 'HackFast',
+    desc: 'Инструменты и материалы по гонкам: настройки, таймингу и трассам.',
+    url: 'https://hackfa.st/',
+    src: 'hackfa.st — проект сообщества',
+  },
+  {
+    id: 'race-vdt',
+    cat: 'race',
+    name: 'VDT — виртуальные гонки',
+    desc: 'Справка и сервисы виртуальных гонок дронов.',
+    url: 'https://vdt.tg/',
+    src: 'vdt.tg — платформа виртуальных гонок',
+  },
+  {
+    id: 'race-flytribe',
+    cat: 'race',
+    name: 'Fly Tribe Magazine',
+    desc: 'Журнал сообщества пилотов: сборки, интервью, репортажи с соревнований (англ.).',
+    url: 'https://www.flytribemagazine.com/',
+    src: 'flytribemagazine.com — журнал сообщества',
+  },
 ];
 
 RC.TOOL_CATS = [
@@ -1292,9 +1547,79 @@ RC.TOOL_CATS = [
   { id: 'firmware', name: 'Прошивки и десктоп-приложения' },
   { id: 'calc', name: 'Калькуляторы' },
   { id: 'db', name: 'Подбор и базы данных' },
+  { id: 'shop', name: 'Магазины и комплектующие' },
+  { id: 'race', name: 'Гонки и сообщество' },
   { id: 'weather', name: 'Погода' },
   { id: 'docs', name: 'Документация' },
 ];
+
+/* == data/firmware.js == */
+// Прошивки Walksnail (Avatar / Ascent) — последние известные версии.
+//
+// ПОЧЕМУ СПИСОК РУЧНОЙ, А НЕ ЖИВОЙ ЗАПРОС. Эти прошивки раздаются только
+// через Google Диск, а он не отдаёт заголовок `access-control-allow-origin`
+// (проверено запросом 2026-08-30) — браузер не даст приложению прочитать
+// список файлов, значит узнать свежую версию само оно не может. У GitHub
+// такой заголовок есть, но репозиторий CaddxFPV-Tech отстаёт от Диска
+// (V17.5.15 против V18.21.10) и не подтверждён с сайта производителя.
+// Поэтому версии сверяются руками, а дата сверки (`checked`) честно
+// показывается в интерфейсе: пользователь видит, насколько свежие данные.
+// Обновление — по команде владельца ассистенту: «обнови прошивки».
+//
+// ИСТОЧНИК. Папки перечислены на walksnail.wiki — справочнике сообщества
+// Walksnail (владелец подтвердил происхождение 2026-08-30). Ссылки на
+// конкретные версии взяты не с вики, а из самих каталогов папок: на вики
+// ссылка «18.21.10 (Latest)» ведёт в папку с файлами 17.5.8.
+// Файлы не копируем и не перезаливаем — только ссылки.
+window.RC = window.RC || {};
+
+RC.FIRMWARE = {
+  checked: '2026-08-30',
+  source: { name: 'Walksnail Wiki — справочник сообщества', url: 'https://walksnail.wiki/en/firmware' },
+  // Предупреждение с вики: откат прошивки на новых партиях убивает очки.
+  warn: 'Goggles X из партий с января 2025 года: НЕ откатывайте прошивку ниже 38.44.13 — там другая память, очки выйдут из строя навсегда.',
+  items: [
+    {
+      id: 'avatar',
+      name: 'Walksnail Avatar',
+      version: '39.44.18',
+      note: 'Очки и воздушный блок. Ретранслятор — 39.44.4, Moonlight — 15.1.18.',
+      url: 'https://drive.google.com/drive/folders/19qvqcC8YJ9qdyQfLYCRn-hgFejiZX2QR',
+      all: 'https://drive.google.com/drive/folders/15jQGO-RAdLNjiruw4Ov3sVqez_Pg0EXr',
+    },
+    {
+      id: 'ascent',
+      name: 'Walksnail Ascent',
+      version: '18.21.10',
+      note: 'Наземный и воздушный блок. Для GT Pro — 18.21.7.',
+      url: 'https://drive.google.com/drive/folders/1zMkmTWlU3D63jHhbtmmT1JwEG9Djj9BF',
+      all: 'https://drive.google.com/drive/folders/1Et_FOc5DiV0n4H1N7oCrYpH44ZNGt-P_',
+    },
+    {
+      id: 'ascent-industry',
+      name: 'Ascent Industry',
+      version: '19.2.4',
+      note: 'Промышленная линейка Ascent.',
+      url: 'https://drive.google.com/drive/folders/1CTYWRlzKDmKselpZRbZ7iYa_AHCkx9ml',
+      all: 'https://drive.google.com/drive/folders/1NmvjseLBbwIC5xPzStFSn4lQmdpD59hA',
+    },
+    {
+      id: 'caddx-pc-tool',
+      name: 'Caddx PC Tool',
+      version: '2.2.9',
+      note: 'Настройка и прошивка с компьютера, Windows. Для macOS — 1.1.6 в общей папке.',
+      url: 'https://drive.google.com/file/d/1hJeSSInM2P_RXejDpVVCp6ZY4oX_krD1/view',
+      all: 'https://drive.google.com/drive/folders/1NDH11WJHklI0Bv_6CixpqVIA4ZKjo84z',
+    },
+    {
+      id: 'headtracker',
+      name: 'Головной трекер и гимбалы GM',
+      version: 'трекер 2.4',
+      note: 'Гимбалы GM V1 — 3.8, GM V2 — 2.2.59. В папке же руководство GM Series.',
+      url: 'https://drive.google.com/drive/folders/1NQulVRybDyPwaLPXSo1dasMoY5FFLtNd',
+    },
+  ],
+};
 
 /* == data/packing.js == */
 // Стартовые шаблоны сборов. При первом запуске копируются в базу,
@@ -1362,6 +1687,17 @@ RC.PACKING_PRESETS = [
 window.RC = window.RC || {};
 
 RC.CHANGELOG = [
+  {
+    v: '1.5',
+    date: '2026-08-30',
+    title: 'Прошивки Walksnail и большой каталог ссылок',
+    items: [
+      'В «Инструментах» появился блок «Прошивки Walksnail»: последние версии Avatar, Ascent, Ascent Industry, PC Tool и трекера — сразу с кнопкой «Скачать».',
+      'Рядом с версией честно показана дата сверки: список ручной, потому что Google Диск не даёт приложению прочитать папку. Кнопка «Все версии» ведёт в саму папку.',
+      'Предупреждение с вики вынесено наверх: Goggles X от января 2025 нельзя откатывать ниже 38.44.13.',
+      'Каталог вырос почти вдвое: добавлены магазины и комплектующие, гонки и сообщество, калькуляторы eCalc и зоны Френеля, справочники и Технобиблиотека.',
+    ],
+  },
   {
     v: '1.4',
     date: '2026-08-30',
@@ -1491,18 +1827,6 @@ RC.CHANGELOG = [
       'Внешние сервисы видят только домен приложения (referrer origin) — без пути и параметров страницы.',
       'Страница «Приватность» переписана честно: полный список online-функций и что именно уходит по каждой.',
       'Кнопки «Я.Карты» и «OSM» в списке локаций выровнены по высоте.',
-    ],
-  },
-  {
-    v: '0.17',
-    date: '2026-08-25',
-    title: 'Несколько бортов подряд и понятный путь после краша',
-    items: [
-      'На чек-листе появилась кнопка «Готов»: борт помечается подготовленным, а вы возвращаетесь к выбору следующего.',
-      'Подготовленные борта видны на «Сегодня» и вкладке «Полёт» с кнопкой «Взлёт» — полёт стартует без повторного чек-листа.',
-      'После краша или аварийной посадки окно «Что дальше» ведёт за руку: осмотр → «Выполнено» в карточке → статус снова «Готова».',
-      'У открытой работы в карточке борта — кнопка «Выполнено» в одно касание; статус «Проверить» больше не залипает после закрытого осмотра.',
-      'Для новичка на «Сегодня» — «Начало работы»: четыре шага с галочками (модель → АКБ → локация → первый полёт), блок исчезает сам.',
     ],
   },
 ];
@@ -3480,6 +3804,37 @@ function viewMore() {
   return h;
 }
 
+// Прошивки Walksnail: показываем ТОЛЬКО последнюю известную версию —
+// вместе с датой сверки, потому что данные ручные (почему именно так —
+// в шапке data/firmware.js). Файлы лежат у производителя, мы их не
+// копируем: наружу ведут обычные ссылки, никаких запросов из приложения.
+function firmwareHtml() {
+  const fw = RC.FIRMWARE;
+  if (!fw || !fw.items || !fw.items.length) return '';
+  const link = (url, label, primary) =>
+    `<a class="btn btn-sm${primary ? ' btn-primary' : ''}" href="${esc(url)}"
+      target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+  let h = `<details class="fold"><summary>Прошивки Walksnail (${fw.items.length})</summary><div class="fold-body">`;
+  if (fw.warn) h += `<div class="banner warn">${esc(fw.warn)}</div>`;
+  // Кнопки отдельной строкой под текстом: на телефоне название с номером
+  // версии иначе ломается на три строки, зажатое кнопками справа.
+  h += '<div class="card flat">' + fw.items.map((f) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <span><span class="t">${esc(f.name)} · ${esc(f.version)}</span> <span class="badge online">online</span></span>
+      ${f.note ? `<span class="d">${esc(f.note)}</span>` : ''}
+      <span class="d muted">Последняя известная версия, проверено ${esc(fmtDate(fw.checked))}. Файлы на Google Диске.</span>
+      <span class="btn-line">${link(f.url, 'Скачать', true)}${f.all ? link(f.all, 'Все версии') : ''}</span>
+    </div>`).join('') + '</div>';
+  // Источник — через гард: инварианты в test/checks.js его требуют, но
+  // забытое поле не должно ронять весь экран «Инструменты» вместе с каталогом.
+  const src = fw.source && fw.source.url && fw.source.name
+    ? `<br>Источник: <a href="${esc(fw.source.url)}" target="_blank" rel="noopener noreferrer">${esc(fw.source.name)}</a>.`
+    : '';
+  h += `<p class="small muted">Версии сверяются вручную: Google Диск не позволяет
+    приложению прочитать список файлов. Свежее списка может быть только сама папка —
+    загляните в «Все версии», если дата проверки давняя.${src}</p>`;
+  return h + '</div></details>';
+}
+
 function viewTools() {
   let h = pageHead('Инструменты', { back: '#/more' });
   h += `<div class="banner">Инструменты открываются в браузере и требуют интернет.
@@ -3497,6 +3852,7 @@ function viewTools() {
   if (favTools.length) {
     h += '<div class="h2">Избранное</div><div class="card flat">' + favTools.map(toolRow).join('') + '</div>';
   }
+  h += firmwareHtml();
   RC.TOOL_CATS.forEach((cat) => {
     const list = RC.TOOLS.filter((t) => t.cat === cat.id);
     h += `<details class="fold"><summary>${esc(cat.name)} (${list.length})</summary>

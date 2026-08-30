@@ -14,7 +14,8 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const sandbox = {};
 sandbox.window = sandbox; // как в браузере: window — глобальный объект
 vm.createContext(sandbox);
-for (const f of ['data/checklists.js', 'data/presets.js', 'data/tools.js', 'data/packing.js', 'data/changelog.js']) {
+for (const f of ['data/checklists.js', 'data/presets.js', 'data/tools.js', 'data/firmware.js',
+  'data/packing.js', 'data/changelog.js']) {
   vm.runInContext(read(f), sandbox, { filename: f });
 }
 const RC = sandbox.RC;
@@ -70,6 +71,25 @@ for (const t of RC.TOOLS) {
   ok(catIds.includes(t.cat), `«${t.name}»: категория известна`);
   ok(!toolIds.has(t.id), `«${t.id}» уникален`);
   toolIds.add(t.id);
+}
+
+// Список прошивок правится руками (Google Диск не даёт прочитать папку
+// из приложения), поэтому инварианты здесь — единственная страховка от
+// опечатки: без source экран «Инструменты» падает целиком, а кривая
+// дата сверки молча показывается пользователю как есть.
+console.log('Прошивки:');
+const fw = RC.FIRMWARE;
+ok(fw && Array.isArray(fw.items) && fw.items.length >= 1, 'список прошивок не пустой');
+ok(/^\d{4}-\d{2}-\d{2}$/.test(fw.checked), 'дата сверки в формате YYYY-MM-DD');
+ok(fw.source && fw.source.name && /^https:\/\//.test(fw.source.url || ''), 'источник списка указан, ссылка https');
+ok(!fw.warn || typeof fw.warn === 'string', 'предупреждение — строка');
+const fwIds = new Set();
+for (const f of fw.items) {
+  ok(f.id && f.name && f.version, `прошивка «${f.name || f.id}»: есть название и версия`);
+  ok(/^https:\/\//.test(f.url || ''), `«${f.name}»: ссылка на скачивание https`);
+  ok(!f.all || /^https:\/\//.test(f.all), `«${f.name}»: ссылка «все версии» https`);
+  ok(!fwIds.has(f.id), `«${f.id}» уникален`);
+  fwIds.add(f.id);
 }
 
 console.log('Сборы:');

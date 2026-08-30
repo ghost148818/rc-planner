@@ -41,6 +41,7 @@ const js = [
   'data/checklists.js',
   'data/presets.js',
   'data/tools.js',
+  'data/firmware.js',
   'data/packing.js',
   'data/changelog.js',
   'app.js',
