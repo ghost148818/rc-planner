@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="0c1d109202">
+  <meta name="build" content="e730132dba">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1363,6 +1363,18 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: '1.4',
+    date: '2026-08-30',
+    title: 'Регламент по налёту и статистика в таблице',
+    items: [
+      'Исправлено: экспорт журнала в CSV отдавал файл с одной строкой заголовка, без полётов. Выгрузите журнал заново.',
+      'У борта появился второй регламент — «Осмотр каждые N минут налёта»: для самолётов с долгими вылетами полёты плохо отражают износ.',
+      'Регламенты можно задать оба сразу — напоминание придёт по тому, что подойдёт раньше; в тексте видно оба счётчика.',
+      'Статистику можно выгрузить в CSV: разделы, полёты, налёт и циклы аккумуляторов одной таблицей для своих графиков.',
+      'Безопасность: повреждённая или чужая резервная копия больше не может подсунуть свой код в числовые поля форм борта и аккумулятора.',
+    ],
+  },
+  {
     v: '1.3',
     date: '2026-08-27',
     title: 'Статистика налёта, регламент осмотра и CSV',
@@ -1493,16 +1505,6 @@ RC.CHANGELOG = [
       'Для новичка на «Сегодня» — «Начало работы»: четыре шага с галочками (модель → АКБ → локация → первый полёт), блок исчезает сам.',
     ],
   },
-  {
-    v: '0.16',
-    date: '2026-08-25',
-    title: 'Внутренняя уборка после ревизии',
-    items: [
-      'Мини-карта больше не мигает при перетаскивании и зуме: загруженные тайлы переиспользуются.',
-      'Сохранённый прогноз старого формата сбрасывается один раз — нажмите «Показать прогноз» заново.',
-      'Единые помощники для координат, ссылок на Я.Карты и списков АКБ — меньше мест для расхождений.',
-    ],
-  },
 ];
 
 /* == app.js == */
@@ -1572,6 +1574,16 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Числовое значение в атрибут value= формы. Данные могут прийти
+// из импортированной копии, где их никто не проверял: validateBackup
+// стережёт только id записей. Не число — пустая клетка, иначе строка
+// вида `" onfocus="…` вырывается из атрибута и исполняется (проверено
+// живой пробой на dist). Числовые поля через esc() не гоняем: пустое
+// поле честнее, чем мусор в поле «Вес, г».
+function numVal(v) {
+  return v == null || v === '' || !isFinite(+v) ? '' : +v;
+}
+
 function uid() {
   return (crypto.randomUUID && crypto.randomUUID()) ||
     'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -1609,7 +1621,8 @@ function fmtDur(min) {
   if (min == null || isNaN(min)) return '—';
   min = Math.round(min);
   if (min < 60) return min + ' мин';
-  return Math.floor(min / 60) + ' ч ' + (min % 60 ? (min % 60) + ' мин' : '').trim();
+  // trim снаружи: у круглых часов иначе оставался хвостовой пробел («3 ч »)
+  return (Math.floor(min / 60) + ' ч ' + (min % 60 ? (min % 60) + ' мин' : '')).trim();
 }
 
 function fmtClock(ms) {
@@ -1750,17 +1763,60 @@ function statusOf(a) {
   return 'unknown';
 }
 
-// Регламент осмотра: a.svcEvery — «осматривать каждые N полётов».
+// Регламент осмотра: два независимых счётчика — a.svcEvery «каждые N
+// полётов» и a.svcEveryMin «каждые N минут налёта» (для самолётов
+// с долгими вылетами полёты — плохая мера износа). Задать можно любой
+// из них или оба; при двух срабатывает тот, что подошёл раньше.
 // Счёт идёт от последней ЗАКРЫТОЙ работы (m.doneAt, у записей до 1.3 —
 // m.createdAt): отметили работу выполненной — счётчик пошёл заново.
 // Статус борта регламент не меняет: это напоминание, а не запрет.
 function svcState(a) {
   const every = Math.round(+a.svcEvery) || 0;
-  if (every < 1) return null;
+  const everyMin = Math.round(+a.svcEveryMin) || 0;
+  if (every < 1 && everyMin < 1) return null;
   const since = S.maintenance.reduce((t, m) =>
     m.aircraftId === a.id && m.done ? Math.max(t, m.doneAt || m.createdAt || 0) : t, 0);
-  const flights = sessionsOf(a.id).filter((s) => s.end && s.start >= since).length;
-  return { every, flights, left: every - flights, due: flights >= every, since };
+  const after = sessionsOf(a.id).filter((s) => s.end && s.start >= since);
+  const flights = after.length;
+  const minutes = after.reduce((n, s) => n + (s.durationMin || 0), 0);
+  return {
+    every, everyMin, flights, minutes, since,
+    left: every ? every - flights : null,
+    leftMin: everyMin ? everyMin - minutes : null,
+    due: (every > 0 && flights >= every) || (everyMin > 0 && minutes >= everyMin),
+  };
+}
+
+// Тексты регламента живут рядом с расчётом — иначе формулировки на
+// «Сегодня», в карточке и в чек-листе разъедутся между собой.
+// Показываем только настроенные счётчики: пустой пользователю не нужен.
+function svcSinceText(sv) {
+  const parts = [];
+  if (sv.every) parts.push(`${sv.flights} ${plural(sv.flights, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${fmtDur(sv.minutes)} налёта`);
+  return parts.join(' и ');
+}
+// «каждые» согласуется с числом: при единице нужна другая форма,
+// иначе выходит «каждые 1 полёт». Поле разрешает 1 — случай живой.
+function svcEveryText(sv) {
+  const parts = [];
+  if (sv.every) {
+    parts.push(sv.every === 1 ? 'каждый полёт'
+      : `каждые ${sv.every} ${plural(sv.every, 'полёт', 'полёта', 'полётов')}`);
+  }
+  if (sv.everyMin) {
+    parts.push(sv.everyMin === 60 ? 'каждый час налёта'
+      : sv.everyMin === 1 ? 'каждую минуту налёта'
+      : `каждые ${fmtDur(sv.everyMin)} налёта`);
+  }
+  return parts.join(' или ');
+}
+// «Сколько осталось» — по каждому счётчику; наступит тот, что раньше.
+function svcLeftText(sv) {
+  const parts = [];
+  if (sv.every) parts.push(`${sv.left} ${plural(sv.left, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${fmtDur(sv.leftMin)} налёта`);
+  return parts.join(' или ');
 }
 
 // gotoHash: чип «Обслуживание» становится ссылкой к работам борта —
@@ -2182,7 +2238,7 @@ function viewToday() {
     h += '<div class="h2">Обслуживание</div><div class="card flat">';
     h += due.map(([a, sv]) => rowBtn(`data-nav="#/model/${a.id}"`,
       `<span class="grow"><span class="t" style="color:var(--maint)">Пора осмотреть: ${esc(a.name)}</span>
-       <span class="d">${sv.flights} ${plural(sv.flights, 'полёт', 'полёта', 'полётов')} с последнего обслуживания · регламент каждые ${sv.every}</span></span>`)).join('');
+       <span class="d">${svcSinceText(sv)} с последнего обслуживания · регламент ${svcEveryText(sv)}</span></span>`)).join('');
     h += open.slice(0, 5).map((m) => {
       const a = S.aircraft.find((x) => x.id === m.aircraftId);
       return rowBtn(`data-nav="#/model/${m.aircraftId}"`,
@@ -2441,15 +2497,15 @@ function viewModel() {
       <div class="stat"><div class="v">${flights[0] ? fmtDate(flights[0].date) : '—'}</div><div class="k">последний полёт</div></div>
     </div></div>`;
 
-  // Регламент осмотра (a.svcEvery) — напоминание, полёты не запрещает.
+  // Регламент осмотра (svcEvery / svcEveryMin) — напоминание, полёты не запрещает.
   const svc = svcState(a);
   if (svc) {
     h += svc.due
-      ? `<div class="banner warn">Пора осмотреть борт: ${svc.flights} ${plural(svc.flights, 'полёт', 'полёта', 'полётов')}
-         с последнего обслуживания при регламенте каждые ${svc.every}.
+      ? `<div class="banner warn">Пора осмотреть борт: ${svcSinceText(svc)}
+         с последнего обслуживания при регламенте ${svcEveryText(svc)}.
          <button class="btn-sm btn right" data-act="add-maint" data-id="${a.id}">Записать осмотр</button></div>`
-      : `<div class="small muted" style="margin:-2px 0 10px">До осмотра ${svc.left} ${plural(svc.left, 'полёт', 'полёта', 'полётов')}
-         · регламент каждые ${svc.every}, пройдено ${svc.flights}.</div>`;
+      : `<div class="small muted" style="margin:-2px 0 10px">До осмотра ${svcLeftText(svc)}
+         · регламент ${svcEveryText(svc)}, пройдено ${svcSinceText(svc)}.</div>`;
   }
 
   h += `<button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">Подготовка к полёту</button>`;
@@ -2619,8 +2675,8 @@ function viewPrep() {
   }
   const svcPrep = svcState(a);
   if (svcPrep && svcPrep.due) {
-    h += `<div class="banner warn">Подошёл регламент: ${svcPrep.flights} ${plural(svcPrep.flights, 'полёт', 'полёта', 'полётов')}
-      с последнего обслуживания (каждые ${svcPrep.every}). Осмотрите борт внимательнее.</div>`;
+    h += `<div class="banner warn">Подошёл регламент: ${svcSinceText(svcPrep)}
+      с последнего обслуживания (${svcEveryText(svcPrep)}). Осмотрите борт внимательнее.</div>`;
   }
   if (tpls.length > 1) {
     h += field('Шаблон', selectHtml('tpl',
@@ -2786,7 +2842,9 @@ function statBars(rows) {
     <span class="v">${esc(r.label)}</span></div>`).join('') + '</div>';
 }
 
-// Свод по ключу: [{k, v, label}] — полёты и налёт, крупные сверху.
+// Свод по ключу: [{k, v, label, n, min}] — полёты и налёт, крупные сверху.
+// v/label рисуют полоску, n/min уходят в CSV сырыми числами: экран
+// и выгрузка обязаны считаться из одного места, иначе разойдутся.
 function statGroup(list, keyFn, nameFn) {
   const by = new Map();
   list.forEach((s) => {
@@ -2798,7 +2856,7 @@ function statGroup(list, keyFn, nameFn) {
   });
   return [...by.entries()]
     .sort((x, y) => y[1].min - x[1].min || y[1].n - x[1].n)
-    .map(([k, o]) => ({ k: nameFn(k), v: o.min, label: `${o.n} · ${fmtDur(o.min)}` }));
+    .map(([k, o]) => ({ k: nameFn(k), v: o.min, label: `${o.n} · ${fmtDur(o.min)}`, n: o.n, min: o.min }));
 }
 
 // Месяцы от первого полёта до текущего, включая пустые: провалы видно.
@@ -2827,8 +2885,45 @@ function statMonths(list) {
     const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1);
     const mon = d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '');
     return { k: mon + ' ' + k.slice(2, 4), v: o.min,
-      label: o.n ? `${o.n} · ${fmtDur(o.min)}` : '—' };
+      label: o.n ? `${o.n} · ${fmtDur(o.min)}` : '—', n: o.n, min: o.min };
   });
+}
+
+// Разделы статистики — один источник для экрана и для выгрузки в CSV.
+// Строка везде одна и та же: k — подпись, v/label — полоска,
+// n/min/cycles — сырые числа для таблицы. key — для кода (заголовок
+// переименуют, и привязка по тексту тихо отвалится), title — для глаз.
+function statSections(done) {
+  const out = [];
+  // Месяцы пропадают только если у всех полётов битая дата — пустой раздел не нужен.
+  const months = statMonths(done);
+  if (months.length) out.push({ key: 'months', title: 'По месяцам', rows: months });
+
+  out.push({ key: 'aircraft', title: 'По бортам', rows: statGroup(done, (s) => s.aircraftId, (id) => {
+    const a = S.aircraft.find((x) => x.id === id);
+    return a ? a.name : 'Борт удалён';
+  }) });
+
+  out.push({ key: 'sites', title: 'По локациям', rows: statGroup(done, (s) => s.siteId || '', (id) => {
+    const site = S.sites.find((x) => x.id === id);
+    return site ? site.name : 'Без локации';
+  }) });
+
+  // Итоги: считаем доли честно, «рейтинга» не рисуем.
+  out.push({ key: 'results', title: 'Чем заканчивались', rows: Object.keys(RESULTS).map((k) => {
+    const n = done.filter((s) => (s.result || 'normal') === k).length;
+    return { k: RESULTS[k], v: n, label: String(n), n };
+  }).filter((r) => r.v) });
+
+  // Аккумуляторы: циклы = износ, изношенные сверху.
+  const batts = S.batteries.filter((b) => b.cycles).sort((x, y) => y.cycles - x.cycles).slice(0, 10);
+  if (batts.length) {
+    out.push({ key: 'batteries', title: 'Износ аккумуляторов', rows: batts.map((b) => ({
+      k: b.label, v: b.cycles, cycles: b.cycles,
+      label: b.cycles + ' ' + plural(b.cycles, 'цикл', 'цикла', 'циклов'),
+    })) });
+  }
+  return out;
 }
 
 function viewStats() {
@@ -2845,52 +2940,40 @@ function viewStats() {
     <div class="stat"><div class="v">${days}</div><div class="k">${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}</div></div>
   </div>`;
 
-  // Месяцы пропадают только если у всех полётов битая дата — пустую карточку не рисуем.
-  const months = statMonths(done);
-  if (months.length) h += '<div class="h2">По месяцам</div>' + statBars(months);
-
-  h += '<div class="h2">По бортам</div>' + statBars(statGroup(done, (s) => s.aircraftId, (id) => {
-    const a = S.aircraft.find((x) => x.id === id);
-    return a ? a.name : 'Борт удалён';
-  }));
-
-  h += '<div class="h2">По локациям</div>' + statBars(statGroup(done, (s) => s.siteId || '', (id) => {
-    const site = S.sites.find((x) => x.id === id);
-    return site ? site.name : 'Без локации';
-  }));
-
-  // Итоги: доля нормальных полётов — честный показатель, а не «рейтинг».
-  const okCount = done.filter((s) => !s.result || s.result === 'normal').length;
-  h += `<div class="h2">Чем заканчивались</div>` + statBars(
-    Object.keys(RESULTS).map((k) => ({
-      k: RESULTS[k],
-      v: done.filter((s) => (s.result || 'normal') === k).length,
-      label: String(done.filter((s) => (s.result || 'normal') === k).length),
-    })).filter((r) => r.v));
-  h += `<p class="small muted">Без происшествий ${Math.round(okCount / done.length * 100)}% полётов.</p>`;
-
-  // Аккумуляторы: циклы = износ, изношенные сверху.
-  const batts = S.batteries.filter((b) => b.cycles).sort((x, y) => y.cycles - x.cycles).slice(0, 10);
-  if (batts.length) {
-    h += '<div class="h2">Износ аккумуляторов</div>' + statBars(batts.map((b) => ({
-      k: b.label, v: b.cycles, label: b.cycles + ' ' + plural(b.cycles, 'цикл', 'цикла', 'циклов'),
-    })));
+  for (const sec of statSections(done)) {
+    if (!sec.rows.length) continue;
+    h += `<div class="h2">${esc(sec.title)}</div>` + statBars(sec.rows);
+    // Доля нормальных полётов — честный показатель, а не «рейтинг».
+    if (sec.key === 'results') {
+      const okCount = done.filter((s) => !s.result || s.result === 'normal').length;
+      h += `<p class="small muted">Без происшествий ${Math.round(okCount / done.length * 100)}% полётов.</p>`;
+    }
   }
 
   h += `<div class="btn-line" style="margin-top:12px">
     <button class="btn" data-nav="#/log">Журнал полётов</button>
-    <button class="btn" data-act="export-log-csv">Экспорт в CSV</button>
+    <button class="btn" data-act="export-stats-csv">Статистика в CSV</button>
+    <button class="btn" data-act="export-log-csv">Журнал в CSV</button>
   </div>`;
   return h;
 }
 
-// Журнал в CSV для таблиц: разделитель «;» и BOM — так файл открывается
-// в Excel/Numbers с русской локалью без «мастера импорта». Собирается
-// в памяти и сохраняется на устройство, никуда не отправляется.
+// CSV для таблиц: разделитель «;» и BOM — так файл открывается в Excel
+// и Numbers с русской локалью без «мастера импорта». Собирается в памяти
+// и сохраняется на устройство, никуда не отправляется.
+// Комментарии тут держим ОТДЕЛЬНЫМИ строками: в 1.3 пояснение про BOM
+// стояло в хвосте строки сборки и проглотило `.concat(rows)` — в файл
+// уходил один заголовок без единого полёта.
+function csvSave(name, head, rows) {
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const line = (cells) => cells.map(q).join(';');
+  const csv = '﻿' + [line(head)].concat(rows.map(line)).join('\r\n') + '\r\n';
+  download(name + '-' + todayISO() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+}
+
 function exportLogCsv() {
   const done = S.sessions.filter((x) => x.end).sort((a, b) => a.start - b.start);
   if (!done.length) return;
-  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const head = ['№', 'Дата', 'Борт', 'Минуты', 'Аккумулятор', 'Локация', 'Итог', 'Погода', 'Заметки', 'Проблемы'];
   const rows = done.map((x) => {
     const a = S.aircraft.find((y) => y.id === x.aircraftId);
@@ -2900,10 +2983,29 @@ function exportLogCsv() {
       String(x.flightNo == null ? '' : x.flightNo), x.date, a ? a.name : '',
       x.durationMin == null ? '' : x.durationMin, b ? b.label : '', site ? site.name : '',
       RESULTS[x.result] || '', x.weather || '', x.notes || '', x.problems || '',
-    ].map(q).join(';');
+    ];
   });
-  const csv = '\ufeff' + [head.map(q).join(';')]  // BOM — иначе Excel читает кириллицу как крокозябры.concat(rows).join('\r\n') + '\r\n';
-  download('rc-planner-log-' + todayISO() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  csvSave('rc-planner-log', head, rows);
+}
+
+// \u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u0432 CSV \u2014 \u0440\u043e\u0432\u043d\u043e \u0442\u043e \u0436\u0435, \u0447\u0442\u043e \u043d\u0430 \u044d\u043a\u0440\u0430\u043d\u0435 (statSections), \u043e\u0434\u043d\u043e\u0439
+// \u0434\u043b\u0438\u043d\u043d\u043e\u0439 \u0442\u0430\u0431\u043b\u0438\u0446\u0435\u0439: \u0440\u0430\u0437\u0434\u0435\u043b, \u043f\u043e\u0434\u043f\u0438\u0441\u044c, \u043f\u043e\u043b\u0451\u0442\u044b, \u043d\u0430\u043b\u0451\u0442, \u0446\u0438\u043a\u043b\u044b. \u041f\u0443\u0441\u0442\u044b\u0435 \u043a\u043b\u0435\u0442\u043a\u0438
+// \u0442\u0430\u043c, \u0433\u0434\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044f \u0443 \u0440\u0430\u0437\u0434\u0435\u043b\u0430 \u043d\u0435\u0442: \u0432\u044b\u0434\u0443\u043c\u044b\u0432\u0430\u0442\u044c \u0447\u0438\u0441\u043b\u0430 \u043d\u0435\u043b\u044c\u0437\u044f.
+function exportStatsCsv() {
+  const done = S.sessions.filter((x) => x.end).sort((a, b) => a.start - b.start);
+  if (!done.length) return;
+  const head = ['\u0420\u0430\u0437\u0434\u0435\u043b', '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435', '\u041f\u043e\u043b\u0451\u0442\u043e\u0432', '\u041d\u0430\u043b\u0451\u0442, \u043c\u0438\u043d', '\u0426\u0438\u043a\u043b\u043e\u0432'];
+  const total = done.reduce((n, s) => n + (s.durationMin || 0), 0);
+  // \u041b\u0451\u0442\u043d\u044b\u0435 \u0434\u043d\u0438 \u0441\u044e\u0434\u0430 \u043d\u0435 \u043a\u043b\u0430\u0434\u0451\u043c: \u0438\u0445 \u043d\u0435\u043a\u0443\u0434\u0430 \u043f\u043e\u043b\u043e\u0436\u0438\u0442\u044c, \u043a\u0440\u043e\u043c\u0435 \u043a\u043e\u043b\u043e\u043d\u043a\u0438
+  // \u00ab\u041f\u043e\u043b\u0451\u0442\u043e\u0432\u00bb, \u0430 \u0447\u0438\u0441\u043b\u043e \u0434\u043d\u0435\u0439 \u0432 \u043a\u043e\u043b\u043e\u043d\u043a\u0435 \u043f\u043e\u043b\u0451\u0442\u043e\u0432 \u2014 \u0432\u0440\u0430\u043d\u044c\u0451 \u0432 \u0442\u0430\u0431\u043b\u0438\u0446\u0435.
+  const rows = [['\u0418\u0442\u043e\u0433\u043e', '\u0412\u0441\u0435 \u043f\u043e\u043b\u0451\u0442\u044b', done.length, total, '']];
+  for (const sec of statSections(done)) {
+    for (const r of sec.rows) {
+      rows.push([sec.title, r.k, r.n == null ? '' : r.n, r.min == null ? '' : r.min,
+        r.cycles == null ? '' : r.cycles]);
+    }
+  }
+  csvSave('rc-planner-stats', head, rows);
 }
 
 /* ---------- Сборы ---------- */
@@ -3845,6 +3947,7 @@ const ACTIONS = {
   // останавливается сразу, даже если итог заполняют позже.
   'print-log': () => printLog(),
   'export-log-csv': () => exportLogCsv(),
+  'export-stats-csv': () => exportStatsCsv(),
   'finish-flight': async (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
     if (s && !s.end && !s.landedAt) {
@@ -4157,19 +4260,23 @@ function openModelForm(a, presetId, saved) {
     ${field('Тип', typePicker(a.type))}
     <div class="grid2">
       ${field('Производитель', `<input type="text" name="manufacturer" value="${esc(a.manufacturer || '')}">`)}
-      ${field('Вес, г', `<input type="number" name="weight" min="0" value="${a.weight || ''}">`)}
+      ${field('Вес, г', `<input type="number" name="weight" min="0" value="${numVal(a.weight)}">`)}
     </div>
-    ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${a.wingspan || ''}">`)}
+    ${field('Размах / диагональ, мм', `<input type="number" name="wingspan" min="0" value="${numVal(a.wingspan)}">`)}
     ${field('Аккумулятор борта', selectHtml('batteryId',
       battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }),
       a.batteryId || '', `data-change="form-model-batt" data-prev="${esc(a.batteryId || '')}"`),
       'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
-      ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${a.maxWind || ''}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
-      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${a.maxAlt || ''}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
+      ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${numVal(a.maxWind)}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
+      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
     </div>
-    ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${a.svcEvery || ''}" placeholder="напр. 10">`,
-      'Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы. Пусто — без напоминаний')}
+    <div class="grid2">
+      ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
+      ${field('Осмотр каждые, минут налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
+    </div>
+    <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
+      Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>
     ${field('Фото', `<input type="file" name="photo" accept="image/*">`, a.photo ? 'Фото уже есть — новое заменит его' : '')}
     ${field('Заметки', `<textarea name="notes">${esc(a.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">${isNew ? 'Добавить' : 'Сохранить'}</button>
@@ -4413,18 +4520,18 @@ function openBattForm(b, presetId) {
     <div class="grid2">
       ${field('Химия', selectHtml('chem', [['LiPo', 'LiPo'], ['Li-Ion', 'Li-Ion'], ['LiFe', 'LiFe'], ['NiMH', 'NiMH']], b.chem))}
       ${field('Банки (S / P)', `<div style="display:flex;gap:8px;align-items:center">
-        <input type="number" name="cells" min="1" max="14" value="${b.cells || ''}" placeholder="6" style="flex:1">
+        <input type="number" name="cells" min="1" max="14" value="${numVal(b.cells)}" placeholder="6" style="flex:1">
         <span class="muted">S ×</span>
-        <input type="number" name="p" min="1" max="10" value="${b.p || ''}" placeholder="1" style="flex:1">
+        <input type="number" name="p" min="1" max="10" value="${numVal(b.p)}" placeholder="1" style="flex:1">
         <span class="muted">P</span></div>`)}
     </div>
     <div class="grid2">
-      ${field('Ёмкость, мА·ч', `<input type="number" name="capacity" min="0" value="${b.capacity || ''}">`)}
-      ${field('Вес, г', `<input type="number" name="weight" min="0" value="${b.weight || ''}" placeholder="${battEstimateWeight(b.chem, b.cells, b.capacity) || 'оценю сам'}">`,
+      ${field('Ёмкость, мА·ч', `<input type="number" name="capacity" min="0" value="${numVal(b.capacity)}">`)}
+      ${field('Вес, г', `<input type="number" name="weight" min="0" value="${numVal(b.weight)}" placeholder="${battEstimateWeight(b.chem, b.cells, b.capacity) || 'оценю сам'}">`,
         'пусто — оценка по химии и ёмкости')}
     </div>
     <div class="grid2">
-      ${field('Циклы', `<input type="number" name="cycles" min="0" value="${b.cycles || 0}">`, '+1 за первый полёт после отметки «заряжен»')}
+      ${field('Циклы', `<input type="number" name="cycles" min="0" value="${numVal(b.cycles) || 0}">`, '+1 за первый полёт после отметки «заряжен»')}
       ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
     </div>
     ${field('Стоит в борте', selectHtml('inModel',
@@ -4570,6 +4677,8 @@ const FORMS = {
     a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
     const svcEvery = Math.round(+fd.get('svcEvery'));
     a.svcEvery = svcEvery > 0 ? Math.min(999, svcEvery) : null;
+    const svcEveryMin = Math.round(+fd.get('svcEveryMin'));
+    a.svcEveryMin = svcEveryMin > 0 ? Math.min(99999, svcEveryMin) : null;
     a.notes = fd.get('notes').trim();
     const photo = fd.get('photo');
     if (photo && photo.size) { a.photo = photo; dropPhotoURL(a.id); }

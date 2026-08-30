@@ -42,6 +42,51 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'stats', 'packing', 'w
   const title = await page.textContent('.head h1');
   ok(title.includes('Проба'), 'имя показано как текст');
 
+  // XSS-проба вторая: числовые поля форм. Значения приходят из
+  // резервной копии, где validateBackup проверяет только id, и попадают
+  // прямо в атрибут value= — строка вида `" onfocus="…` из атрибута
+  // вырывалась и исполнялась (найдено ревью 1.4, закрыто numVal).
+  const attrPayload = '" onfocus="window.__xss2=1" autofocus x="';
+  await page.evaluate(async (payload) => {
+    await window.RCDB.put('aircraft', {
+      id: 'attr-probe', name: 'Проба атрибута', type: 'plane', components: {},
+      weight: payload, wingspan: payload, maxWind: payload, maxAlt: payload,
+      svcEvery: payload, svcEveryMin: payload,
+    });
+    await window.RCDB.put('batteries', {
+      id: 'attr-batt', label: 'Проба АКБ', chem: 'lipo',
+      cells: payload, p: payload, capacity: payload, weight: payload, cycles: payload,
+    });
+    await window.loadAll();
+    location.hash = '#/model/attr-probe';
+  }, attrPayload);
+  // Проверяем по DOM, а не регуляркой по innerHTML: экранированная
+  // кавычка в тексте <option> при сериализации возвращается сырой,
+  // и поиск «onfocus=» в разметке даёт ложную тревогу на безобидный текст.
+  // Вырвавшийся атрибут виден только как настоящий атрибут элемента.
+  const injected = async () => page.evaluate(() => {
+    const dlg = document.querySelector('dialog');
+    if (!dlg) return 'окно не открылось';
+    const bad = dlg.querySelectorAll('[onfocus], [autofocus], [x]');
+    // Заодно проводим фокус по всем полям: подложенный обработчик сработал бы.
+    dlg.querySelectorAll('input, select, textarea').forEach((el) => el.focus());
+    return bad.length;
+  });
+
+  await page.waitForTimeout(150);
+  await page.click('[data-act="edit-model"]');
+  await page.waitForTimeout(200);
+  ok((await injected()) === 0, 'форма борта: мусор из копии не вырвался из value=');
+  await page.click('.dlg-close');
+
+  await page.evaluate(() => {
+    openBattForm(S.batteries.find((b) => b.id === 'attr-batt'));
+  });
+  await page.waitForTimeout(200);
+  ok((await injected()) === 0, 'форма АКБ: мусор из копии не вырвался из value=');
+  await page.click('.dlg-close');
+  ok(!(await page.evaluate(() => window.__xss2)), 'подложенный обработчик не исполнился');
+
   // Модальное окно закрывается.
   await page.evaluate(() => { location.hash = '#/more'; });
   await page.click('[data-act="whatsnew"]');
