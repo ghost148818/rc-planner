@@ -63,7 +63,7 @@ async function seed(page) {
     await put('maintenance', { id: 'm2', aircraftId: 'a1', title: 'Осмотр после сезона', kind: 'inspection', date: iso(now - 40 * day), done: true, createdAt: now - 40 * day, doneAt: now - 40 * day });
     await put('runs', { id: 'r1', aircraftId: 'a1', date: iso(now), templateName: 'FPV квадрокоптер', items: [{ t: 'Пропеллеры', state: 'ok' }, { t: 'Моторы', state: 'ok' }] });
     const st = (await window.RCDB.get('settings', 'main')) || { id: 'main', pilot: '', favTools: [] };
-    st.pilot = 'VelRa'; st.weatherCache = wx; st.favTools = ['betaflight-app', 'elrs-web-flasher'];
+    st.pilot = 'Пилот'; st.weatherCache = wx; st.favTools = ['betaflight-app', 'elrs-web-flasher'];
     await put('settings', st);
     localStorage.setItem('rcp.hi', '1');
     await window.loadAll();
