@@ -2,3 +2,4 @@ node_modules/
 .DS_Store
 test/shots/
 test/tmp/
+docs/design/artboards/

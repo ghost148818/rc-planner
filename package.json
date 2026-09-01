@@ -1,6 +1,6 @@
 {
   "name": "rc-planner",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "private": true,
   "description": "RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота",
   "license": "MIT",
