@@ -110,15 +110,16 @@ const CSS_A = `
   .pill svg { width: 16px; height: 16px; color: var(--dim); } .pill.sel { border-color: var(--text); }
   .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); font-size: 11px; vertical-align: 2px; font-weight: 500; }
   .badge.online { color: var(--info); border-color: var(--info); }
+  .ico14 { display: inline-flex; } .ico14 svg { width: 14px; height: 14px; }
   .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: var(--tap); padding: 10px 18px; border-radius: var(--radius); background: var(--card-2); border: 1px solid var(--line); font-size: 16px; font-weight: 600; color: var(--text); }
   .btn svg { width: 20px; height: 20px; }
   .btn-primary { background: var(--ok); border-color: var(--ok); color: var(--on-primary); min-height: 56px; font-size: 17px; }
   .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
-  .btn-sm { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
+  .btn-sm { width: auto; min-height: 40px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
   .btn-ghost { background: transparent; border-style: dashed; color: var(--mut); font-weight: 500; }
   .btn-line { display: flex; gap: 8px; }
   .seg { display: flex; background: var(--bg-el); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
-  .seg > div { flex: 1; min-height: 38px; border-radius: 8px; color: var(--mut); font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .seg > div { flex: 1; min-height: 40px; border-radius: 8px; color: var(--mut); font-size: 14px; display: flex; align-items: center; justify-content: center; }
   .seg > div.on { background: var(--card-2); color: var(--text); font-weight: 600; }
   .seg.four > div { font-size: 13px; }
   .ck { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); min-height: 56px; background: var(--card); position: relative; }
@@ -167,11 +168,11 @@ const tabbar = (active, live) => `<div class="tabbar">${TABS.map(([id, l]) =>
   `<div class="tab${id === active ? ' on' : ''}">${I[id]}<span>${l}</span>${live && id === 'flight' ? '<i class="live"></i>' : ''}</div>`).join('')}</div>`;
 const head = (title, sub, { back, right } = {}) => `<div class="head">
   ${back ? `<div class="back">${I.back}</div>` : ''}
-  <div class="grow"><h1>${title}${sub ? `<div class="sub">${sub}</div>` : ''}</h1></div>
+  <div class="grow"><h1>${title}${sub ? `<span class="sub" style="display: block;">${sub}</span>` : ''}</h1></div>
   ${right || ''}
 </div>`;
 const chev = `<span class="chev">${I.chev}</span>`;
-const row = (main, { icon, thumb, right = chev, style = '' } = {}) => `<div class="row" style="${style}">${thumb ? `<span class="thumb">${I[thumb]}</span>` : ''}${icon ? `<span class="row-ic">${I[icon]}</span>` : ''}<span class="grow">${main}</span>${right}</div>`;
+const row = (main, { icon, thumb, right = chev, style = '' } = {}) => `<div class="row"${style ? ` style="${style}"` : ''}>${thumb ? `<span class="thumb">${I[thumb]}</span>` : ''}${icon ? `<span class="row-ic">${I[icon]}</span>` : ''}<span class="grow">${main}</span>${right}</div>`;
 const td = (t, d) => `<span class="t">${t}</span>${d ? `<span class="d">${d}</span>` : ''}`;
 const chip = (cls, text) => `<span class="chip dot ${cls}">${text}</span>`;
 const strip = (pattern, nowIdx) => `<div class="strip">${pattern.split('').map((c, i) => {
@@ -219,7 +220,7 @@ files['Main.dc.html'] = doc(`
       <span class="grow">
         <span class="t" style="font-size: 20px; font-weight: 700;">Apex 5″</span>
         <span class="d">FPV квад · <span class="ok">LiPo 6S 1300 #1</span> · заряжен</span>
-        <span class="d" style="margin-top: 4px;"><span class="ok">${'✓'}</span> Чек-лист пройден в 21:19 · Поле у реки</span>
+        <span class="d" style="margin-top: 4px; display: flex; align-items: center; gap: 5px;"><span class="ok ico14">${I.check}</span>Чек-лист пройден в 13:19</span>
       </span>
     </div>
     <div class="btn btn-primary" style="margin-top: 14px;">${I.takeoff}Взлёт</div>
@@ -229,22 +230,22 @@ files['Main.dc.html'] = doc(`
     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
       <span class="row-ic">${I.wind}</span>
       <span class="grow"><span class="t" style="font-size: 15px;">Можно лететь до 15:00 <span class="badge online">online</span></span>
-      <span class="d">ветер 4 м/с у земли · 8 на 80 м · порывы 6</span></span>
+      <span class="d">5 м/с у земли · 7 на 80 м · порывы до 8</span></span>
       ${chev}
     </div>
     ${strip('GGGGGGgggyyygggrrrrrGGGG', 14)}
   </div>
 
-  <div class="h2">Ещё к вылету <span class="cnt">2</span></div>
+  <div class="h2">Остальные борта <span class="cnt">2</span></div>
   <div class="card flat">
     ${row(td('Mini Talon', 'Самолёт · Li-Ion 6S2P 7000 · заряжен'), { thumb: 'plane', right: `<span class="btn btn-sm">Чек-лист</span>` })}
-    ${row(td('<span class="muted">Крыло AR Wing Pro</span>', 'открыта работа: замена луча №2'), { thumb: 'wing', right: chip('st-maint', 'Обслуживание') })}
+    ${row(td('<span class="muted">AR Wing Pro</span>', 'открыта работа: замена луча №2'), { thumb: 'wing', right: chip('st-maint', 'Обслуживание') })}
   </div>
 
   <div class="h2">Обслуживание <span class="cnt">2</span></div>
   <div class="card flat">
     ${row(td('<span class="maint">Пора осмотреть: Apex 5″</span>', '10 из 10 полётов по регламенту'), { icon: 'wrench', right: `<span class="btn btn-sm">Осмотр</span>` })}
-    ${row(td('Замена луча №2', 'Крыло AR Wing Pro · 17 авг · далее: заказать луч'), { icon: 'wrench' })}
+    ${row(td('Замена луча №2', 'AR Wing Pro · 17 авг · далее: заказать луч'), { icon: 'wrench' })}
   </div>
 </div>
 ${tabbar('today')}
@@ -273,13 +274,13 @@ files['TodayHome.dc.html'] = doc(`
   <div class="card flat">
     ${row(td('Выезд на поле', '9 из 15 собрано'), { icon: 'packing', right: `<span class="btn btn-sm">Продолжить</span>` })}
     ${row(td('Зарядить: LiPo 6S 1300 #2', 'после полёта · 38 циклов'), { icon: 'bolt', right: chip('st-info', 'после полёта') })}
-    ${row(td('LiPo 4S 1500', '97 циклов · заряд не отмечен'), { icon: 'bolt', right: chip('st-check', 'Следить') })}
+    ${row(td('<span class="maint">Пора осмотреть: Apex 5″</span>', '10 из 10 полётов по регламенту'), { icon: 'wrench', right: `<span class="btn btn-sm">Осмотр</span>` })}
   </div>
 
   <div class="h2">К вылету <span class="cnt">2 из 3</span></div>
   <div class="card flat">
-    ${row(td('Apex 5″', 'FPV квад · LiPo 6S 1300 #1 · заряжен'), { thumb: 'quad', right: chip('st-ready', 'Готова') })}
-    ${row(td('Mini Talon', 'Самолёт · Li-Ion 6S2P 7000 · заряжен'), { thumb: 'plane', right: chip('st-ready', 'Готова') })}
+    ${row(td('Apex 5″', 'FPV квад · LiPo 6S 1300 #1 · заряжен'), { thumb: 'quad', right: chip('st-ready', 'Готов') })}
+    ${row(td('Mini Talon', 'Самолёт · Li-Ion 6S2P 7000 · заряжен'), { thumb: 'plane', right: chip('st-ready', 'Готов') })}
   </div>
 
   <div class="banner">${I.backup}<span class="grow">Резервная копия — 19 дней назад</span><span class="btn btn-sm">Сохранить</span></div>
@@ -303,7 +304,7 @@ files['TodayAfter.dc.html'] = doc(`
   <div class="card flat">
     ${row(td('<span class="warn">Полёт #015 · Mini Talon</span>', 'проблема: «просадка по газу на 3-й минуте»'), { icon: 'wrench', right: `<span class="btn btn-sm">Осмотр</span>` })}
     ${row(td('Зарядить 2 аккумулятора', 'LiPo 6S 1300 #1 · Li-Ion 6S2P 7000'), { icon: 'bolt', right: chip('st-info', 'после полёта') })}
-    ${row(td('Сохранить резервную копию', '3 новых полёта с последней копии'), { icon: 'backup', right: `<span class="btn btn-sm">Сохранить</span>` })}
+    ${row(td('Сохранить резервную копию', '6 полётов с последней копии · 19 дней'), { icon: 'backup', right: `<span class="btn btn-sm">Сохранить</span>` })}
   </div>
 
   <div class="h2">Полёты сегодня <span class="cnt">3</span></div>
@@ -328,19 +329,19 @@ files['Bort.dc.html'] = doc(`
     <div style="display: flex; align-items: center; gap: 12px;">
       <span class="thumb lg">${I.quad}</span>
       <span class="grow" style="display: flex; flex-direction: column; gap: 6px;">
-        <span style="display: flex; gap: 8px; align-items: center;">${chip('st-ready', 'Готова')}<span class="xs dim">авто · изменить</span></span>
+        <span style="display: flex; gap: 8px; align-items: center;">${chip('st-ready', 'Готов')}<span class="xs dim">авто · изменить</span></span>
         <span class="pill" style="align-self: flex-start;">${I.batteries}LiPo 6S 1300 #1 · <span class="ok">заряжен</span></span>
       </span>
     </div>
     <div class="stat-line" style="margin-top: 12px;">
-      <div class="stat" style="padding: 8px 10px;"><div class="v">8</div><div class="k">полётов</div></div>
-      <div class="stat" style="padding: 8px 10px;"><div class="v">48 мин</div><div class="k">налёт</div></div>
-      <div class="stat" style="padding: 8px 10px;"><div class="v">31 авг</div><div class="k">последний</div></div>
+      <div class="stat" style="padding: 8px 10px;"><div class="v">10</div><div class="k">полётов</div></div>
+      <div class="stat" style="padding: 8px 10px;"><div class="v">1 ч</div><div class="k">налёт</div></div>
+      <div class="stat" style="padding: 8px 10px;"><div class="v">сегодня</div><div class="k">последний</div></div>
     </div>
     <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
-      <span class="small muted" style="white-space: nowrap;">До осмотра 2 полёта</span>
-      <span class="progress" style="flex: 1; display: block;"><i style="width: 80%;"></i></span>
-      <span class="xs dim mono">8/10</span>
+      <span class="small maint" style="white-space: nowrap;">Пора осмотреть</span>
+      <span class="progress" style="flex: 1; display: block;"><i style="width: 100%; background: var(--maint);"></i></span>
+      <span class="xs dim mono">10/10</span>
     </div>
     <div class="btn btn-primary" style="margin-top: 12px; min-height: 48px; font-size: 16px;">${I.templates}Чек-лист и полёт</div>
   </div>
@@ -352,9 +353,7 @@ files['Bort.dc.html'] = doc(`
   <div class="card">
     <div class="kv">
       <div><span class="k">Вес сухой / взлётный</span><span class="v">520 г / 740 г</span></div>
-      <div><span class="k">Диагональ</span><span class="v">225 мм</span></div>
       <div><span class="k">Ветер · высота</span><span class="v">до 20 м/с · до 60 м</span></div>
-      <div><span class="k">Регламент</span><span class="v">осмотр каждые 10 полётов</span></div>
     </div>
   </div>
 
@@ -362,7 +361,6 @@ files['Bort.dc.html'] = doc(`
   <div class="card flat">
     ${row(td('Полётный контроллер', 'Speedybee F405 V4 · <span class="info">Betaflight 4.5.1</span>'), {})}
     ${row(td('VTX', 'Walksnail Avatar V2 · <span class="info">39.44.18</span> · <span class="warn">есть новее</span>'), {})}
-    ${row(td('Мотор', 'T-Motor F60 Pro V 2550KV · заменён 12 авг'), {})}
     ${row('<span class="t muted">+ Добавить компонент</span>', { right: '' })}
   </div>
 </div>
@@ -398,12 +396,10 @@ files['Checklist.dc.html'] = doc(`
     </div>
   </div>
 </div>
-<div style="position: absolute; left: 0; right: 0; bottom: 74px; padding: 10px 16px 12px; background: linear-gradient(to top, var(--bg) 70%, transparent);">
-  <div class="banner warn" style="margin-bottom: 8px; padding: 8px 12px; font-size: 13px;">${I.x}<span class="grow">1 проблема — лететь безопасно?</span></div>
-  <div class="btn-line">
-    <div class="btn btn-primary" style="flex: 2;">${I.takeoff}Начать полёт</div>
-    <div class="btn" style="flex: 1; min-height: 56px;">Готов</div>
-  </div>
+<div style="position: absolute; left: 0; right: 0; bottom: 74px; padding: 26px 16px 12px; background: linear-gradient(to top, var(--bg) 86%, transparent);">
+  <div class="banner warn" style="margin-bottom: 8px; padding: 8px 12px; font-size: 13px;">${I.x}<span class="grow">Отмечена 1 проблема: сервоприводы</span></div>
+  <div class="btn btn-primary">${I.takeoff}Начать полёт</div>
+  <div class="btn" style="margin-top: 8px;">Отметить готовым — взлёт позже</div>
 </div>
 ${tabbar('flight')}
 `);
@@ -413,7 +409,7 @@ ${tabbar('flight')}
 ============================================================ */
 files['FlightTimer.dc.html'] = doc(`
 <div class="views">
-  ${head('В полёте', 'Apex 5″ · полёт <span class="mono">#016</span>', { back: true, right: `<span class="pill" style="min-height: 32px; font-size: 12px;">${I.eye}экран не гаснет</span>` })}
+  ${head('В полёте', 'Apex 5″ · полёт <span class="mono">#016</span>', { back: true, right: `<span class="xs muted" style="display: inline-flex; align-items: center; gap: 5px;"><span class="ico14">${I.eye}</span>экран не гаснет</span>` })}
   <div class="ring">
     <svg class="r" viewBox="0 0 220 220"><circle cx="110" cy="110" r="102" fill="none" stroke="var(--card-2)" stroke-width="8"></circle><circle cx="110" cy="110" r="102" fill="none" stroke="var(--ok)" stroke-width="8" stroke-linecap="round" stroke-dasharray="641" stroke-dashoffset="372"></circle></svg>
     <div style="text-align: center;">
@@ -430,9 +426,10 @@ files['FlightTimer.dc.html'] = doc(`
   <div class="btn" style="margin-top: 8px;">Отменить — полёта не было</div>
   <p class="small muted" style="text-align: center; margin-top: 14px;">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже.</p>
 
-  <div class="h2">Сегодня <span class="cnt">2 полёта · 12 мин</span></div>
+  <div class="h2">Сегодня <span class="cnt">2 полёта · 28 мин</span></div>
   <div class="card flat">
-    ${row(td('<span class="mono">#015</span> Apex 5″', '6 мин · <span class="ok">нормальный</span>'), {})}
+    ${row(td('<span class="mono">#015</span> Mini Talon', '22 мин · <span class="warn">с проблемой</span>'), {})}
+    ${row(td('<span class="mono">#014</span> Apex 5″', '6 мин · <span class="ok">нормальный</span>'), {})}
   </div>
 </div>
 ${tabbar('flight', true)}
@@ -450,7 +447,7 @@ files['Windows.dc.html'] = doc(`
   </div>
   <div style="display: flex; gap: 6px; margin-bottom: 12px; overflow: hidden;">
     ${[['Сегодня', 'g', true], ['Ср 2', 'g'], ['Чт 3', 'y'], ['Пт 4', 'r'], ['Сб 5', 'g'], ['Вс 6', 'g'], ['Пн 7', 'y']].map(([l, c, on]) =>
-      `<span class="pill${on ? ' sel' : ''}" style="padding: 5px 8px; font-size: 12px; gap: 5px; min-height: 34px;"><i style="width: 7px; height: 7px; border-radius: 50%; background: var(--${c === 'g' ? 'ok' : c === 'y' ? 'warn' : 'bad'});"></i>${l}</span>`).join('')}
+      `<span class="pill${on ? ' sel' : ''}" style="padding: 5px 8px; font-size: 12px; gap: 5px; min-height: 40px;"><i style="width: 7px; height: 7px; border-radius: 50%; background: var(--${c === 'g' ? 'ok' : c === 'y' ? 'warn' : 'bad'});"></i>${l}</span>`).join('')}
   </div>
   <div class="banner ok" style="font-size: 16px;">${I.sun}<span>Можно лететь: <strong>06:00–15:00</strong> и <strong>20:00–24:00</strong></span></div>
   <div class="card" style="padding: 12px 14px;">
@@ -482,7 +479,6 @@ files['Windows.dc.html'] = doc(`
   <div class="h2">Обратить внимание</div>
   <div class="card flat">
     ${row(td('15:00–19:00 · дождь', 'осадки 0,4 мм · вероятность 60 %'), { icon: 'rain', right: chip('st-bad', 'не стоит') })}
-    ${row(td('09:00–11:00 · порывы до 13', 'у земли 9 м/с, на 80 м — 12'), { icon: 'wind', right: chip('st-check', 'на пределе') })}
   </div>
   <div class="btn btn-sm" style="margin-top: 4px;">Windy: карта ветра <span class="badge online">online</span></div>
 </div>
@@ -494,11 +490,11 @@ ${tabbar('today')}
 ============================================================ */
 files['Journal.dc.html'] = doc(`
 <div class="views">
-  ${head('Журнал', '14 полётов · 2 ч 12 мин', { right: `<div class="iconbtn">${I.dots}</div>` })}
+  ${head('Журнал', '16 полётов · 2 ч 46 мин', { right: `<div class="iconbtn">${I.dots}</div>` })}
   <div class="seg" style="margin-bottom: 10px;"><div class="on">Полёты</div><div>Статистика</div></div>
   <div style="display: flex; gap: 8px; margin-bottom: 4px;">
     <span class="pill sel">Все борта ${I.down}</span>
-    <span class="pill">Сентябрь ${I.down}</span>
+    <span class="pill">Всё время ${I.down}</span>
   </div>
 
   <div class="h2" style="margin-top: 12px;">Сегодня <span class="cnt">3 полёта · 34 мин</span></div>
@@ -514,7 +510,7 @@ files['Journal.dc.html'] = doc(`
   <div class="h2">29 авг <span class="cnt">2 полёта · 28 мин</span></div>
   <div class="card flat">
     ${row(td('<span class="mono">#012</span> Mini Talon', '22 мин · Li-Ion 6S2P · Поле у реки'), { right: chip('st-ready', 'норм') })}
-    ${row(td('<span class="mono">#011</span> Крыло AR Wing Pro', '6 мин · LiPo 4S 1500 · Склон'), { right: chip('st-bad', 'краш') })}
+    ${row(td('<span class="mono">#011</span> AR Wing Pro', '6 мин · LiPo 4S 1500 · Склон'), { right: chip('st-bad', 'краш') })}
   </div>
   <div class="popover" style="right: 16px; top: 56px;">
     <div>${I.print}Печать журнала</div>
@@ -541,20 +537,20 @@ files['Desktop.dc.html'] = doc(`
           <span class="thumb lg">${I.quad}</span>
           <span class="grow">
             <span class="t" style="font-size: 20px; font-weight: 700;">Apex 5″</span>
-            <span class="d">FPV квад · <span class="ok">LiPo 6S 1300 #1</span> · заряжен · чек-лист пройден в 21:19</span>
+            <span class="d">FPV квад · <span class="ok">LiPo 6S 1300 #1</span> · заряжен · чек-лист пройден в 13:19</span>
           </span>
           <div class="btn btn-primary" style="width: 200px;">${I.takeoff}Взлёт</div>
         </div>
       </div>
-      <div class="h2">Ещё к вылету <span class="cnt">2</span></div>
+      <div class="h2">Остальные борта <span class="cnt">2</span></div>
       <div class="card flat">
         ${row(td('Mini Talon', 'Самолёт · Li-Ion 6S2P 7000 · заряжен'), { thumb: 'plane', right: `<span class="btn btn-sm">Чек-лист</span>` })}
-        ${row(td('<span class="muted">Крыло AR Wing Pro</span>', 'открыта работа: замена луча №2'), { thumb: 'wing', right: chip('st-maint', 'Обслуживание') })}
+        ${row(td('<span class="muted">AR Wing Pro</span>', 'открыта работа: замена луча №2'), { thumb: 'wing', right: chip('st-maint', 'Обслуживание') })}
       </div>
       <div class="h2">Обслуживание <span class="cnt">2</span></div>
       <div class="card flat">
         ${row(td('<span class="maint">Пора осмотреть: Apex 5″</span>', '10 из 10 полётов по регламенту'), { icon: 'wrench', right: `<span class="btn btn-sm">Осмотр</span>` })}
-        ${row(td('Замена луча №2', 'Крыло AR Wing Pro · 17 авг'), { icon: 'wrench' })}
+        ${row(td('Замена луча №2', 'AR Wing Pro · 17 авг'), { icon: 'wrench' })}
       </div>
     </div>
     <div style="min-width: 0;">
@@ -564,15 +560,15 @@ files['Desktop.dc.html'] = doc(`
         <div class="d" style="margin-bottom: 10px;">Поле у реки · Apex 5″ до 20 м/с</div>
         ${strip('GGGGGGgggyyygggrrrrrGGGG', 14)}
         <div class="kv" style="margin-top: 12px;">
-          <div><span class="k">У земли</span><span class="v">4 м/с</span></div>
-          <div><span class="k">На 80 м</span><span class="v">8 м/с</span></div>
-          <div><span class="k">Порывы</span><span class="v">до 6</span></div>
+          <div><span class="k">У земли</span><span class="v">5 м/с</span></div>
+          <div><span class="k">На 80 м</span><span class="v">7 м/с</span></div>
+          <div><span class="k">Порывы</span><span class="v">до 8</span></div>
           <div><span class="k">Дождь</span><span class="v">с 15:00</span></div>
         </div>
       </div>
-      <div class="h2">Сегодня <span class="cnt">2 полёта · 12 мин</span></div>
+      <div class="h2">Сегодня <span class="cnt">2 полёта · 28 мин</span></div>
       <div class="card flat">
-        ${row(td('<span class="mono">#015</span> Apex 5″', '6 мин · нормальный'), {})}
+        ${row(td('<span class="mono">#015</span> Mini Talon', '22 мин · <span class="warn">с проблемой</span>'), {})}
         ${row(td('<span class="mono">#014</span> Apex 5″', '6 мин · нормальный'), {})}
       </div>
       <div class="banner">${I.backup}<span class="grow">Копия — 19 дней назад</span><span class="btn btn-sm">Сохранить</span></div>
@@ -602,7 +598,7 @@ const CSS_B = `
   .num { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12px; color: var(--dim); width: 44px; flex: none; }
   .btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 10px 18px; border-radius: 8px; background: var(--ink); color: #fff; font-weight: 600; font-size: 16px; }
   .btn svg { width: 20px; height: 20px; } .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
-  .btn.sm { min-height: 36px; padding: 6px 12px; font-size: 13px; width: auto; display: inline-flex; border-radius: 6px; }
+  .btn.sm { min-height: 44px; padding: 6px 12px; font-size: 13px; width: auto; display: inline-flex; border-radius: 6px; }
   .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .maint { color: var(--maint); } .muted { color: var(--mut); } .accent { color: var(--accent); }
@@ -627,13 +623,13 @@ files['DirectionB.dc.html'] = doc(`
   <div class="card" style="padding: 12px 16px;">
     <div class="row">
       <span class="thumb">${I.quad}</span>
-      <span class="grow"><span class="t" style="font-weight: 600;">Apex 5″</span><span class="d">LiPo 6S 1300 #1 · чек-лист пройден в 21:19</span></span>
+      <span class="grow"><span class="t" style="font-weight: 600;">Apex 5″</span><span class="d">LiPo 6S 1300 #1 · чек-лист пройден в 13:19</span></span>
       <span class="btn sm">${I.takeoff}Взлёт</span>
     </div>
     <div class="row">
       <span class="thumb">${I.plane}</span>
       <span class="grow"><span class="t">Mini Talon</span><span class="d">Li-Ion 6S2P 7000 · заряжен</span></span>
-      <span class="tag ok">готова</span>
+      <span class="tag ok">готов</span>
     </div>
     <div class="row">
       <span class="thumb">${I.wing}</span>
@@ -642,9 +638,9 @@ files['DirectionB.dc.html'] = doc(`
     </div>
   </div>
 
-  <div class="rule"><span>Журнал</span><span>сегодня · 2 полёта · 12 мин</span></div>
+  <div class="rule"><span>Журнал</span><span>сегодня · 2 полёта · 28 мин</span></div>
   <div class="card" style="padding: 4px 16px;">
-    <div class="row"><span class="num">#015</span><span class="grow"><span class="t">Apex 5″</span><span class="d">6 мин · LiPo 6S 1300 #1</span></span><span class="tag ok">норм</span></div>
+    <div class="row"><span class="num">#015</span><span class="grow"><span class="t">Mini Talon</span><span class="d">22 мин · Li-Ion 6S2P 7000</span></span><span class="tag warn">проблема</span></div>
     <div class="row"><span class="num">#014</span><span class="grow"><span class="t">Apex 5″</span><span class="d">6 мин · LiPo 6S 1300 #1</span></span><span class="tag ok">норм</span></div>
     <div class="row"><span class="num">31 авг</span><span class="grow"><span class="t">Apex 5″</span><span class="d">6 мин · Склон</span></span><span class="tag ok">норм</span></div>
   </div>
@@ -698,14 +694,14 @@ files['DirectionC.dc.html'] = doc(`
   <div class="hero">
     <div style="display: flex; align-items: center; gap: 14px;">
       <span class="thumb xl">${I.quad}</span>
-      <span class="grow"><span class="t" style="font-size: 22px; font-weight: 800;">Apex 5″</span><span class="d">LiPo 6S 1300 #1 · заряжен</span><span class="d ok">Чек-лист пройден · 21:19</span></span>
+      <span class="grow"><span class="t" style="font-size: 22px; font-weight: 800;">Apex 5″</span><span class="d">LiPo 6S 1300 #1 · заряжен</span><span class="d ok">Чек-лист пройден · 13:19</span></span>
     </div>
     <div class="big">${I.takeoff}ВЗЛЁТ</div>
     <div class="strip">${'GGGGGGgggyyygggrrrrrGGGG'.split('').map((c) => `<i class="${c === 'g' ? 'g' : c === 'y' ? 'y' : c === 'r' ? 'r' : c === 'G' ? 'g n' : 'r n'}"></i>`).join('')}</div>
   </div>
   <div class="h2">Ещё к вылету</div>
   <div class="list">
-    <div class="row"><span class="thumb">${I.plane}</span><span class="grow"><span class="t">Mini Talon</span><span class="d">Li-Ion 6S2P 7000 · заряжен</span></span><span class="chip ok">Готова</span></div>
+    <div class="row"><span class="thumb">${I.plane}</span><span class="grow"><span class="t">Mini Talon</span><span class="d">Li-Ion 6S2P 7000 · заряжен</span></span><span class="chip ok">Готов</span></div>
     <div class="row"><span class="thumb">${I.wing}</span><span class="grow"><span class="t mut">AR Wing Pro</span><span class="d">замена луча №2</span></span><span class="chip maint">Ремонт</span></div>
   </div>
   <div class="h2">Обслуживание</div>
@@ -743,16 +739,16 @@ files['Current.dc.html'] = doc(`
 <h1>Сейчас: версия 1.5</h1>
 <div class="lead">Скриншоты текущего приложения с тестовыми данными. Красные метки — находки аудита, к которым отвечают экраны направления А.</div>
 <div class="shots">
-  <div class="shot"><img src="cur-today.png" alt="">
+  <div class="shot"><img src="cur-today.png" alt="Сегодня, версия 1.5">
     <span class="mark" style="left: 350px; top: 84px;">1</span><span class="mark" style="left: 292px; top: 292px;">2</span>
     <div class="cap"><b>Сегодня</b> · кнопка «Начать полёт» и «Взлёт» готового борта конкурируют; «Окна» повторяются в «Ещё»</div></div>
-  <div class="shot"><img src="cur-model.png" alt="">
+  <div class="shot"><img src="cur-model.png" alt="Борт, версия 1.5">
     <span class="mark" style="left: 350px; top: 60px;">3</span><span class="mark" style="left: 350px; top: 706px;">4</span>
     <div class="cap"><b>Борт</b> · статус и АКБ выглядят как поля формы; подсказка показывается всегда; 11 строк компонентов, из них 6 «не указано»</div></div>
-  <div class="shot"><img src="cur-checklist.png" alt="">
+  <div class="shot"><img src="cur-checklist.png" alt="Чек-лист, версия 1.5">
     <span class="mark" style="left: 350px; top: 160px;">5</span><span class="mark" style="left: 350px; top: 336px;">6</span>
     <div class="cap"><b>Чек-лист</b> · три состояния по кругу — не видно, что есть «пропуск»; подпись АКБ обрезана; «START FLIGHT» — единственная английская надпись</div></div>
-  <div class="shot"><img src="cur-weather.png" alt="">
+  <div class="shot"><img src="cur-weather.png" alt="Окна для полётов, версия 1.5">
     <span class="mark" style="left: 350px; top: 500px;">7</span>
     <div class="cap"><b>Окна</b> · 24 часа по две строки — пять экранов прокрутки, картина дня не видна целиком</div></div>
 </div>
@@ -761,8 +757,11 @@ files['Current.dc.html'] = doc(`
   <div><b>2 · Три разных аффорданса в строке</b>Чип, шеврон и кнопка в одной строке. В А строка отвечает за одно действие.</div>
   <div><b>3 · Карточка на 6 экранов</b>Всё в одной ленте. В А — сегменты «Обзор · Компоненты · Обслуживание · История».</div>
   <div><b>4 · Шум пустых компонентов</b>Показываем только заполненные, пустые — за «+ Добавить».</div>
+  <div><b>5 · Цикл из трёх состояний</b>Тап крутит ок → проблема → пропуск, «пропуск» не виден заранее. В А тап по строке — «ок», тап по клетке — выбор из трёх.</div>
+  <div><b>6 · Обрезанные подписи</b>Два селекта в ряд режут название АКБ. В А — пилюли на всю ширину строки, длинные списки остаются селектом.</div>
+  <div><b>7 · Пять экранов прогноза</b>24 часа по две строки. В А — полоска дня, чипы дней и карточка выбранного часа; список — только для того, на что обратить внимание.</div>
 </div>
-`, { css: CSS_CUR, w: 1740, h: 1180, theme: false });
+`, { css: CSS_CUR, w: 1740, h: 1300, theme: false });
 
 /* ============================================================
    Система: токены, компоненты, движение, технологии
@@ -795,14 +794,14 @@ files['System.dc.html'] = doc(`
 
 <div class="sec"><h3>Палитра (переключите тему — значения слева меняются)</h3>
   <div class="sw">
-    ${[['bg', 'Фон'], ['bg-el', 'Панель'], ['card', 'Карточка'], ['card-2', 'Карточка 2'], ['line', 'Линия'], ['text', 'Текст'], ['mut', 'Приглушённый'], ['dim', 'Тусклый'], ['ok', 'Готова / ок'], ['warn', 'Проверить'], ['maint', 'Обслуживание'], ['bad', 'Запрет / краш'], ['info', 'Инфо / online'], ['unk', 'Нет данных'], ['link', 'Ссылка']].map(([k, n]) =>
+    ${[['bg', 'Фон'], ['bg-el', 'Панель'], ['card', 'Карточка'], ['card-2', 'Карточка 2'], ['line', 'Линия'], ['text', 'Текст'], ['mut', 'Приглушённый'], ['dim', 'Тусклый'], ['ok', 'Готов / ок'], ['warn', 'Проверить'], ['maint', 'Обслуживание'], ['bad', 'Запрет / краш'], ['info', 'Инфо / online'], ['unk', 'Нет данных'], ['link', 'Ссылка']].map(([k, n]) =>
       `<div><i style="background: var(--${k});"></i><b>${n}</b>--${k}</div>`).join('')}
   </div>
 </div>
 
 <div class="sec cols">
   <div><h3>Статусы и метки</h3>
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">${chip('st-ready', 'Готова')}${chip('st-check', 'Проверить')}${chip('st-maint', 'Обслуживание')}${chip('st-bad', 'Полёты запрещены')}${chip('st-unk', 'Нет данных')}${chip('st-info', 'после полёта')}</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">${chip('st-ready', 'Готов')}${chip('st-check', 'Проверить')}${chip('st-maint', 'Обслуживание')}${chip('st-bad', 'Полёты запрещены')}${chip('st-unk', 'Нет данных')}${chip('st-info', 'после полёта')}</div>
     <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;"><span class="badge online">online</span><span class="badge">основная</span><span class="pill">${I.sites}Поле у реки ${I.down}</span><span class="pill sel">${I.quad}Apex 5″ ${I.down}</span></div>
     <p class="small muted" style="margin-top: 10px;">«online» — синий (информация), не жёлтый: жёлтый оставлен состоянию «Проверить». Пилюля — выбор одного из немногих; селект остаётся для длинных списков.</p>
   </div>
@@ -857,7 +856,7 @@ files['System.dc.html'] = doc(`
     <tr><th>Что</th><th>Зачем</th><th>Поддержка</th></tr>
     <tr><td>View Transitions (same-document)</td><td>анимация экранов при полной пересборке разметки</td><td>Chrome 111+, Safari 18+, Firefox 144+ (сверить перед кодом)</td></tr>
     <tr><td>@starting-style, transition-behavior</td><td>вход и выход dialog/popover без JS</td><td>Chrome 117+, Safari 17.5+, Firefox 129+</td></tr>
-    <tr><td>popover</td><td>меню «⋯», выбор состояния пункта — без модалки</td><td>Chrome 114+, Safari 17+, Firefox 125+</td></tr>
+    <tr><td>popover</td><td>меню действий, выбор состояния пункта — без модалки</td><td>Chrome 114+, Safari 17+, Firefox 125+</td></tr>
     <tr><td>Container queries</td><td>рельса и две колонки на планшете и десктопе</td><td>все современные</td></tr>
     <tr><td>CSS nesting, :has(), color-mix(), oklch()</td><td>короче стили, тона статусов из одного цвета</td><td>все современные</td></tr>
     <tr><td>Wake Lock API</td><td>экран не гаснет, пока идёт полёт</td><td>Chrome 84+, Safari 16.4+; Firefox — нет (индикатор прячется)</td></tr>
@@ -882,7 +881,7 @@ const canvas = {
     { file: 'Main.dc.html', title: 'А · Пульт — Сегодня на поле', x: 0, y: 0, w: 390, h: 844, page: 'page-1' },
     { file: 'DirectionB.dc.html', title: 'Б · Бортжурнал', x: 390 + G, y: 0, w: 390, h: 844, page: 'page-1' },
     { file: 'DirectionC.dc.html', title: 'В · Панель', x: 2 * (390 + G), y: 0, w: 390, h: 844, page: 'page-1' },
-    { file: 'Current.dc.html', title: 'Сейчас · 1.5 с пометками аудита', x: 0, y: 844 + 160, w: 1740, h: 1180, page: 'page-1' },
+    { file: 'Current.dc.html', title: 'Сейчас · 1.5 с пометками аудита', x: 0, y: 844 + 160, w: 1740, h: 1300, page: 'page-1' },
 
     { file: 'TodayHome.dc.html', title: 'Сегодня · дома, утром', x: 0, y: 0, w: 390, h: 844, page: 'page-2' },
     { file: 'TodayAfter.dc.html', title: 'Сегодня · разбор после полётов', x: 390 + G, y: 0, w: 390, h: 844, page: 'page-2' },
@@ -901,7 +900,7 @@ const canvas = {
     { id: 'dir-c', x: 2 * (390 + G), y: -230, w: 390, page: 'page-1', text: 'В · «Панель» — для солнца и перчаток.\nБаза 18 px, касание 64, четыре вкладки и круглая кнопка «Полёт» в панели, лаймовый акцент с максимальным контрастом.\nЦена: меньше информации на экран, каталог инструментов и длинные списки станут вдвое длиннее.' },
     { id: 'how', x: 3 * (390 + G), y: 0, w: 330, page: 'page-1', text: 'Как читать канвас\n1 · Страница «Направления» — выбрать одно из трёх (или смешать: например, А с крупной кнопкой из В).\n2 · Страница «Экраны А» — как ведущее направление проходит по всем состояниям дня.\n3 · Страница «Система» — токены, движение и технологии для реализации.\nПереключатель темы над артбордами А показывает светлую палитру.' },
     { id: 'states', x: 3 * (390 + G), y: 844 + 140, w: 390, page: 'page-2', text: 'Состояния «Сегодня»\nдома → на поле → в полёте → разбор.\nЭкран не спрашивает, он показывает следующее действие: собраться и зарядить; взлететь; посадка; осмотр, зарядка, копия.\nПравило: одна главная кнопка на экран, остальное — строки.' },
-    { id: 'future', x: 3 * (390 + G), y: 844 + 140 + 260, w: 390, page: 'page-2', text: 'Заложено под ROADMAP\n· версия прошивки у компонента и метка «есть новее» (firmware-журнал);\n· пункт «Помощник · online» в «Ещё» с тем же паттерном согласия, что у погоды;\n· строка «Резервная копия N дней назад» — место для будущей синхронизации через файл;\n· рельса и правая колонка на десктопе — под работу на верстаке.' },
+    { id: 'future', x: 3 * (390 + G), y: 844 + 140 + 340, w: 390, page: 'page-2', text: 'Заложено под ROADMAP\n· версия прошивки у компонента и метка «есть новее» (firmware-журнал);\n· пункт «Помощник · online» в «Ещё» с тем же паттерном согласия, что у погоды;\n· строка «Резервная копия N дней назад» — место для будущей синхронизации через файл;\n· рельса и правая колонка на десктопе — под работу на верстаке.' },
   ],
   launch: { view: 'canvas', page: 'page-1' },
 };

@@ -104,6 +104,24 @@ async function seed(page) {
   await shoot('dark', phone, screens, 'dark');
   await shoot('light', phone, [['today', '#/today'], ['model', '#/model/a1'], ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); }]], 'light');
   await shoot('dark', { width: 1280, height: 800 }, [['today', '#/today'], ['model', '#/model/a1']], 'desktop');
+  // Четыре снимка 1× видимой области — для артборда «Сейчас» дизайн-канваса.
+  {
+    const ctx = await browser.newContext({ viewport: phone, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    await page.goto(srv.url);
+    await page.waitForSelector('#tabbar .tab');
+    await seed(page);
+    const cur = [['today', '#/today'], ['model', '#/model/a1'],
+      ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); await p.waitForTimeout(100); await p.click('.ck[data-i="0"]'); await p.click('.ck[data-i="1"]'); }],
+      ['weather', '#/weather', async (p) => { await p.selectOption('select[name="wxmodel"]', 'a1'); await p.waitForTimeout(80); await p.selectOption('select[name="wxsite"]', 'site-1'); }]];
+    for (const [name, hash, pre] of cur) {
+      await page.evaluate((h) => { location.hash = h; }, hash);
+      await page.waitForTimeout(120);
+      if (pre) { await pre(page); await page.waitForTimeout(150); }
+      await page.screenshot({ path: path.join(OUT, 'cur-' + name + '.png') });
+    }
+    await ctx.close();
+  }
   await browser.close();
   await srv.close();
   console.log('done');
