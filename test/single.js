@@ -40,8 +40,12 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   ok((await page.locator('[data-act="start-flight"]').count()) === 0,
     'без аккумулятора кнопки START FLIGHT нет');
   await page.click('.ck >> nth=0');
-  const st = await page.getAttribute('.ck >> nth=0', 'data-state');
-  ok(st === 'ok', 'касание отмечает пункт как «ок»');
+  // render(true) с анимациями перерисовывает внутри View Transition — ждём состояние.
+  const stOk = await page.waitForFunction(() => {
+    const c = document.querySelector('.ck');
+    return c && c.dataset.state === 'ok';
+  }, null, { timeout: 3000 }).then(() => true, () => false);
+  ok(stOk, 'касание отмечает пункт как «ок»');
 
   // 2б. Ставим АКБ прямо с чек-листа через «+ Добавить аккумулятор…»
   await page.selectOption('select[name="prepBatt"]', '__new');

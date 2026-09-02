@@ -32,8 +32,11 @@ const PUB = path.join(__dirname, '..', 'public');
   ok(/^[0-9a-f]{10}$/.test(build), 'версия сборки в meta: ' + build);
   const swText = await page.evaluate(async () => (await fetch('sw.js')).text());
   ok(swText.includes(build), 'sw.js собран с той же версией');
-  const more = await page.evaluate(() => { location.hash = '#/more'; return document.body.textContent; });
-  ok(more.includes(build), 'версия видна в настройках');
+  await page.evaluate(() => { location.hash = '#/more'; });
+  // Экран собирается по hashchange (с анимациями — асинхронно) — ждём текст.
+  const seen = await page.waitForFunction((b) => document.body.textContent.includes(b), build, { timeout: 3000 })
+    .then(() => true, () => false);
+  ok(seen, 'версия видна в настройках');
 
   // Service worker активируется и берёт страницу под контроль
   await page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller, null, { timeout: 15000 })

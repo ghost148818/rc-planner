@@ -35,6 +35,10 @@ const UI = {
     loading: false, error: '', data: null, // data: {fetched, place, json}
   },
   navCount: 0,        // сколько маршрутов прошли — для кнопки «Назад»
+  navDir: 'forward',  // направление перехода для View Transitions: forward|back|tab
+  navStack: [],       // короткая история маршрутов — чтобы отличить «назад»
+  navBackHint: false, // кнопка «Назад» ушла по запасному маршруту — всё равно back
+  routeHash: '',      // последний обработанный адрес — popstate и hashchange приходят парой
   modalReturn: null,  // форма, к которой вернуться после вложенного диалога
 };
 
@@ -120,6 +124,12 @@ function fmtClock(ms) {
   const mm = Math.floor(s / 60);
   const ss = s % 60;
   return (mm < 100 ? String(mm).padStart(2, '0') : mm) + ':' + String(ss).padStart(2, '0');
+}
+
+// Таймер на экране: мигает только двоеточие (span.colon), цифры стоят.
+function clockHtml(ms) {
+  const [mm, ss] = fmtClock(ms).split(':');
+  return mm + '<span class="colon">:</span>' + ss;
 }
 
 function plural(n, one, few, many) {
@@ -209,13 +219,39 @@ function lineDiff(aText, bText) {
 
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+// Тема и режим «В перчатках» — только UI-предпочтения в localStorage.
+// rcp.theme: light|dark, отсутствует — как в системе; rcp.gloves: '1'.
+// Тот же расчёт продублирован инлайн-скриптом в index.html, чтобы первая
+// отрисовка не мигала; здесь — источник для настроек и смены темы системы.
+const THEME_COLOR = { dark: '#14181e', light: '#f2f3f5' };
+function themePref() {
+  const t = lsGet('rcp.theme');
+  return t === 'light' || t === 'dark' ? t : 'system';
+}
+function applyTheme() {
+  let t = themePref();
+  if (t === 'system') {
+    t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  const root = document.documentElement;
+  root.dataset.theme = t;
+  if (lsGet('rcp.gloves') === '1') root.dataset.gloves = '';
+  else delete root.dataset.gloves;
+  const meta = $('meta[name="theme-color"]');
+  if (meta) meta.content = THEME_COLOR[t];
+}
+function reducedMotion() {
+  return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
 
 /* ============================================================
    3. СТАТУСЫ МОДЕЛЕЙ
 ============================================================ */
 
 const STATUS = {
-  ready: { label: 'Готова', cls: 'st-ready' },
+  ready: { label: 'Готов', cls: 'st-ready' },
   check: { label: 'Проверить', cls: 'st-check' },
   maintenance: { label: 'Обслуживание', cls: 'st-maintenance' },
   grounded: { label: 'Полёты запрещены', cls: 'st-grounded' },
@@ -237,7 +273,7 @@ function sessionsOf(id) {
 }
 
 // Цепочка после краша/аварии очевидна: полёт с проблемой → «Обслуживание»
-// (создан осмотр) → осмотр отмечен выполненным → снова «Готова».
+// (создан осмотр) → осмотр отмечен выполненным → снова «Готов».
 // Поэтому «Проверить» держится только пока НЕТ закрытой работы,
 // сделанной после проблемного полёта.
 function statusOf(a) {
@@ -524,7 +560,20 @@ const ICONS = {
   update: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
   move: ic('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M3.5 12h17"/>'),
   paste: ic('<rect x="5" y="4" width="14" height="17.5" rx="2"/><path d="M9 4.5V3.4A1.4 1.4 0 0 1 10.4 2h3.2A1.4 1.4 0 0 1 15 3.4v1.1"/><path d="M12 9.5v7M8.8 13.3 12 16.5l3.2-3.2"/>'),
+  // знаки состояний и служебные: вместо текстовых ✓ ✕ — ★ ☆ × +
+  check: ic('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.2),
+  x: ic('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 2.2),
+  minus: ic('<path d="M6 12h12"/>', 2.2),
+  close: ic('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 2),
+  plus: ic('<path d="M12 5.5v13M5.5 12h13"/>', 2),
+  star: ic('<path fill="currentColor" d="M12 3.2l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 17.1 6.6 20l1.1-6.1-4.5-4.3 6.1-.8Z"/>'),
+  starOff: ic('<path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 17.1 6.6 20l1.1-6.1-4.5-4.3 6.1-.8Z"/>'),
 };
+// Знак клетки чек-листа по состоянию пункта (ok/fail/skip/пусто).
+const CK_MARK = { ok: 'check', fail: 'x', skip: 'minus' };
+function ckMark(state) {
+  return CK_MARK[state] ? ICONS[CK_MARK[state]] : '';
+}
 
 const TABS = [
   { id: 'today', label: 'Сегодня' },
@@ -577,11 +626,11 @@ function selectHtml(name, options, current, extra) {
 }
 
 function openModal(title, body) {
-  closeModal();
+  closeModal(true); // мгновенно: двум окнам не жить, даже пока прежнее уезжает
   const root = $('#modal-root');
   root.innerHTML = `<dialog aria-label="${esc(title)}">
     <div class="dlg-head"><h2>${title}</h2>
-      <button class="dlg-close" data-act="close-modal" aria-label="Закрыть">×</button></div>
+      <button class="dlg-close" data-act="close-modal" aria-label="Закрыть">${ICONS.close}</button></div>
     <div class="dlg-body">${body}</div>
   </dialog>`;
   const d = $('dialog', root);
@@ -591,10 +640,26 @@ function openModal(title, body) {
   d.addEventListener('click', (ev) => { if (ev.target === d) dismissModal(); });
 }
 
-function closeModal() {
+// Закрытие: с анимацией лист уезжает вниз (класс closing, 160 мс) и узел
+// убирается по transitionend либо по таймеру 200 мс — если transitionend
+// не пришёл. immediate — снять сразу (перед открытием следующего окна).
+// body.locked снимается сразу, чтобы страница не оставалась запертой.
+function closeModal(immediate) {
   const d = $('#modal-root dialog');
-  if (d) { try { d.close(); } catch (e) {} d.remove(); }
   document.body.classList.remove('locked');
+  if (!d) return;
+  const drop = () => { try { d.close(); } catch (e) {} d.remove(); };
+  if (immediate || reducedMotion()) { drop(); return; }
+  if (d.classList.contains('closing')) return; // уже уезжает
+  d.classList.add('closing');
+  let done = false;
+  const fin = (ev) => {
+    if (done || (ev && ev.target !== d)) return;
+    done = true;
+    drop();
+  };
+  d.addEventListener('transitionend', fin);
+  setTimeout(fin, 200);
 }
 
 // Закрытие по кнопке/Esc/фону: если под диалогом ждёт незаконченная форма
@@ -705,10 +770,10 @@ function viewToday() {
   if (armed.length) {
     h += armed.map(([a, b]) => takeoffReady(a)
       ? `<div class="row">
-          <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:40px">
+          <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:var(--seg)">
             ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
             <span class="d">${TYPES[a.type] || ''} · ${battTag(b)} · чек-лист пройден</span></span></button>
-          <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}" style="min-height:40px">Взлёт</button>
+          <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>
         </div>`
       : rowBtn(`data-nav="#/model/${a.id}"`,
         `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
@@ -791,7 +856,7 @@ function fleetSortCmp() {
 function fleetRow(a) {
   const b = armedBattery(a);
   return `<div class="row">
-    <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:44px;min-width:0">
+    <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:var(--tap);min-width:0">
       ${aircraftThumb(a)}<span class="grow" style="min-width:0"><span class="t">${esc(a.name)}</span>
       <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
     ${chip(statusOf(a), a.id)}
@@ -807,8 +872,8 @@ function viewFleet() {
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
     ${selectHtml('fleetSort', [['name', 'По названию'], ['status', 'По статусу'], ['type', 'По типу']],
-      S.settings.fleetSort || 'name', 'data-change="fleet-sort" style="flex:1;min-height:40px"')}
-    <button class="btn btn-sm" data-act="add-group" style="min-height:40px">+ Группа</button>
+      S.settings.fleetSort || 'name', 'data-change="fleet-sort" style="flex:1;min-height:var(--seg)"')}
+    <button class="btn btn-sm" data-act="add-group">${ICONS.plus}Группа</button>
   </div>`;
   const cmp = fleetSortCmp();
   const inGroup = (gid) => S.aircraft.filter((a) => (a.groupId || '') === gid).sort(cmp);
@@ -958,7 +1023,7 @@ function viewModel() {
 
   if (UI.justCreated === a.id) {
     const learning = !!lsGet('rcp.tour') || !(S.sites.length && S.sessions.some((x) => x.end));
-    h += `<div class="banner ok">Борт добавлен ✓ Это его карточка: статус, АКБ, компоненты, обслуживание.
+    h += `<div class="banner ok">${ICONS.check}<span class="grow">Борт добавлен. Это его карточка: статус, АКБ, компоненты, обслуживание.</span>
       <button class="btn-sm btn right" data-nav="#/fleet">Во «Флот»</button>
       ${learning ? '<button class="btn-sm btn right" data-nav="#/today">К обучению</button>' : ''}</div>`;
   }
@@ -968,14 +1033,14 @@ function viewModel() {
 
   h += `<div class="card"><div style="display:flex;align-items:center;gap:10px">
     ${chip(st, a.id)}
-    <select data-change="status-manual" data-id="${a.id}" style="flex:1;min-height:40px">
+    <select data-change="status-manual" data-id="${a.id}" style="flex:1;min-height:var(--seg)">
       <option value="" ${!a.statusManual ? 'selected' : ''}>Статус: авто</option>
       ${Object.keys(STATUS).filter((k) => k !== 'unknown').map((k) =>
         `<option value="${k}" ${a.statusManual === k ? 'selected' : ''}>Вручную: ${STATUS[k].label}</option>`).join('')}
     </select></div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
       <span class="row-ic">${ICONS.batteries}</span>
-      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:40px"`)}
+      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:var(--seg)"`)}
       ${bat && bat.status !== 'retired' ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
         data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
     </div>
@@ -1041,10 +1106,10 @@ function viewModel() {
   if (openM.length) {
     // «Выполнено» одним касанием — после краша это следующий очевидный шаг
     h += openM.map((m) => `<div class="row">
-      ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:40px">
+      ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:var(--seg)">
         <span class="t">${esc(m.title)}</span>
         <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
-      <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}" style="min-height:40px">Выполнено</button>
+      <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}">Выполнено</button>
     </div>`).join('');
   } else {
     h += '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
@@ -1114,7 +1179,7 @@ function viewFlight() {
     h += prepared.map((a) => `<div class="row">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
       <span class="d">чек-лист пройден в ${fmtTime(a.prepared.at)}</span></span>
-      <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}" style="min-height:40px">Взлёт</button>
+      <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>
     </div>`).join('');
     h += '</div>';
   }
@@ -1185,9 +1250,12 @@ function viewPrep() {
   h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${doneCount} из ${items.length} · касание: ок → проблема → пропуск</div>`;
   h += '<div class="card flat">';
+  // view-transition-name получает только последняя тронутая клетка: при
+  // render(true) анимируется она одна, остальные не моргают. Имя уникально
+  // в пределах страницы (ck-<i>).
   h += items.map((it, i) => `<button class="ck" data-act="ck-toggle" data-i="${i}" data-state="${it.state || ''}" style="width:100%;text-align:left">
       <span class="grow"><span class="t">${esc(it.t)}</span>${it.hint ? `<span class="d">${esc(it.hint)}</span>` : ''}</span>
-      <span class="st">${it.state === 'ok' ? '✓' : it.state === 'fail' ? '✕' : it.state === 'skip' ? '—' : ''}</span>
+      <span class="st"${UI.prep.lastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''}>${ckMark(it.state)}</span>
     </button>`).join('');
   h += '</div>';
   if (fails) h += `<div class="banner warn">Отмечены проблемы: ${fails}. Убедитесь, что лететь безопасно, или устраните их.</div>`;
@@ -1207,12 +1275,12 @@ function viewSession() {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
   let h = pageHead('Полёт', { back: '#/flight', sub: esc(a ? a.name : '') + ` · <span class="mono">#${String(s.flightNo).padStart(3, '0')}</span>` });
   if (!s.end && s.landedAt) {
-    h += `<div class="timer" id="timer">${fmtClock(s.landedAt - s.start)}</div>
+    h += `<div class="timer landed" id="timer">${clockHtml(s.landedAt - s.start)}</div>
       <div class="banner">Посадка зафиксирована — таймер остановлен. Осталось записать итог.</div>
       <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
       <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт (таймер снова пойдёт)</button>`;
   } else if (!s.end) {
-    h += `<div class="timer" id="timer">${fmtClock(Date.now() - s.start)}</div>
+    h += `<div class="timer" id="timer">${clockHtml(Date.now() - s.start)}</div>
       <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Завершить полёт</button>
       <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить (не был полёт)</button>
       <p class="small muted center" style="margin-top:12px">Таймер идёт. Можно свернуть приложение — время не потеряется.</p>`;
@@ -1245,7 +1313,7 @@ function sessionDetailHtml(s) {
     h += `<details class="fold"><summary>Чек-лист перед полётом</summary><div class="fold-body"><div class="card flat">` +
       run.items.map((it) => `<div class="ck" data-state="${it.state || ''}">
         <span class="grow"><span class="t">${esc(it.t)}</span></span>
-        <span class="st">${it.state === 'ok' ? '✓' : it.state === 'fail' ? '✕' : '—'}</span></div>`).join('') +
+        <span class="st">${ckMark(it.state || 'skip')}</span></div>`).join('') +
       '</div></div></details>';
   }
   return h;
@@ -1371,10 +1439,11 @@ function statMonths(list) {
   });
   return keys.slice(-12).map((k) => {
     const o = by.get(k) || { n: 0, min: 0 };
-    // «авг 26» — коротко и без «г.»: подпись живёт в узкой колонке.
-    const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 1);
-    const mon = d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '');
-    return { k: mon + ' ' + k.slice(2, 4), v: o.min,
+    // «сен 2026» — из своего списка месяцев, а не из локали: одинаково
+    // на любом устройстве и без точки после сокращения. MONTHS_RU —
+    // родительный падеж для дат («5 мая»); месяц сам по себе — «май».
+    const mon = MONTHS_RU[+k.slice(5, 7) - 1];
+    return { k: (mon === 'мая' ? 'май' : mon) + ' ' + k.slice(0, 4), v: o.min,
       label: o.n ? `${o.n} · ${fmtDur(o.min)}` : '—', n: o.n, min: o.min };
   });
 }
@@ -1523,15 +1592,15 @@ function viewPack() {
     <div class="small muted" style="margin-bottom:8px">${done} из ${p.items.length}</div>`;
   h += '<div class="card flat">';
   h += p.items.map((it, i) => `<div class="ck" data-state="${it.done ? 'ok' : ''}">
-      <button class="grow" data-act="pack-toggle" data-i="${i}" style="text-align:left;min-height:36px">
+      <button class="grow" data-act="pack-toggle" data-i="${i}" style="text-align:left;min-height:var(--seg)">
         <span class="t">${esc(it.t)}</span></button>
-      <button class="st" data-act="pack-toggle" data-i="${i}">${it.done ? '✓' : ''}</button>
-      <button style="color:var(--dim);width:32px;min-height:36px" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">✕</button>
+      <button class="st" data-act="pack-toggle" data-i="${i}"${UI.packLastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''} aria-label="${it.done ? 'Собрано' : 'Не собрано'}">${it.done ? ICONS.check : ''}</button>
+      <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
     </div>`).join('');
   h += '</div>';
   h += `<form data-form="pack-item" class="btn-line" style="margin-bottom:8px">
       <input type="text" name="t" placeholder="Свой пункт…" required style="flex:1">
-      <button class="btn btn-sm" type="submit" style="min-height:48px">Добавить</button>
+      <button class="btn btn-sm" type="submit" style="min-height:var(--btn)">Добавить</button>
     </form>
     <button class="btn btn-danger" data-act="del-pack" data-id="${p.id}">Удалить набор</button>`;
   return h;
@@ -1945,10 +2014,16 @@ function viewMore() {
   h += '</div>';
 
   h += '<div class="h2">Настройки</div><div class="card">';
+  const themeNow = themePref();
   h += field('Тема', `<div class="seg">
-    <button data-act="theme-set" data-theme="dark" aria-pressed="${document.documentElement.dataset.theme !== 'light'}">Тёмная</button>
-    <button data-act="theme-set" data-theme="light" aria-pressed="${document.documentElement.dataset.theme === 'light'}">Светлая</button>
+    ${[['system', 'Как в системе'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(([v, l]) =>
+      `<button data-act="theme-set" data-theme="${v}" aria-pressed="${themeNow === v}">${l}</button>`).join('')}
   </div>`);
+  const gloves = lsGet('rcp.gloves') === '1';
+  h += field('Размер элементов', `<div class="seg">
+    <button data-act="gloves-set" data-gloves="0" aria-pressed="${!gloves}">Обычный</button>
+    <button data-act="gloves-set" data-gloves="1" aria-pressed="${gloves}">В перчатках</button>
+  </div>`, 'Крупнее кнопки и строки — для поля');
   h += `<form data-form="pilot">` + field('Имя пилота / позывной',
     `<input type="text" name="pilot" value="${esc(S.settings.pilot || '')}" placeholder="необязательно">`) +
     `<button class="btn btn-sm" type="submit">Сохранить</button></form>`;
@@ -2011,8 +2086,8 @@ function viewTools() {
       <span class="grow"><span class="t">${esc(t.name)} <span class="badge online">online</span></span>
       <span class="d">${esc(t.desc)}</span>
       <span class="d muted">Источник: ${esc(t.src)}</span></span>
-      <button style="width:40px;min-height:40px;font-size:20px;color:${fav.includes(t.id) ? 'var(--warn)' : 'var(--dim)'}"
-        data-act="tool-fav" data-id="${t.id}" aria-label="В избранное">${fav.includes(t.id) ? '★' : '☆'}</button>
+      <button class="ic-btn${fav.includes(t.id) ? ' on' : ''}" data-act="tool-fav" data-id="${t.id}"
+        aria-label="${fav.includes(t.id) ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${fav.includes(t.id)}">${fav.includes(t.id) ? ICONS.star : ICONS.starOff}</button>
       <a class="btn btn-sm" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Открыть</a>
     </div>`;
   if (favTools.length) {
@@ -2055,7 +2130,7 @@ function viewSites() {
   if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию');
   h += '<div class="card flat">';
   h += S.sites.map((s) => `<div class="row">
-    <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:40px">
+    <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(s.name)}${s.isDefault ? ' <span class="badge">основная</span>' : ''}</span>
       <span class="d">${esc(s.place || '')}${s.lat != null ? `${s.place ? ' · ' : ''}<span class="mono">${s.lat}, ${s.lon}</span>` : ' · без координат'}</span>
     </button>
@@ -2074,7 +2149,7 @@ function battRow(b) {
     `<button class="chip ${b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
       data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
   return `<div class="row">
-    <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:40px">
+    <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(b.label)}</span>
       <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
     ${chargeChip}
@@ -2106,7 +2181,7 @@ function viewBatteries() {
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
     ${selectHtml('battSort', [['name', 'По названию'], ['charge', 'По заряду'], ['chem', 'По химии'], ['cycles', 'По циклам']],
-      S.settings.battSort || 'name', 'data-change="batt-sort" style="flex:1;min-height:40px"')}
+      S.settings.battSort || 'name', 'data-change="batt-sort" style="flex:1;min-height:var(--seg)"')}
   </div>`;
   const cmp = battSortCmp();
   // АКБ живёт там же, где её борт: группа борта-владельца. Свободные
@@ -2290,6 +2365,7 @@ const ACTIONS = {
   'dismiss-tour': () => { lsSet('rcp.tour', ''); render(); },
   // «Назад» ведёт туда, откуда пришли; на глубокой ссылке — по запасному маршруту.
   'nav-back': (el) => {
+    UI.navBackHint = true; // и по истории, и по запасному маршруту — это «назад»
     if (UI.navCount > 1) history.back();
     else go(el.dataset.fallback || '#/today');
   },
@@ -2384,6 +2460,7 @@ const ACTIONS = {
     if (!it) return;
     const order = [null, 'ok', 'fail', 'skip'];
     it.state = order[(order.indexOf(it.state || null) + 1) % order.length];
+    UI.prep.lastIdx = +el.dataset.i; // эта клетка получит анимацию отметки
     render(true);
   },
   'cancel-prep': () => { UI.prep = null; go('#/flight'); },
@@ -2537,7 +2614,7 @@ const ACTIONS = {
         <span class="d">${fmtDate(c.date)}${c.fileName ? ' · ' + esc(c.fileName) : ''}</span></span>
         ${c.text ? `<button class="btn btn-sm" data-act="config-view" data-id="${c.id}">Текст</button>` : ''}
         ${c.file ? `<button class="btn btn-sm" data-act="config-dl" data-id="${c.id}">Файл</button>` : ''}
-        <button style="color:var(--dim);width:32px;min-height:36px" data-act="del-config" data-id="${c.id}" aria-label="Удалить">✕</button>
+        <button class="ic-btn" data-act="del-config" data-id="${c.id}" aria-label="Удалить">${ICONS.x}</button>
       </div>`).join('') + '</div>';
     if (texts.length >= 2) {
       h += `<div class="spacer"></div><form data-form="cfg-compare">
@@ -2585,6 +2662,7 @@ const ACTIONS = {
     const p = S.packing.find((x) => x.id === UI.arg);
     if (!p) return;
     p.items[+el.dataset.i].done = !p.items[+el.dataset.i].done;
+    UI.packLastIdx = +el.dataset.i;
     await put('packing', p);
     render(true);
   },
@@ -2730,11 +2808,17 @@ const ACTIONS = {
 
   /* --- Оболочка --- */
   'theme-set': (el) => {
-    document.documentElement.dataset.theme = el.dataset.theme;
-    lsSet('rcp.theme', el.dataset.theme);
-    const meta = $('meta[name="theme-color"]');
-    if (meta) meta.content = el.dataset.theme === 'light' ? '#f2f3f5' : '#14181e';
-    render();
+    const t = el.dataset.theme;
+    if (t === 'light' || t === 'dark') lsSet('rcp.theme', t);
+    else lsDel('rcp.theme'); // «как в системе» — ключа нет
+    applyTheme();
+    render(true);
+  },
+  'gloves-set': (el) => {
+    if (el.dataset.gloves === '1') lsSet('rcp.gloves', '1');
+    else lsDel('rcp.gloves');
+    applyTheme();
+    render(true);
   },
   'whatsnew': () => showWhatsNew(true),
   'update-app': () => {
@@ -3366,7 +3450,7 @@ const FORMS = {
       await put('batteries', b);
     }
     // Любой не-нормальный итог (краш, аварийная, проблема, обслуживание)
-    // запускает одну и ту же цепочку: осмотр → «Выполнено» → «Готова».
+    // запускает одну и ту же цепочку: осмотр → «Выполнено» → «Готов».
     const trouble = firstFinish && s.result && s.result !== 'normal';
     const ta = S.aircraft.find((x) => x.id === s.aircraftId);
     if (trouble) {
@@ -3392,7 +3476,7 @@ const FORMS = {
       <ol class="small" style="padding-left:18px;margin-top:4px">
         <li>Осмотрите «${esc(ta ? ta.name : '')}» и почините, что нужно.</li>
         <li>Откройте работу в карточке борта и отметьте «Выполнено».</li>
-        <li>Статус сам вернётся в «Готова» — борт снова можно готовить к полёту.</li>
+        <li>Статус сам вернётся в «Готов» — борт снова можно готовить к полёту.</li>
       </ol>
       <button class="btn btn-primary" data-nav="#/model/${s.aircraftId}" style="margin-top:12px">К карточке борта</button>
       <button class="btn" data-act="close-modal">Позже</button>`);
@@ -3560,22 +3644,59 @@ const RENDERERS = {
   backup: viewBackup, privacy: viewPrivacy,
 };
 
+// Тап по текущему адресу — перерисовать и прокрутить к началу. Сравниваем
+// нормализованный адрес: при старте hash пустой, а onRoute уже считает
+// его '#/today' — иначе первый тап по «Сегодня» глотался дедупликацией.
+// Направление перехода задаёт navDirection() в onRoute, здесь его не ставим.
 function go(hash) {
-  if (location.hash === hash) onRoute();
+  if ((location.hash || '#/today') === hash) onRoute(true);
   else location.hash = hash;
 }
 
-function onRoute() {
-  const parts = (location.hash || '#/today').replace(/^#\/?/, '').split('/');
+// Корневой экран вкладки (#/today, #/fleet…): переход между ними — «tab».
+function isTabRoot(view) {
+  return TABS.some((t) => t.id === view);
+}
+
+// Направление перехода для View Transitions. Короткий стек маршрутов
+// отличает «назад» (новый маршрут — предыдущий в стеке) от «вперёд»;
+// history.back() и запасной маршрут кнопки «Назад» — тоже back.
+// Переход между корневыми экранами вкладок — всегда «tab» (только
+// прозрачность), даже если это возврат на предыдущую вкладку: панель
+// не должна ездить то сбоку, то растворяться. Стек при этом правится
+// как обычно — возврат снимает вершину.
+function navDirection(hash, prevView, view) {
+  const st = UI.navStack;
+  const isPrev = st.length > 1 && st[st.length - 2] === hash;
+  const tabHop = isTabRoot(prevView) && isTabRoot(view);
+  const back = UI.navBackHint || (isPrev && !tabHop);
+  UI.navBackHint = false;
+  if (isPrev) st.pop();
+  else if (st[st.length - 1] !== hash) st.push(hash);
+  if (st.length > 40) st.shift();
+  if (back) return 'back';
+  return tabHop ? 'tab' : 'forward';
+}
+
+// force — перерисовать даже тот же маршрут (go на текущий адрес). Без
+// него повтор того же адреса пропускается: на смену hash браузер шлёт
+// и popstate, и hashchange — второй вызов ломал направление перехода
+// и дважды собирал экран.
+function onRoute(force) {
+  const hash = location.hash || '#/today';
+  if (!force && hash === UI.routeHash) return;
+  UI.routeHash = hash;
+  const parts = hash.replace(/^#\/?/, '').split('/');
   const view = parts[0] || 'today';
+  const prevView = UI.view;
   UI.view = RENDERERS[view] ? view : 'today';
   UI.arg = parts[1] ? decodeURIComponent(parts[1]) : null;
   UI.navCount++;
+  UI.navDir = navDirection(hash, prevView, UI.view);
   UI.modalReturn = null; // ушли со страницы — восстанавливать нечего
   if (UI.view !== 'model' || UI.arg !== UI.justCreated) UI.justCreated = null;
-  closeModal();
-  render();
-  window.scrollTo(0, 0);
+  closeModal(true);
+  render(false, true);
 }
 
 function renderTabbar() {
@@ -3585,7 +3706,26 @@ function renderTabbar() {
       ${ICONS[t.id]}<span>${t.label}</span></button>`).join('');
 }
 
-function render(keepScroll) {
+// render — обёртка над paint(): при поддержке View Transitions и без
+// prefers-reduced-motion смена разметки идёт внутри
+// document.startViewTransition, направление — html[data-vt]
+// (forward|back|tab, для render(true) — update: корень не моргает,
+// анимируются только элементы с view-transition-name). Разметка
+// обновляется асинхронно (в колбэке) — код после render() на новый DOM
+// рассчитывать не должен. toTop — прокрутить к началу (новый маршрут).
+function render(keepScroll, toTop) {
+  if (!document.startViewTransition || reducedMotion() || document.hidden) {
+    paint(keepScroll, toTop);
+    return;
+  }
+  document.documentElement.dataset.vt = keepScroll ? 'update' : UI.navDir;
+  const vt = document.startViewTransition(() => paint(keepScroll, toTop));
+  // Второй render() до конца первого перехода — переход пропускается,
+  // а ready отклоняется; это штатно, но без catch — ошибка в консоли.
+  vt.ready.catch(() => {});
+}
+
+function paint(keepScroll, toTop) {
   const y = window.scrollY;
   const focused = document.activeElement;
   const focusSel = focused && focused.dataset && focused.dataset.act && focused.dataset.i != null
@@ -3598,6 +3738,8 @@ function render(keepScroll) {
   if (keepScroll) {
     window.scrollTo(0, y);
     if (focusSel) { const el = $(focusSel); if (el) el.focus(); }
+  } else if (toTop) {
+    window.scrollTo(0, 0);
   }
 
   // Живой таймер на экране активного полёта.
@@ -3607,7 +3749,7 @@ function render(keepScroll) {
       TIMER = setInterval(() => {
         const t = $('#timer');
         const cur = S.sessions.find((x) => x.id === s.id);
-        if (t && cur && !cur.end && !cur.landedAt) t.textContent = fmtClock(Date.now() - s.start);
+        if (t && cur && !cur.end && !cur.landedAt) t.innerHTML = clockHtml(Date.now() - s.start);
         else { clearInterval(TIMER); TIMER = null; }
       }, 1000);
     }
@@ -3769,8 +3911,8 @@ document.addEventListener('paste', (e) => {
   }
 });
 
-window.addEventListener('hashchange', onRoute);
-window.addEventListener('popstate', onRoute);
+window.addEventListener('hashchange', () => onRoute());
+window.addEventListener('popstate', () => onRoute());
 
 /* ============================================================
    11. PWA И ОБНОВЛЕНИЯ
@@ -3845,6 +3987,13 @@ function maybeWhatsNew() {
       <span class="small muted">${esc(e && e.message)}</span></p>
       <p class="small muted">Проверьте, что браузер не в приватном режиме.</p></div>`;
     return;
+  }
+  applyTheme();
+  // Тема «как в системе» следует за системой на лету; явный выбор — нет.
+  if (window.matchMedia) {
+    matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+      if (themePref() === 'system') applyTheme();
+    });
   }
   onRoute();
   setupSW();

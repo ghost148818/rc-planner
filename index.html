@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-theme="dark">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,11 +12,17 @@
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
-    // Тема до первой отрисовки, чтобы не мигало.
+    // Тема и режим «В перчатках» до первой отрисовки, чтобы не мигало.
+    // Тот же расчёт живёт в app.js как applyTheme(): без сохранённого
+    // выбора тема берётся у системы.
     try {
       var t = localStorage.getItem('rcp.theme');
-      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-    } catch (e) {}
+      if (t !== 'light' && t !== 'dark') {
+        t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.dataset.theme = t;
+      if (localStorage.getItem('rcp.gloves') === '1') document.documentElement.dataset.gloves = '';
+    } catch (e) { document.documentElement.dataset.theme = 'dark'; }
   </script>
   <!-- build:pwa -->
   <link rel="manifest" href="manifest.json">

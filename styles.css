@@ -1,5 +1,7 @@
-/* RC Planner — «полевой инструмент»: тёмный графит по умолчанию,
-   высокий контраст, крупные touch-элементы, цвет только у статусов. */
+/* RC Planner — «полевой инструмент»: тёмный графит (тема по умолчанию —
+   как в системе), высокий контраст, крупные touch-элементы, цвет только
+   у статусов. Размеры касания — токены в :root, режим «В перчатках»
+   (html[data-gloves]) переопределяет их одним блоком. */
 
 /* ---------- Токены ---------- */
 :root {
@@ -29,7 +31,31 @@
 
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --radius: 12px;
-  --tap: 48px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Размеры касания и шрифта: всё, что должно расти в перчатках */
+  --tap: 48px;      /* поля ввода, кнопки карты, квадратные кнопки */
+  --row: 56px;      /* строка списка, пункт чек-листа */
+  --btn: 48px;      /* обычная кнопка */
+  --primary: 56px;  /* главная кнопка экрана */
+  --seg: 40px;      /* сегменты, малые кнопки, кнопки в строке */
+  --font: 16px;     /* основной текст */
+  --font-d: 13px;   /* вторичная строка, подписи */
+  --ck-box: 44px;   /* клетка чек-листа */
+  --tab-h: 60px;    /* вкладка нижней панели */
+}
+
+/* Режим «В перчатках»: крупнее кнопки и строки — для поля */
+:root[data-gloves] {
+  --tap: 56px;
+  --row: 64px;
+  --btn: 56px;
+  --primary: 64px;
+  --seg: 48px;
+  --font: 17px;
+  --font-d: 14px;
+  --ck-box: 52px;
+  --tab-h: 68px;
 }
 
 :root[data-theme="light"] {
@@ -64,7 +90,7 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: var(--font)/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   min-height: 100dvh;
   overscroll-behavior-y: contain;
 }
@@ -78,7 +104,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #views {
   max-width: 640px;
   margin: 0 auto;
-  padding: 12px 16px calc(88px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
 }
 
 /* Нижняя панель */
@@ -96,7 +122,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #tabbar .tab {
   flex: 1 1 0;
   max-width: 128px;
-  min-height: 60px;
+  min-height: var(--tab-h);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -119,16 +145,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   min-height: 40px;
 }
 .head h1 { font-size: 21px; line-height: 1.2; flex: 1; }
-.head .sub { color: var(--mut); font-size: 13px; margin-top: 2px; }
+.head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
 .back {
-  width: 40px; height: 40px;
+  width: var(--seg); height: var(--seg);
   margin-left: -8px;
   display: flex; align-items: center; justify-content: center;
   color: var(--mut);
   border-radius: 50%;
 }
 .back svg { width: 22px; height: 22px; }
-.head .head-act { color: var(--link); font-size: 15px; min-height: 40px; padding: 0 6px; flex: none; white-space: nowrap; }
+.head .head-act { color: var(--link); font-size: 15px; min-height: var(--seg); padding: 0 6px; flex: none; white-space: nowrap; }
 
 .h2 {
   font-size: 13px;
@@ -154,7 +180,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 56px;
+  min-height: var(--row);
   padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--line);
@@ -163,8 +189,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .row:last-child { border-bottom: 0; }
 button.row:active, a.row:active { background: var(--card-2); }
 .row .grow { flex: 1; min-width: 0; }
-.row .t { display: block; font-size: 16px; }
-.row .d { display: block; color: var(--mut); font-size: 13px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+.row .t { display: block; font-size: var(--font); }
+.row .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
 .row .chev { color: var(--dim); flex: none; }
 .row .chev svg { width: 18px; height: 18px; }
 .row .row-ic { color: var(--mut); flex: none; display: flex; }
@@ -216,7 +242,8 @@ button.row:active, a.row:active { background: var(--card-2); }
   font-size: 11px;
   vertical-align: 2px;
 }
-.badge.online { color: var(--warn); border-color: var(--warn); opacity: 0.9; }
+/* online — информационная пометка, не предупреждение: синий, не жёлтый */
+.badge.online { color: var(--info); border-color: var(--info); }
 
 /* ---------- Кнопки ---------- */
 .btn {
@@ -225,25 +252,37 @@ button.row:active, a.row:active { background: var(--card-2); }
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: var(--tap);
+  min-height: var(--btn);
   padding: 10px 18px;
   border-radius: var(--radius);
   background: var(--card-2);
   border: 1px solid var(--line);
-  font-size: 16px;
+  font-size: var(--font);
   font-weight: 600;
+  transition: transform 0.08s var(--ease);
 }
-.btn:active { opacity: 0.8; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+/* Нажатие подтверждается масштабом, а не прозрачностью */
+.btn:active { transform: scale(0.98); }
 .btn-primary {
   background: var(--ok);
   border-color: var(--ok);
   color: #08130c;
-  min-height: 56px;
-  font-size: 17px;
+  min-height: var(--primary);
+  font-size: calc(var(--font) + 1px);
 }
 :root[data-theme="light"] .btn-primary { color: #fff; }
 .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
-.btn-sm { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
+.btn-sm { width: auto; min-height: var(--seg); padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
+/* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
+.ic-btn {
+  width: var(--seg); min-height: var(--seg); flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--dim);
+  border-radius: 8px;
+}
+.ic-btn svg { width: 20px; height: 20px; }
+.ic-btn.on { color: var(--warn); }
 .btn + .btn { margin-top: 8px; }
 /* Кнопки в строке списка (Я.Карты/OSM у локации) стоят в ряд, не столбиком */
 .row .btn + .btn { margin-top: 0; }
@@ -254,7 +293,7 @@ button.row:active, a.row:active { background: var(--card-2); }
 .field { margin-bottom: 12px; }
 .field label {
   display: block;
-  font-size: 13px;
+  font-size: var(--font-d);
   color: var(--mut);
   margin-bottom: 4px;
 }
@@ -269,7 +308,7 @@ input[type="search"], select, textarea {
   color: var(--text);
   font: inherit;
 }
-textarea { min-height: 84px; resize: vertical; }
+textarea { min-height: 84px; resize: vertical; field-sizing: content; }
 select { appearance: none; }
 input[type="file"] { color: var(--mut); font-size: 14px; }
 .field .hint { font-size: 12px; color: var(--dim); margin-top: 3px; }
@@ -286,7 +325,7 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
 }
 .seg button {
   flex: 1;
-  min-height: 40px;
+  min-height: var(--seg);
   border-radius: 8px;
   color: var(--mut);
   font-size: 14px;
@@ -314,21 +353,23 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
-  min-height: 56px;
+  min-height: var(--row);
 }
 .ck:last-child { border-bottom: 0; }
 .ck .grow { flex: 1; min-width: 0; }
-.ck .t { display: block; font-size: 16px; }
-.ck .d { display: block; color: var(--mut); font-size: 12.5px; }
+.ck .t { display: block; font-size: var(--font); }
+.ck .d { display: block; color: var(--mut); font-size: calc(var(--font-d) - 0.5px); }
 .ck .st {
   flex: none;
-  width: var(--tap); height: var(--tap);
+  width: var(--ck-box); height: var(--ck-box);
   border-radius: 10px;
   border: 1px solid var(--line);
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px;
   color: var(--dim);
+  background: var(--bg-el);
+  transition: background 0.14s var(--ease), border-color 0.14s var(--ease), color 0.14s var(--ease);
 }
+.ck .st svg { width: 22px; height: 22px; }
 .ck[data-state="ok"] .st { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
 .ck[data-state="ok"] .t { color: var(--mut); }
 .ck[data-state="skip"] .st { color: var(--unk); background: var(--unk-bg); }
@@ -342,7 +383,7 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   overflow: hidden;
   margin: 8px 0 4px;
 }
-.progress i { display: block; height: 100%; background: var(--ok); border-radius: 3px; }
+.progress i { display: block; height: 100%; background: var(--ok); border-radius: 3px; transition: width 0.24s var(--ease); }
 
 /* ---------- Таймер и данные ---------- */
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -355,6 +396,11 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   margin: 18px 0;
   font-variant-numeric: tabular-nums;
 }
+/* Мигает только двоеточие; после посадки число гаснет в --mut */
+@keyframes colon-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.timer .colon { animation: colon-blink 1s ease-in-out infinite; }
+.timer.landed { color: var(--mut); }
+.timer.landed .colon { animation: none; }
 .stat-line { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .stat {
   flex: 1 1 90px;
@@ -373,7 +419,7 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
 .bar-row .n {
   flex: 0 0 88px;
   color: var(--mut);
-  font-size: 13px;
+  font-size: var(--font-d);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -386,7 +432,7 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   background: var(--card-2);
   overflow: hidden;
 }
-.bar-track i { display: block; height: 100%; background: var(--info); border-radius: 4px; }
+.bar-track i { display: block; height: 100%; background: var(--info); border-radius: 4px; transition: width 0.24s var(--ease); }
 .bar-row .v {
   flex: 0 0 auto;
   min-width: 76px;
@@ -420,7 +466,8 @@ details.fold summary::after {
   transition: transform 0.15s;
 }
 details.fold[open] summary::after { transform: rotate(-135deg); }
-details.fold .fold-body { padding: 0 2px 14px; }
+/* Длинные списки (каталог, история) не раскладываются, пока не видны */
+details.fold .fold-body { padding: 0 2px 14px; content-visibility: auto; contain-intrinsic-size: auto 400px; }
 
 /* ---------- Баннеры ---------- */
 .banner {
@@ -435,6 +482,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
   background: var(--card);
   color: var(--mut);
 }
+.banner > svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
 .banner.ok { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
 .banner.warn { border-color: var(--warn); color: var(--warn); background: var(--warn-bg); }
 
@@ -495,7 +543,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
 }
 .grp-head.grp-sub, .card.grp-sub, .grp-empty.grp-sub { margin-left: 16px; }
 .grp-head .grp-edit {
-  width: 36px; height: 36px;
+  width: var(--seg); height: var(--seg);
   display: flex; align-items: center; justify-content: center;
   color: var(--dim);
   border-radius: 8px;
@@ -503,7 +551,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
 .grp-head .grp-edit svg { width: 18px; height: 18px; }
 .grp-empty { margin: 2px 0 8px; }
 .row .row-move {
-  width: 40px; min-height: 40px; flex: none;
+  width: var(--seg); min-height: var(--seg); flex: none;
   display: flex; align-items: center; justify-content: center;
   color: var(--dim);
   border-radius: 8px;
@@ -589,7 +637,7 @@ details.fold .fold-body { padding: 0 2px 14px; }
   background: var(--card-2);
   overflow: hidden;
 }
-.gauge i { display: block; height: 100%; border-radius: 4px; }
+.gauge i { display: block; height: 100%; border-radius: 4px; transition: width 0.24s var(--ease); }
 .wxr-sub { color: var(--mut); font-size: 12.5px; margin-top: 4px; }
 
 /* ---------- Модальные окна ---------- */
@@ -603,11 +651,29 @@ dialog {
   margin: auto auto 0;
   padding: 0;
   max-height: 92dvh;
+  /* Лист въезжает снизу 220 мс; уезжает (класс closing) за 160 мс —
+     узел убирает closeModal по transitionend. Свойства display/overlay
+     с allow-discrete нужны, чтобы вход анимировался из @starting-style. */
+  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease),
+    overlay 0.22s var(--ease) allow-discrete, display 0.22s var(--ease) allow-discrete;
 }
+dialog[open] { transform: translateY(0); opacity: 1; }
+@starting-style {
+  dialog[open] { transform: translateY(24px); opacity: 0; }
+}
+dialog.closing { transform: translateY(24px); opacity: 0; transition-duration: 0.16s; }
 @media (min-width: 700px) {
   dialog { border-radius: 16px; margin: auto; }
 }
-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  transition: opacity 0.22s var(--ease), overlay 0.22s var(--ease) allow-discrete, display 0.22s var(--ease) allow-discrete;
+}
+dialog[open]::backdrop { opacity: 1; }
+@starting-style {
+  dialog[open]::backdrop { opacity: 0; }
+}
+dialog.closing::backdrop { opacity: 0; transition-duration: 0.16s; }
 .dlg-scrim {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -624,19 +690,19 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .dlg-head h2 { font-size: 18px; flex: 1; }
 .dlg-close {
-  width: 36px; height: 36px;
+  width: var(--seg); height: var(--seg);
   display: flex; align-items: center; justify-content: center;
   color: var(--mut);
-  font-size: 22px;
   border-radius: 50%;
 }
+.dlg-close svg { width: 22px; height: 22px; }
 .dlg-body { padding: 10px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; }
 body.locked { overflow: hidden; }
 
 /* ---------- Разное ---------- */
 .list-plain { list-style: none; }
 .muted { color: var(--mut); }
-.small { font-size: 13px; }
+.small { font-size: var(--font-d); }
 .spacer { height: 8px; }
 hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .right { margin-left: auto; }
@@ -647,6 +713,32 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .result-problem, .result-emergency { color: var(--warn); }
 .result-crash { color: var(--bad); }
 .result-maintenance { color: var(--maint); }
+
+/* ---------- Переходы между экранами (View Transitions) ----------
+   render() ставит html[data-vt]: forward — новый экран въезжает справа
+   на 24 px и проявляется, старый гаснет; back — зеркально; tab — только
+   прозрачность; update (render(true)) — корень не моргает, анимируются
+   лишь элементы с view-transition-name (клетка чек-листа). Без
+   поддержки API всё рисуется мгновенно. */
+::view-transition { pointer-events: none; }
+@keyframes vt-in-fwd { from { transform: translateX(24px); opacity: 0; } }
+@keyframes vt-in-back { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes ck-pop { from { transform: scale(0.9); opacity: 0.4; } }
+html[data-vt="forward"]::view-transition-new(root) { animation: vt-in-fwd 0.18s var(--ease); }
+html[data-vt="forward"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+html[data-vt="back"]::view-transition-new(root) { animation: vt-in-back 0.18s var(--ease); }
+html[data-vt="back"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+html[data-vt="tab"]::view-transition-new(root) { animation: vt-fade-in 0.14s var(--ease); }
+html[data-vt="tab"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+html[data-vt="update"]::view-transition-old(root),
+html[data-vt="update"]::view-transition-new(root) { animation: none; }
+html[data-vt="update"]::view-transition-old(*) { animation: none; opacity: 0; }
+html[data-vt="update"]::view-transition-new(*) { animation: ck-pop 0.2s var(--ease); }
+/* Имена клеток нужны только точечному обновлению: при смене экрана
+   клетка едет вместе с корнем, а не отдельно от него */
+html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

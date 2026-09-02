@@ -92,7 +92,9 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'stats', 'packing', 'w
   await page.click('[data-act="whatsnew"]');
   ok(await page.isVisible('dialog'), 'окно «Что нового» открылось');
   await page.click('.dlg-close');
-  ok(!(await page.isVisible('dialog')), 'окно закрылось');
+  // С анимациями окно уезжает до 200 мс и только потом удаляется — ждём узел.
+  const closed = await page.waitForSelector('dialog', { state: 'detached', timeout: 3000 }).then(() => true, () => false);
+  ok(closed, 'окно закрылось');
 
   ok(errors.length === 0, 'ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
   await browser.close();

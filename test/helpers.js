@@ -57,9 +57,19 @@ function serve(dir) {
   });
 }
 
-// Страница с копилкой ошибок консоли.
+// Страница с копилкой ошибок консоли. По умолчанию — без анимаций
+// (prefers-reduced-motion): View Transitions и уезжающие окна делают
+// DOM асинхронным, а тесты ждут результат сразу; движение проверяет
+// отдельный блок visual-набора с reducedMotion: 'no-preference'.
+// `RCP_MOTION=1 npm test` гоняет все наборы с анимациями — конфигурация
+// пользователя по умолчанию; проверки после click обязаны ждать результат
+// (waitForSelector/waitForFunction), а не читать DOM сразу.
+const MOTION = process.env.RCP_MOTION ? 'no-preference' : 'reduce';
+
 async function newPage(browser, opts) {
-  const context = await browser.newContext(opts || {});
+  // colorScheme: 'dark' — тема теперь «как в системе», а система Playwright
+  // по умолчанию светлая; «тёмные» скриншоты должны остаться тёмными.
+  const context = await browser.newContext(Object.assign({ reducedMotion: MOTION, colorScheme: 'dark' }, opts || {}));
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
