@@ -38,7 +38,7 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   const items = await page.locator('.ck').count();
   ok(items >= 5, 'чек-лист крыла показан (' + items + ' пунктов)');
   ok((await page.locator('[data-act="start-flight"]').count()) === 0,
-    'без аккумулятора кнопки START FLIGHT нет');
+    'без аккумулятора кнопки «Начать полёт» нет');
   await page.click('.ck >> nth=0');
   // render(true) с анимациями перерисовывает внутри View Transition — ждём состояние.
   const stOk = await page.waitForFunction(() => {
@@ -55,14 +55,17 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.fill('dialog input[name="capacity"]', '1300');
   await page.click('dialog button[type="submit"]');
   await page.waitForSelector('[data-act="start-flight"]');
-  ok(true, 'после установки АКБ кнопка START FLIGHT появилась');
+  ok(true, 'после установки АКБ кнопка «Начать полёт» появилась');
 
-  // 3. START FLIGHT
+  // 3. «Начать полёт»
   await page.click('[data-act="start-flight"]');
   await page.waitForSelector('#timer');
   ok(true, 'полёт начался, таймер идёт');
 
-  // 4. Итог: по дороге заводим локацию прямо из формы
+  // 4. «Посадка» останавливает таймер, форму не открывает; итог — отдельно
+  await page.click('[data-act="land-flight"]');
+  await page.waitForSelector('.timer.landed');
+  ok((await page.locator('dialog').count()) === 0, '«Посадка» зафиксирована, форма итога сама не открылась');
   await page.click('[data-act="finish-flight"]');
   await page.fill('dialog input[name="durationMin"]', '5');
   await page.fill('dialog input[name="weather"]', 'ветер 3 м/с');
@@ -86,9 +89,16 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.evaluate(() => { location.hash = '#/fleet'; });
   await page.waitForTimeout(80);
   ok((await page.textContent('#views')).includes('Test Wing'), 'после перезагрузки модель на месте');
-  await page.evaluate(() => { location.hash = '#/log'; });
+  await page.evaluate(() => { location.hash = '#/journal'; });
   await page.waitForTimeout(80);
   ok((await page.textContent('#views')).includes('#001'), 'полёт #001 в журнале');
+  await page.click('[data-act="journal-tab"][data-tab="stats"]');
+  await page.waitForSelector('.stat-line.four');
+  ok(true, 'сегмент «Статистика» в журнале открывается');
+  // Старый адрес журнала остаётся рабочим (закладки, changelog)
+  await page.evaluate(() => { location.hash = '#/log'; });
+  await page.waitForTimeout(80);
+  ok((await page.textContent('#views')).includes('#001'), '#/log открывает журнал на полётах');
 
   // 6. Экспорт
   await page.evaluate(() => { location.hash = '#/backup'; });

@@ -15,7 +15,7 @@ const VIEWPORTS = [
   ['tablet', { width: 820, height: 1180 }],
   ['desktop', { width: 1280, height: 800 }],
 ];
-const SCREENS = ['today', 'fleet', 'flight', 'packing', 'more', 'tools'];
+const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
 
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });

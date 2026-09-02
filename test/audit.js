@@ -11,7 +11,7 @@ const DIST = path.join(__dirname, '..', 'dist', 'rc-planner.html');
 
 // Экраны без обязательного аргумента. Должен совпадать со списком в app.js —
 // новый экран добавлять и туда, и сюда, иначе его никто не проверит.
-const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'stats', 'packing', 'weather',
+const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'packing', 'weather',
   'more', 'tools', 'sites', 'batteries', 'templates', 'backup', 'privacy'];
 
 (async () => {
@@ -86,6 +86,23 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'log', 'stats', 'packing', 'w
   ok((await injected()) === 0, 'форма АКБ: мусор из копии не вырвался из value=');
   await page.click('.dlg-close');
   ok(!(await page.evaluate(() => window.__xss2)), 'подложенный обработчик не исполнился');
+
+  // XSS-проба третья: номер полёта. flightNo из копии — не обязательно
+  // число; журнал (#/journal) рисует его первым (закрыто flightNoText).
+  await page.evaluate(async () => {
+    await window.RCDB.put('sessions', {
+      id: 'no-probe', aircraftId: 'attr-probe', date: '2026-01-01', start: 1, end: 2,
+      durationMin: 3, flightNo: '<img src=x onerror="window.__xss3=1">', result: 'normal',
+    });
+    await window.loadAll();
+    location.hash = '#/log'; // не #/journal: после обхода экранов сегмент стоит на «Статистике»
+  });
+  await page.waitForTimeout(200);
+  ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0,
+    'журнал: номер полёта из копии не стал тегом');
+  ok(!(await page.evaluate(() => window.__xss3)), 'обработчик в номере полёта не исполнился');
+  ok((await page.textContent('#views')).includes('#—'), 'нечисловой номер полёта показан как «#—»');
+  await page.evaluate(async () => { await window.RCDB.del('sessions', 'no-probe'); await window.loadAll(); });
 
   // Модальное окно закрывается.
   await page.evaluate(() => { location.hash = '#/more'; });

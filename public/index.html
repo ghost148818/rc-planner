@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="119071e914">
+  <meta name="build" content="f11f03e545">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -165,6 +165,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #tabbar .tab svg { width: 24px; height: 24px; }
 #tabbar .tab[aria-current="page"] { color: var(--text); }
 #tabbar .tab[aria-current="page"] svg { color: var(--ok); }
+/* Точка «идёт полёт» у иконки вкладки «Полёт» */
+#tabbar .tab { position: relative; }
+#tabbar .tab .live {
+  position: absolute;
+  top: 10px;
+  right: calc(50% - 18px);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px var(--bg-el);
+}
 
 /* ---------- Шапка страницы ---------- */
 .head {
@@ -175,6 +186,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   min-height: 40px;
 }
 .head h1 { font-size: 21px; line-height: 1.2; flex: 1; }
+/* Заголовок с подписью тянется на всю ширину — кнопка справа уходит
+   к краю (как глобальный .grow на макете), иначе меню «⋯» позиционируется
+   от середины шапки */
+.head .grow { flex: 1; min-width: 0; }
 .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
 .back {
   width: var(--seg); height: var(--seg);
@@ -185,6 +200,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .back svg { width: 22px; height: 22px; }
 .head .head-act { color: var(--link); font-size: 15px; min-height: var(--seg); padding: 0 6px; flex: none; white-space: nowrap; }
+.head .head-ic {
+  width: var(--seg); height: var(--seg);
+  margin-right: -6px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--mut);
+  border-radius: 50%;
+}
+.head .head-ic svg { width: 22px; height: 22px; }
+.head .head-ic[aria-expanded="true"] { background: var(--card-2); color: var(--text); }
 
 .h2 {
   font-size: 13px;
@@ -194,6 +219,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   color: var(--mut);
   margin: 20px 0 8px;
 }
+/* Счётчик в заголовке раздела: «Сегодня 2 полёта · 28 мин» */
+.h2 .cnt { color: var(--dim); font-weight: 500; letter-spacing: 0; text-transform: none; }
 
 /* ---------- Карточки и списки ---------- */
 .card {
@@ -303,6 +330,8 @@ button.row:active, a.row:active { background: var(--card-2); }
 }
 :root[data-theme="light"] .btn-primary { color: #fff; }
 .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+/* «Посадка» — единственная кнопка, которую жмут не глядя: крупнее главной */
+.btn-land { min-height: calc(var(--primary) + 8px); font-size: 18px; }
 .btn-sm { width: auto; min-height: var(--seg); padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
 /* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
 .ic-btn {
@@ -361,6 +390,76 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   font-size: 14px;
 }
 .seg button[aria-pressed="true"] { background: var(--card-2); color: var(--text); font-weight: 600; }
+/* Селект в виде пилюли (фильтр журнала, локация/АКБ на чек-листе):
+   ширина по содержимому, стрелка рисуется своей рамкой не нужна —
+   достаточно закруглённой формы и подчёркнутого выбора (.sel) */
+.pill-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 4px; scrollbar-width: none; }
+.pill-row::-webkit-scrollbar { display: none; }
+select.sel-pill {
+  width: auto;
+  max-width: 70%;
+  min-height: var(--seg);
+  padding: 6px 30px 6px 12px;
+  border-radius: 999px;
+  background: var(--card-2);
+  font-size: 14px;
+  flex: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select.sel-pill.sel { border-color: var(--text); }
+
+/* Меню действий (popover): верхний слой, позиция под кнопкой ставится
+   в toggleMenu. Переопределяем UA-стили popover (inset/margin/border).
+   Без нативной поддержки :popover-open неизвестен — правила с ним
+   отбрасываются, меню живёт на атрибуте hidden. */
+.menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 6px;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  background: var(--bg-el);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 25;
+}
+.menu[hidden] { display: none; }
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 15px;
+  text-align: left;
+  white-space: nowrap;
+}
+.menu button svg { width: 20px; height: 20px; color: var(--mut); flex: none; }
+.menu button:active { background: var(--card-2); }
+.menu button[disabled] { color: var(--dim); cursor: default; }
+.menu[popover]:popover-open {
+  display: flex;
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease),
+    overlay 0.16s var(--ease) allow-discrete, display 0.16s var(--ease) allow-discrete;
+}
+@starting-style {
+  .menu[popover]:popover-open { opacity: 0; transform: translateY(-6px); }
+}
+.menu[popover]::backdrop { background: transparent; }
+
 /* Сегмент с иконками: класс модели в форме */
 .seg-ic button {
   display: flex;
@@ -1972,6 +2071,8 @@ const UI = {
   navBackHint: false, // кнопка «Назад» ушла по запасному маршруту — всё равно back
   routeHash: '',      // последний обработанный адрес — popstate и hashchange приходят парой
   modalReturn: null,  // форма, к которой вернуться после вложенного диалога
+  journalTab: 'log',  // экран «Журнал»: сегмент log|stats
+  journalAircraft: '', // экран «Журнал»: фильтр по борту ('' — все)
 };
 
 const WX_DEFAULT_WIND = 16; // м/с, порог без выбранной модели
@@ -2008,6 +2109,15 @@ function esc(s) {
 // поле честнее, чем мусор в поле «Вес, г».
 function numVal(v) {
   return v == null || v === '' || !isFinite(+v) ? '' : +v;
+}
+
+// Номер полёта в разметку — та же идея, что numVal: flightNo приходит
+// из копии непроверенным, строка `<img onerror=…>` в этом поле
+// исполнялась (ревью 2.0, живая проба на #/journal). Целое число —
+// «#007», всё остальное — «#—».
+function flightNoText(s) {
+  const n = s && s.flightNo;
+  return '#' + (n != null && n !== '' && Number.isInteger(+n) ? String(+n).padStart(3, '0') : '—');
 }
 
 function uid() {
@@ -2464,7 +2574,10 @@ const ICONS = {
   flight: ic('<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2Z"/>', 1.6),
   // рюкзак: ручка, клапан, передний карман
   packing: ic('<rect x="5" y="7" width="14" height="14.5" rx="3"/><path d="M9.5 7V5.5a2.5 2.5 0 0 1 5 0V7"/><path d="M5 12.5h14"/><path d="M8.5 21.5v-4.5a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5v4.5"/>'),
+  // раскрытая книга — вкладка «Журнал»
+  journal: ic('<path d="M4 5h5.5a3 3 0 0 1 3 3v12.5a2.3 2.3 0 0 0-2.3-2.3H4Z"/><path d="M20 5h-5.5a3 3 0 0 0-3 3v12.5a2.3 2.3 0 0 1 2.3-2.3H20Z"/>'),
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>',
+  print: ic('<path d="M6 9V3.5h12V9"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v6.5H6Z"/>'),
   chev: ic('<path d="m9 6 6 6-6 6"/>', 2),
   back: ic('<path d="M15 6 9 12l6 6"/>', 2),
   // классы моделей
@@ -2511,27 +2624,72 @@ const TABS = [
   { id: 'today', label: 'Сегодня' },
   { id: 'fleet', label: 'Флот' },
   { id: 'flight', label: 'Полёт' },
-  { id: 'packing', label: 'Сборы' },
+  { id: 'journal', label: 'Журнал' },
   { id: 'more', label: 'Ещё' },
 ];
 
-// Какая вкладка активна для каждого экрана.
+// Какая вкладка активна для каждого экрана. «Сборы» вкладки не имеют
+// (решение владельца, 2.0): экраны сборов живут под «Сегодня», вход —
+// карточка «Перед выездом» и строка в «Ещё».
 const TAB_OF = {
-  today: 'today', weather: 'today',
+  today: 'today', weather: 'today', packing: 'today', pack: 'today',
   fleet: 'fleet', model: 'fleet', batteries: 'fleet',
-  flight: 'flight', prep: 'flight', session: 'flight', log: 'flight', stats: 'flight',
-  packing: 'packing', pack: 'packing',
+  flight: 'flight', prep: 'flight', session: 'flight',
+  journal: 'journal', log: 'journal', stats: 'journal',
   more: 'more', tools: 'more', sites: 'more',
   backup: 'more', privacy: 'more', templates: 'more',
 };
 
+// actIcon — КЛЮЧ из ICONS: кнопка справа становится квадратной с иконкой,
+// actLabel уходит в aria-label (меню «⋯» журнала).
 function pageHead(title, opts) {
   opts = opts || {};
+  const act = !opts.act ? ''
+    : opts.actIcon && ICONS[opts.actIcon]
+      ? `<button class="head-act head-ic" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}" aria-haspopup="menu">${ICONS[opts.actIcon]}</button>`
+      : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
   return `<div class="head">
     ${opts.back ? `<button class="back" data-act="nav-back" data-fallback="${opts.back}" aria-label="Назад">${ICONS.back}</button>` : ''}
     <div class="grow"><h1>${title}</h1>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>
-    ${opts.act ? `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>` : ''}
+    ${act}
   </div>`;
+}
+
+// Меню действий (popover="manual"). Нативный popover живёт в верхнем
+// слое (поверх dialog и панели), позицию под кнопкой считаем от её
+// прямоугольника — anchor positioning есть не везде. Режим manual, а не
+// auto, осознанно: auto гасит меню по тапу мимо ДО события click, и
+// повторный тап по «⋯» открывал его заново (подтверждено пробой).
+// Закрытие по тапу мимо и Esc — своё, в разделе 10, одно на оба режима.
+// Кнопка идёт через data-act, а не popovertarget (отступление от §2.2
+// спецификации, зафиксировано там же): без поддержки popover
+// (Safari < 17) нативный инвокер мёртв, а меню — обычный блок; свой
+// переключатель даёт один путь на оба случая, запасной режим —
+// атрибут hidden. Прогрессивное улучшение по правилу §0.
+function menuOpen(m) {
+  return typeof m.togglePopover === 'function' ? m.matches(':popover-open') : !m.hidden;
+}
+function toggleMenu(btn, id) {
+  const m = document.getElementById(id);
+  if (!m) return;
+  if (menuOpen(m)) { closeMenus(); return; }
+  const r = btn.getBoundingClientRect();
+  m.style.top = Math.round(r.bottom + 6) + 'px';
+  if (typeof m.showPopover === 'function') m.showPopover(); else m.hidden = false;
+  // Правый край — под кнопкой, но меню не выходит за экран: на узком
+  // телефоне при min-width 200px иначе обрезался бы левый край.
+  const right = Math.round(window.innerWidth - r.right);
+  m.style.right = Math.max(8, Math.min(right, window.innerWidth - 8 - m.offsetWidth)) + 'px';
+  btn.setAttribute('aria-expanded', 'true');
+}
+function closeMenus() {
+  document.querySelectorAll('.menu').forEach((m) => {
+    if (!menuOpen(m)) return;
+    if (typeof m.hidePopover === 'function') { try { m.hidePopover(); } catch (e) {} }
+    else m.hidden = true;
+  });
+  document.querySelectorAll('[aria-haspopup="menu"][aria-expanded="true"]')
+    .forEach((b) => b.setAttribute('aria-expanded', 'false'));
 }
 
 // icon — только КЛЮЧ из ICONS (не сырой SVG): пользовательские данные
@@ -2748,7 +2906,7 @@ function viewToday() {
 function sessionRow(s) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
-    `<span class="grow"><span class="t"><span class="mono">#${String(s.flightNo).padStart(3, '0')}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
+    `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
      <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${RESULTS[s.result] || '—'}</span></span></span>`);
 }
 
@@ -2995,7 +3153,7 @@ function viewModel() {
          · регламент ${svcEveryText(svc)}, пройдено ${svcSinceText(svc)}.</div>`;
   }
 
-  h += `<button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">Подготовка к полёту</button>`;
+  h += `<button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">Чек-лист и полёт</button>`;
 
   // Паспорт
   const specs = [
@@ -3078,7 +3236,7 @@ function viewModel() {
   if (flights.length) {
     h += `<div class="h2">Полёты</div><div class="card flat">` +
       flights.slice(0, 5).map(sessionRow).join('') + '</div>';
-    if (flights.length > 5) h += `<button class="btn" data-nav="#/log">Весь журнал</button>`;
+    if (flights.length > 5) h += `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
   }
 
   // Заметки
@@ -3102,7 +3260,10 @@ function viewFlight() {
     h += `<div class="banner">Подготовка не закончена: ${esc(a ? a.name : '')}.
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
-  h += `<button class="btn btn-primary" data-act="start-prep">Начать подготовку</button>`;
+  if (!S.aircraft.length && !activeSessions().length) {
+    return h + emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
+  }
+  h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
 
   // Подготовленные борта: чек-лист пройден, взлёт в одно нажатие.
   const prepared = S.aircraft.filter((a) => takeoffReady(a));
@@ -3116,15 +3277,20 @@ function viewFlight() {
     h += '</div>';
   }
 
+  // Экран облегчён (2.0): только полёты за сегодня, вся история — в «Журнале».
   const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
-  if (done.length) {
-    h += `<div class="h2" style="margin-bottom:0">Последние полёты</div>`;
-    h += logGroupedHtml(done.slice(0, 10), done);
-    h += `<button class="btn" data-nav="#/log">Журнал полётов и печать (${done.length})</button>`;
-    h += `<button class="btn" data-nav="#/stats">Статистика налёта</button>`;
-  } else if (!activeSessions().length && !S.aircraft.length) {
-    h += emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
+  const today = done.filter((s) => s.date === todayISO());
+  if (today.length) {
+    // Один заголовок, как на макете: счётчик дня — в нём, а не отдельной
+    // строкой дня из logGroupedHtml.
+    const mins = today.reduce((n, s) => n + (s.durationMin || 0), 0);
+    h += `<div class="h2">Сегодня <span class="cnt">${today.length} ${plural(today.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span></div>`;
+    h += logGroupedHtml(today, null, true);
   }
+  h += '<div class="card flat" style="margin-top:10px">' +
+    rowBtn('data-nav="#/journal"', `<span class="grow"><span class="t">Журнал полётов</span>
+      <span class="d">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать, CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
+    '</div>';
   return h;
 }
 
@@ -3192,8 +3358,8 @@ function viewPrep() {
   h += '</div>';
   if (fails) h += `<div class="banner warn">Отмечены проблемы: ${fails}. Убедитесь, что лететь безопасно, или устраните их.</div>`;
   if (armedBattery(a)) {
-    h += `<button class="btn btn-primary" data-act="start-flight">START FLIGHT</button>
-      <button class="btn" data-act="prep-done">Готов — подготовить следующий борт</button>`;
+    h += `<button class="btn btn-primary" data-act="start-flight">Начать полёт</button>
+      <button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
   } else {
     h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — и кнопки появятся.</div>`;
   }
@@ -3205,16 +3371,19 @@ function viewSession() {
   const s = S.sessions.find((x) => x.id === UI.arg);
   if (!s) return pageHead('Полёт не найден', { back: '#/flight' });
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
-  let h = pageHead('Полёт', { back: '#/flight', sub: esc(a ? a.name : '') + ` · <span class="mono">#${String(s.flightNo).padStart(3, '0')}</span>` });
+  let h = pageHead('Полёт', { back: '#/flight', sub: esc(a ? a.name : '') + ` · <span class="mono">${flightNoText(s)}</span>` });
+  // Два шага (2.0): «Посадка» только останавливает таймер (land-flight),
+  // итог записывают отдельной кнопкой — в поле руки заняты бортом.
   if (!s.end && s.landedAt) {
     h += `<div class="timer landed" id="timer">${clockHtml(s.landedAt - s.start)}</div>
       <div class="banner">Посадка зафиксирована — таймер остановлен. Осталось записать итог.</div>
       <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
-      <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт (таймер снова пойдёт)</button>`;
+      <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
+      <p class="small muted center" style="margin-top:12px">«Продолжить полёт» снова запустит таймер.</p>`;
   } else if (!s.end) {
     h += `<div class="timer" id="timer">${clockHtml(Date.now() - s.start)}</div>
-      <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Завершить полёт</button>
-      <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить (не был полёт)</button>
+      <button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">Посадка</button>
+      <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
       <p class="small muted center" style="margin-top:12px">Таймер идёт. Можно свернуть приложение — время не потеряется.</p>`;
   } else {
     h += sessionDetailHtml(s);
@@ -3253,7 +3422,8 @@ function sessionDetailHtml(s) {
 
 // Список полётов, сгруппированный по датам: заголовок дня с числом
 // полётов и налётом. Используется в журнале и на вкладке «Полёт».
-function logGroupedHtml(list, totalsFrom) {
+// noDayHead — без заголовков дней (вызывающий рисует свой, «Сегодня»).
+function logGroupedHtml(list, totalsFrom, noDayHead) {
   // totalsFrom: полный журнал для честных итогов дня, когда list обрезан
   const full = totalsFrom || list;
   let h = '';
@@ -3264,8 +3434,11 @@ function logGroupedHtml(list, totalsFrom) {
       if (open) h += '</div>';
       cur = sess.date;
       const dayList = full.filter((x) => x.date === cur);
-      h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>
-        <span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span></div><div class="card flat">`;
+      if (!noDayHead) {
+        h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>
+        <span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span></div>`;
+      }
+      h += '<div class="card flat">';
       open = true;
     }
     h += sessionRow(sess);
@@ -3274,19 +3447,64 @@ function logGroupedHtml(list, totalsFrom) {
   return h;
 }
 
-function viewLog() {
-  const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
-  let h = pageHead('Журнал полётов', {
-    back: '#/flight', sub: `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')}`,
-    act: 'print-log', actLabel: 'Печать',
-  });
-  if (!done.length) return h + emptyState('Полётов пока не было.');
-  h += logGroupedHtml(done);
-  h += `<div class="btn-line">
-    <button class="btn" data-nav="#/stats">Статистика</button>
-    <button class="btn" data-act="export-log-csv">Экспорт в CSV</button>
+/* ---------- Журнал: полёты + статистика одной вкладкой ---------- */
+
+// Действующий фильтр журнала: id борта, если он ещё существует, иначе
+// '' (все). Борт могли удалить или он не приехал с импортом копии —
+// тогда UI.journalAircraft сбрасывается, чтобы селект не рисовался
+// «выбранным» при показе всех полётов (ревью 2.0).
+function journalFilterId() {
+  const id = UI.journalAircraft;
+  if (id && !S.aircraft.some((a) => a.id === id)) UI.journalAircraft = '';
+  return UI.journalAircraft;
+}
+
+// Завершённые полёты с учётом фильтра по борту (UI.journalAircraft).
+// Печать и CSV фильтр НЕ учитывают — выгрузка всегда полная.
+function journalDone() {
+  const all = S.sessions.filter((s) => s.end);
+  const id = journalFilterId();
+  return id ? all.filter((s) => s.aircraftId === id) : all;
+}
+
+function viewJournal() {
+  const total = S.sessions.filter((s) => s.end);
+  const mins = total.reduce((n, s) => n + (s.durationMin || 0), 0);
+  // Без полётов меню «⋯» не рисуем вовсе: печатать и выгружать нечего,
+  // а меню из одних отключённых пунктов не закрывалось бы по тапу
+  // (disabled-кнопка события click не даёт).
+  let h = pageHead('Журнал', total.length ? {
+    sub: `${total.length} ${plural(total.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}`,
+    act: 'journal-menu', actLabel: 'Меню журнала', actIcon: 'more',
+  } : { sub: 'Полётов пока не было' });
+  // Меню «⋯»: печать и выгрузки — существующие действия. Атрибут hidden —
+  // запасной режим для браузеров без popover (см. toggleMenu).
+  if (total.length) {
+    h += `<div class="menu" popover="manual" id="journal-menu" role="menu" hidden>
+      <button role="menuitem" data-act="print-log">${ICONS.print}Печать журнала</button>
+      <button role="menuitem" data-act="export-log-csv">${ICONS.backup}Журнал в CSV</button>
+      <button role="menuitem" data-act="export-stats-csv">${ICONS.backup}Статистика в CSV</button>
+    </div>`;
+  }
+  const tab = UI.journalTab === 'stats' ? 'stats' : 'log';
+  h += `<div class="seg" style="margin-bottom:10px">
+    <button data-act="journal-tab" data-tab="log" aria-pressed="${tab === 'log'}">Полёты</button>
+    <button data-act="journal-tab" data-tab="stats" aria-pressed="${tab === 'stats'}">Статистика</button>
   </div>`;
-  return h;
+  if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт');
+  const fid = journalFilterId();
+  if (S.aircraft.length > 1) {
+    h += `<div class="pill-row">${selectHtml('journalAircraft',
+      [['', 'Все борта']].concat(S.aircraft.map((a) => [a.id, a.name])),
+      fid, `class="sel-pill${fid ? ' sel' : ''}" data-change="journal-aircraft" aria-label="Фильтр по борту"`)}</div>`;
+  }
+  const done = journalDone();
+  if (!done.length) return h + emptyState('У этого борта полётов пока не было.');
+  return h + (tab === 'stats' ? journalStatsHtml(done) : journalLogHtml(done));
+}
+
+function journalLogHtml(done) {
+  return logGroupedHtml(done.slice().sort((a, b) => b.start - a.start));
 }
 
 // Кнопка правки итога — в деталях завершённого полёта (finish-flight
@@ -3303,7 +3521,7 @@ function printLog() {
     const a = S.aircraft.find((y) => y.id === x.aircraftId);
     const b = S.batteries.find((y) => y.id === x.batteryId);
     const site = S.sites.find((y) => y.id === x.siteId);
-    return `<tr>${cell('#' + String(x.flightNo).padStart(3, '0'))}${cell(fmtDate(x.date))}${cell(a ? a.name : '')}` +
+    return `<tr>${cell(flightNoText(x))}${cell(fmtDate(x.date))}${cell(a ? a.name : '')}` +
       `${cell(x.durationMin != null ? x.durationMin + ' мин' : '')}${cell(b ? b.label : '')}${cell(site ? site.name : '')}` +
       `${cell(RESULTS[x.result] || '')}${cell(x.notes || x.problems || '')}</tr>`;
   }).join('');
@@ -3417,11 +3635,11 @@ function statSections(done) {
   return out;
 }
 
-function viewStats() {
-  const done = S.sessions.filter((s) => s.end).sort((a, b) => a.start - b.start);
-  let h = pageHead('Статистика', { back: '#/flight', sub: 'Считается из журнала на этом устройстве' });
-  if (!done.length) return h + emptyState('Полётов пока не было — считать нечего.');
-
+// Вкладка «Статистика» журнала: list — уже отфильтрованный по борту
+// список; statSections не меняется, фильтр применён до расчёта.
+function journalStatsHtml(list) {
+  const done = list.slice().sort((a, b) => a.start - b.start);
+  let h = '';
   const total = done.reduce((n, s) => n + (s.durationMin || 0), 0);
   const days = new Set(done.map((s) => s.date)).size;
   h += `<div class="stat-line four">
@@ -3441,11 +3659,7 @@ function viewStats() {
     }
   }
 
-  h += `<div class="btn-line" style="margin-top:12px">
-    <button class="btn" data-nav="#/log">Журнал полётов</button>
-    <button class="btn" data-act="export-stats-csv">Статистика в CSV</button>
-    <button class="btn" data-act="export-log-csv">Журнал в CSV</button>
-  </div>`;
+  h += `<p class="small muted" style="margin-top:12px">Считается из журнала на этом устройстве. Выгрузка в CSV — в меню вверху справа.</p>`;
   return h;
 }
 
@@ -3502,7 +3716,8 @@ function exportStatsCsv() {
 /* ---------- Сборы ---------- */
 
 function viewPacking() {
-  let h = pageHead('Сборы', { act: 'add-pack', actLabel: 'Новый набор' });
+  // Своей вкладки у сборов нет (2.0): «Назад» ведёт на «Сегодня» — и из «Ещё» тоже.
+  let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор' });
   if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор');
   h += '<div class="card flat">';
   h += S.packing.map((p) => {
@@ -3939,6 +4154,7 @@ function viewMore() {
   let h = pageHead('Ещё');
   h += '<div class="card flat">';
   h += rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов <span class="badge online">online</span></span><span class="d">Погода по локации: когда можно лететь</span></span>`, 'weather');
+  h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d">Что взять с собой: наборы и галочки</span></span>`, 'packing');
   h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
   h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d">Запомненные места полётов</span></span>`, 'sites');
   h += rowBtn('data-nav="#/templates"', `<span class="grow"><span class="t">Шаблоны чек-листов</span><span class="d">Свои предполётные проверки</span></span>`, 'templates');
@@ -4228,7 +4444,7 @@ async function savePrepRun(p) {
   return run;
 }
 
-// Начать полёт: общая точка для «START FLIGHT» и взлёта подготовленного
+// Начать полёт: общая точка для «Начать полёт» с чек-листа и взлёта подготовленного
 // борта. Снимает пометку «подготовлен» — она одноразовая.
 async function takeoff(aircraftId, runId, siteId) {
   const a = S.aircraft.find((x) => x.id === aircraftId);
@@ -4474,11 +4690,23 @@ const ACTIONS = {
     const pr = a.prepared;
     await takeoff(a.id, pr.runId, pr.siteId);
   },
-  // «Завершить полёт» фиксирует момент посадки (landedAt): таймер
-  // останавливается сразу, даже если итог заполняют позже.
+  /* --- Журнал --- */
+  'journal-tab': (el) => { UI.journalTab = el.dataset.tab === 'stats' ? 'stats' : 'log'; render(true); },
+  'journal-menu': (el) => toggleMenu(el, 'journal-menu'),
   'print-log': () => printLog(),
   'export-log-csv': () => exportLogCsv(),
   'export-stats-csv': () => exportStatsCsv(),
+  // «Посадка» только фиксирует момент посадки (landedAt): таймер стоит,
+  // форма итога НЕ открывается — её вызывают отдельно («Записать итог»).
+  'land-flight': async (el) => {
+    const s = S.sessions.find((x) => x.id === el.dataset.id);
+    if (!s || s.end || s.landedAt) return;
+    s.landedAt = Date.now();
+    await put('sessions', s);
+    render();
+  },
+  // «Записать итог»/«Итог»/«Изменить итог»: для ещё летящего борта
+  // (баннер забытого полёта) сначала фиксирует посадку, затем открывает форму.
   'finish-flight': async (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
     if (s && !s.end && !s.landedAt) {
@@ -4502,7 +4730,7 @@ const ACTIONS = {
   'session-info': (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
     if (!s) return;
-    openModal(`Полёт <span class="mono">#${String(s.flightNo).padStart(3, '0')}</span>`,
+    openModal(`Полёт <span class="mono">${flightNoText(s)}</span>`,
       sessionDetailHtml(s) + `<div class="spacer"></div>
       <button class="btn" data-act="finish-flight" data-id="${s.id}">Изменить итог</button>
       <button class="btn btn-danger" data-act="del-session" data-id="${s.id}">Удалить запись</button>`);
@@ -5567,9 +5795,14 @@ function handleImportFile(input) {
    9. НАВИГАЦИЯ И ОТРИСОВКА
 ============================================================ */
 
+// #/log и #/stats остались как старые адреса (закладки, ссылки в
+// changelog): открывают «Журнал» на нужном сегменте.
 const RENDERERS = {
   today: viewToday, fleet: viewFleet, model: viewModel,
-  flight: viewFlight, prep: viewPrep, session: viewSession, log: viewLog, stats: viewStats,
+  flight: viewFlight, prep: viewPrep, session: viewSession,
+  journal: viewJournal,
+  log: () => { UI.journalTab = 'log'; return viewJournal(); },
+  stats: () => { UI.journalTab = 'stats'; return viewJournal(); },
   packing: viewPacking, pack: viewPack, weather: viewWeather,
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,
@@ -5631,11 +5864,14 @@ function onRoute(force) {
   render(false, true);
 }
 
+// Точка у иконки «Полёт» — идёт незавершённый полёт (в воздухе или сел
+// без итога): видно с любой вкладки.
 function renderTabbar() {
   const active = TAB_OF[UI.view] || 'today';
+  const live = activeSessions().length > 0;
   $('#tabbar').innerHTML = TABS.map((t) =>
-    `<button class="tab" data-nav="#/${t.id}" ${t.id === active ? 'aria-current="page"' : ''}>
-      ${ICONS[t.id]}<span>${t.label}</span></button>`).join('');
+    `<button class="tab" data-nav="#/${t.id}" ${t.id === active ? 'aria-current="page"' : ''}${t.id === 'flight' && live ? ' aria-label="Полёт — идёт полёт"' : ''}>
+      ${ICONS[t.id]}${t.id === 'flight' && live ? '<i class="live" aria-hidden="true"></i>' : ''}<span>${t.label}</span></button>`).join('');
 }
 
 // render — обёртка над paint(): при поддержке View Transitions и без
@@ -5716,13 +5952,22 @@ document.addEventListener('click', (e) => {
       : 'https://yandex.ru/maps/'; // поле очищено — не вести на старую точку
     return; // не preventDefault: пусть ссылка работает как в списке локаций
   }
+  // Меню действий (popover="manual"): тап мимо закрывает его; тап по
+  // кнопке «⋯» ведёт в toggleMenu, тап по пункту — ниже, через data-act.
+  const inMenu = e.target.closest('.menu');
+  if (!inMenu && !e.target.closest('[aria-haspopup="menu"]')) closeMenus();
   const nav = e.target.closest('[data-nav]');
   if (nav) { e.preventDefault(); go(nav.dataset.nav); return; }
   const act = e.target.closest('[data-act]');
   if (act && ACTIONS[act.dataset.act]) {
     e.preventDefault();
+    if (inMenu) closeMenus(); // пункт выбран — меню закрывается до действия
     ACTIONS[act.dataset.act](act);
   }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenus();
 });
 
 document.addEventListener('submit', (e) => {
@@ -5826,6 +6071,9 @@ document.addEventListener('change', (e) => {
     render(true);
   } else if (kind === 'weather-day') {
     UI.wx.day = +el.value || 0;
+    render(true);
+  } else if (kind === 'journal-aircraft') {
+    UI.journalAircraft = el.value;
     render(true);
   }
 });

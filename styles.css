@@ -135,6 +135,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #tabbar .tab svg { width: 24px; height: 24px; }
 #tabbar .tab[aria-current="page"] { color: var(--text); }
 #tabbar .tab[aria-current="page"] svg { color: var(--ok); }
+/* Точка «идёт полёт» у иконки вкладки «Полёт» */
+#tabbar .tab { position: relative; }
+#tabbar .tab .live {
+  position: absolute;
+  top: 10px;
+  right: calc(50% - 18px);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px var(--bg-el);
+}
 
 /* ---------- Шапка страницы ---------- */
 .head {
@@ -145,6 +156,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   min-height: 40px;
 }
 .head h1 { font-size: 21px; line-height: 1.2; flex: 1; }
+/* Заголовок с подписью тянется на всю ширину — кнопка справа уходит
+   к краю (как глобальный .grow на макете), иначе меню «⋯» позиционируется
+   от середины шапки */
+.head .grow { flex: 1; min-width: 0; }
 .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
 .back {
   width: var(--seg); height: var(--seg);
@@ -155,6 +170,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .back svg { width: 22px; height: 22px; }
 .head .head-act { color: var(--link); font-size: 15px; min-height: var(--seg); padding: 0 6px; flex: none; white-space: nowrap; }
+.head .head-ic {
+  width: var(--seg); height: var(--seg);
+  margin-right: -6px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--mut);
+  border-radius: 50%;
+}
+.head .head-ic svg { width: 22px; height: 22px; }
+.head .head-ic[aria-expanded="true"] { background: var(--card-2); color: var(--text); }
 
 .h2 {
   font-size: 13px;
@@ -164,6 +189,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   color: var(--mut);
   margin: 20px 0 8px;
 }
+/* Счётчик в заголовке раздела: «Сегодня 2 полёта · 28 мин» */
+.h2 .cnt { color: var(--dim); font-weight: 500; letter-spacing: 0; text-transform: none; }
 
 /* ---------- Карточки и списки ---------- */
 .card {
@@ -273,6 +300,8 @@ button.row:active, a.row:active { background: var(--card-2); }
 }
 :root[data-theme="light"] .btn-primary { color: #fff; }
 .btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+/* «Посадка» — единственная кнопка, которую жмут не глядя: крупнее главной */
+.btn-land { min-height: calc(var(--primary) + 8px); font-size: 18px; }
 .btn-sm { width: auto; min-height: var(--seg); padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
 /* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
 .ic-btn {
@@ -331,6 +360,76 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
   font-size: 14px;
 }
 .seg button[aria-pressed="true"] { background: var(--card-2); color: var(--text); font-weight: 600; }
+/* Селект в виде пилюли (фильтр журнала, локация/АКБ на чек-листе):
+   ширина по содержимому, стрелка рисуется своей рамкой не нужна —
+   достаточно закруглённой формы и подчёркнутого выбора (.sel) */
+.pill-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 4px; scrollbar-width: none; }
+.pill-row::-webkit-scrollbar { display: none; }
+select.sel-pill {
+  width: auto;
+  max-width: 70%;
+  min-height: var(--seg);
+  padding: 6px 30px 6px 12px;
+  border-radius: 999px;
+  background: var(--card-2);
+  font-size: 14px;
+  flex: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select.sel-pill.sel { border-color: var(--text); }
+
+/* Меню действий (popover): верхний слой, позиция под кнопкой ставится
+   в toggleMenu. Переопределяем UA-стили popover (inset/margin/border).
+   Без нативной поддержки :popover-open неизвестен — правила с ним
+   отбрасываются, меню живёт на атрибуте hidden. */
+.menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 6px;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  background: var(--bg-el);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 25;
+}
+.menu[hidden] { display: none; }
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 15px;
+  text-align: left;
+  white-space: nowrap;
+}
+.menu button svg { width: 20px; height: 20px; color: var(--mut); flex: none; }
+.menu button:active { background: var(--card-2); }
+.menu button[disabled] { color: var(--dim); cursor: default; }
+.menu[popover]:popover-open {
+  display: flex;
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease),
+    overlay 0.16s var(--ease) allow-discrete, display 0.16s var(--ease) allow-discrete;
+}
+@starting-style {
+  .menu[popover]:popover-open { opacity: 0; transform: translateY(-6px); }
+}
+.menu[popover]::backdrop { background: transparent; }
+
 /* Сегмент с иконками: класс модели в форме */
 .seg-ic button {
   display: flex;
