@@ -839,14 +839,6 @@ dialog[open]::backdrop { opacity: 1; }
   dialog[open]::backdrop { opacity: 0; }
 }
 dialog.closing::backdrop { opacity: 0; transition-duration: 0.16s; }
-.dlg-scrim {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 30;
-  width: 100%;
-  border: 0;
-  cursor: default;
-}
 .dlg-head {
   display: flex;
   align-items: center;
@@ -865,7 +857,6 @@ dialog.closing::backdrop { opacity: 0; transition-duration: 0.16s; }
 body.locked { overflow: hidden; }
 
 /* ---------- Разное ---------- */
-.list-plain { list-style: none; }
 .muted { color: var(--mut); }
 .small { font-size: var(--font-d); }
 .spacer { height: 8px; }
@@ -1262,7 +1253,9 @@ select.sel-sm {
 /* Тесная шапка (pageHead {tight}): длинный заголовок + текстовое действие
    + «?» — «Окна для полётов» с «Пояснением». Только на узком экране
    заголовок чуть меньше и отступы кнопки уже — иначе он ломался на две
-   строки. Модификатор, а не :has(): у остальных шапок с действием и «?»
+   строки. В режиме «В перчатках» (--font 17 px, --seg 52 px) перенос
+   заголовка всё же возможен — без переполнения, это допустимо.
+   Модификатор, а не :has(): у остальных шапок с действием и «?»
    кегль h1 должен оставаться 21 px, как у соседних вкладок */
 @media (max-width: 420px) {
   .head.tight h1 { font-size: 19px; }
