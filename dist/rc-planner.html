@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="446d39fc6c-single">
+  <meta name="build" content="200ceb2c73-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -345,6 +345,13 @@ button.row:active, a.row:active { background: var(--card-2); }
 /* Кнопки в строке списка (Я.Карты/OSM у локации) стоят в ряд, не столбиком */
 .row .btn + .btn { margin-top: 0; }
 .btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Текстовая кнопка-ссылка под главной («Как считается окно» в «Окнах»):
+   без рамки и заливки, но полной высоты касания — порог 44/52 общий для всех кнопок */
+.link-btn {
+  display: block; width: 100%; min-height: var(--seg);
+  color: var(--link); font-size: 14px; font-weight: 500; text-align: center;
+  margin-top: 2px;
+}
 .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
 
 /* ---------- Формы ---------- */
@@ -1278,17 +1285,6 @@ select.sel-sm {
 .help .fold-body .h3 { font-weight: 600; margin: 14px 0 6px; }
 .help .fold-body .banner { margin-top: 4px; }
 .help .fold-body .card.flat { margin-bottom: 10px; }
-/* Тесная шапка (pageHead {tight}): длинный заголовок + текстовое действие
-   + «?» — «Окна для полётов» с «Пояснением». Только на узком экране
-   заголовок чуть меньше и отступы кнопки уже — иначе он ломался на две
-   строки. В режиме «В перчатках» (--font 17 px, --seg 52 px) перенос
-   заголовка всё же возможен — без переполнения, это допустимо.
-   Модификатор, а не :has(): у остальных шапок с действием и «?»
-   кегль h1 должен оставаться 21 px, как у соседних вкладок */
-@media (max-width: 420px) {
-  .head.tight h1 { font-size: 19px; }
-  .head.tight .head-act:not(.head-ic) { padding: 0 2px; }
-}
 
 </style>
 </head>
@@ -2308,6 +2304,7 @@ RC.CHANGELOG = [
       '«Начало работы» на «Сегодня» — пять шагов: борт, АКБ в борт, локация с координатами, чек-лист и полёт, резервная копия.',
       'В «Ещё» появилась «Инструкция»: руководство по каждому экрану и частые вопросы. Кнопка «?» в шапке экрана открывает его раздел.',
       '«Перед выездом» на «Сегодня» показывает только начатые наборы сборов; нетронутые — одной строкой «Собраться на выезд».',
+      'Локации: место и координаты отдельными строками, без обрезки. В «Окнах» пояснение расчёта — кнопка «Как считается окно» под «Показать прогноз».',
     ],
   },
   {
@@ -2653,7 +2650,7 @@ RC.HELP = {
           'Окно — подряд идущие часы без «не стоит», ночные тоже. Всё время — московское.',
         ] },
         { h: 'На экране' },
-        'Чипы семи дней с точкой цвета лучшего вердикта дня; полоска из 24 часов — тап по часу открывает его карточку (ветер у земли и на высоте, порывы, осадки, доля от порога); «Обратить внимание» перечисляет плохие и пограничные отрезки; полный список — «Все часы». Кнопка «Пояснение» в шапке показывает таблицы порогов для выбранного борта. «Windy: карта ветра» раскрывает карту прямо на экране — тоже online.',
+        'Чипы семи дней с точкой цвета лучшего вердикта дня; полоска из 24 часов — тап по часу открывает его карточку (ветер у земли и на высоте, порывы, осадки, доля от порога); «Обратить внимание» перечисляет плохие и пограничные отрезки; полный список — «Все часы». Кнопка «Как считается окно» под «Показать прогноз» показывает таблицы порогов для выбранного борта. «Windy: карта ветра» раскрывает карту прямо на экране — тоже online.',
         { h: 'Приватность' },
         'Наружу уходят координаты места, огрублённые до ~1 км (два знака после запятой); точная точка остаётся в вашей локации. «Моё местоположение (GPS)» спрашивает геопозицию у браузера только по этому выбору. Полученный прогноз сохраняется на устройстве и показывается на «Сегодня», пока ему меньше 6 часов. Прогноз — ориентир; решение о вылете всегда за пилотом.',
       ],
@@ -3593,7 +3590,7 @@ function pageHead(title, opts) {
       : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
   const help = opts.help
     ? `<button class="head-ic head-help" data-nav="#/help/${esc(opts.help)}" aria-label="Инструкция">${ICONS.help}</button>` : '';
-  return `<div class="head${opts.tight ? ' tight' : ''}">
+  return `<div class="head">
     ${opts.back ? `<button class="back" data-act="nav-back" data-fallback="${opts.back}" aria-label="Назад">${ICONS.back}</button>` : ''}
     <div class="grow"><h1>${title}</h1>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>
     ${act}${help}
@@ -5750,11 +5747,14 @@ function viewWeather() {
   const lim = wxLimits();
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
-  // «Пояснение» — про расчёт (таблицы порогов для выбранного борта),
-  // «?» — раздел инструкции про экран целиком; смыслы не дублируются.
+  // В шапке только «?» (раздел инструкции про экран целиком). Пояснение
+  // расчёта (таблицы порогов для выбранного борта) — кнопкой «Как считается
+  // окно» под «Показать прогноз»: текстовое действие в шапке рядом с «?»
+  // ломало заголовок и подпись на 2–3 строки на телефоне (ревью снимков 2.0).
+  // Пилюля online без «·» перед ней — иначе на переносе точка висела одна.
   let h = pageHead('Окна для полётов', {
-    back: '#/today', sub: 'Борт · место · дата · <span class="badge online">online</span>',
-    act: 'wx-help', actLabel: 'Пояснение', help: 'weather', tight: true,
+    back: '#/today', sub: 'Борт · место · дата <span class="badge online">online</span>',
+    help: 'weather',
   });
 
   if (!navigator.onLine && !wx.data) {
@@ -5795,6 +5795,7 @@ function viewWeather() {
   h += field('Дата', wxDayChipsHtml(lim));
   h += `<button class="btn btn-primary" data-act="weather-load" ${wx.loading ? 'disabled' : ''}>
     ${wx.loading ? 'Запрашиваю прогноз…' : 'Показать прогноз'}</button>`;
+  h += `<button class="link-btn" data-act="wx-help">Как считается окно</button>`;
   h += '</div>';
 
   if (wx.error) h += `<div class="banner warn">${esc(wx.error)}</div>`;
@@ -6007,7 +6008,8 @@ function viewSites() {
   h += S.sites.map((s) => `<div class="row">
     <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(s.name)}${s.isDefault ? ' <span class="badge">основная</span>' : ''}</span>
-      <span class="d">${esc(s.place || '')}${s.lat != null ? `${s.place ? ' · ' : ''}<span class="mono">${s.lat}, ${s.lon}</span>` : ' · без координат'}</span>
+      ${s.place ? `<span class="d">${esc(s.place)}</span>` : ''}
+      ${s.lat != null ? `<span class="d mono wrap">${s.lat}, ${s.lon}</span>` : '<span class="d">без координат</span>'}
     </button>
     ${mapLinks(s)}
   </div>`).join('');

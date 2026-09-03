@@ -808,7 +808,7 @@ function pageHead(title, opts) {
       : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
   const help = opts.help
     ? `<button class="head-ic head-help" data-nav="#/help/${esc(opts.help)}" aria-label="Инструкция">${ICONS.help}</button>` : '';
-  return `<div class="head${opts.tight ? ' tight' : ''}">
+  return `<div class="head">
     ${opts.back ? `<button class="back" data-act="nav-back" data-fallback="${opts.back}" aria-label="Назад">${ICONS.back}</button>` : ''}
     <div class="grow"><h1>${title}</h1>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>
     ${act}${help}
@@ -2965,11 +2965,14 @@ function viewWeather() {
   const lim = wxLimits();
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
-  // «Пояснение» — про расчёт (таблицы порогов для выбранного борта),
-  // «?» — раздел инструкции про экран целиком; смыслы не дублируются.
+  // В шапке только «?» (раздел инструкции про экран целиком). Пояснение
+  // расчёта (таблицы порогов для выбранного борта) — кнопкой «Как считается
+  // окно» под «Показать прогноз»: текстовое действие в шапке рядом с «?»
+  // ломало заголовок и подпись на 2–3 строки на телефоне (ревью снимков 2.0).
+  // Пилюля online без «·» перед ней — иначе на переносе точка висела одна.
   let h = pageHead('Окна для полётов', {
-    back: '#/today', sub: 'Борт · место · дата · <span class="badge online">online</span>',
-    act: 'wx-help', actLabel: 'Пояснение', help: 'weather', tight: true,
+    back: '#/today', sub: 'Борт · место · дата <span class="badge online">online</span>',
+    help: 'weather',
   });
 
   if (!navigator.onLine && !wx.data) {
@@ -3010,6 +3013,7 @@ function viewWeather() {
   h += field('Дата', wxDayChipsHtml(lim));
   h += `<button class="btn btn-primary" data-act="weather-load" ${wx.loading ? 'disabled' : ''}>
     ${wx.loading ? 'Запрашиваю прогноз…' : 'Показать прогноз'}</button>`;
+  h += `<button class="link-btn" data-act="wx-help">Как считается окно</button>`;
   h += '</div>';
 
   if (wx.error) h += `<div class="banner warn">${esc(wx.error)}</div>`;
@@ -3222,7 +3226,8 @@ function viewSites() {
   h += S.sites.map((s) => `<div class="row">
     <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(s.name)}${s.isDefault ? ' <span class="badge">основная</span>' : ''}</span>
-      <span class="d">${esc(s.place || '')}${s.lat != null ? `${s.place ? ' · ' : ''}<span class="mono">${s.lat}, ${s.lon}</span>` : ' · без координат'}</span>
+      ${s.place ? `<span class="d">${esc(s.place)}</span>` : ''}
+      ${s.lat != null ? `<span class="d mono wrap">${s.lat}, ${s.lon}</span>` : '<span class="d">без координат</span>'}
     </button>
     ${mapLinks(s)}
   </div>`).join('');
