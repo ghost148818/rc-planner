@@ -93,7 +93,7 @@ async function seed(page) {
   const screens = [
     ['today', '#/today'], ['today-top', '#/today'], ['fleet', '#/fleet'], ['model', '#/model/a1'], ['model-plane', '#/model/a2'],
     ['flight', '#/flight'], ['prep', '#/prep'],
-    ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); await p.waitForTimeout(100); await p.click('.ck[data-i="0"]'); await p.click('.ck[data-i="1"]'); await p.click('.ck[data-i="2"]'); await p.click('.ck[data-i="2"]'); }],
+    ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); await p.waitForTimeout(100); await p.click('.ck-main[data-i="0"]'); await p.click('.ck-main[data-i="1"]'); await p.click('.ck-main[data-i="2"]'); await p.click('.ck-main[data-i="2"]'); }],
     ['session', '#/prep', async (p) => { await p.evaluate(async () => { await window.RCDB.put('sessions', { id: 'live', aircraftId: 'a1', date: new Date().toLocaleDateString('en-CA'), start: Date.now() - 154000, end: null, durationMin: null, flightNo: 15, batteryId: 'b1', siteId: 'site-1', weather: '', result: '', notes: '', problems: '', checklistRunId: 'r1' }); await window.loadAll(); location.hash = '#/session/live'; }); }],
     ['landed', '#/session/live', async (p) => { await p.click('[data-act="land-flight"]'); }],
     ['finish', '#/session/live', async (p) => { await p.click('[data-act="finish-flight"]'); }],
@@ -114,7 +114,7 @@ async function seed(page) {
     await page.waitForSelector('#tabbar .tab');
     await seed(page);
     const cur = [['today', '#/today'], ['model', '#/model/a1'],
-      ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); await p.waitForTimeout(100); await p.click('.ck[data-i="0"]'); await p.click('.ck[data-i="1"]'); }],
+      ['checklist', '#/prep', async (p) => { await p.click('[data-act="prep-model"][data-id="a2"]'); await p.waitForTimeout(100); await p.click('.ck-main[data-i="0"]'); await p.click('.ck-main[data-i="1"]'); }],
       ['weather', '#/weather', async (p) => { await p.selectOption('select[name="wxmodel"]', 'a1'); await p.waitForTimeout(80); await p.selectOption('select[name="wxsite"]', 'site-1'); }]];
     for (const [name, hash, pre] of cur) {
       await page.evaluate((h) => { location.hash = h; }, hash);

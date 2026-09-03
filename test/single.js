@@ -46,6 +46,22 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
     return c && c.dataset.state === 'ok';
   }, null, { timeout: 3000 }).then(() => true, () => false);
   ok(stOk, 'касание отмечает пункт как «ок»');
+  // Меню клетки: три состояния; «Проблема» попадает в баннер липкой панели
+  await page.click('.st[data-act="ck-menu"][data-i="1"]');
+  await page.waitForSelector('.ck-menu [data-act="ck-set"][data-state="fail"]');
+  await page.click('.ck-menu [data-act="ck-set"][data-state="fail"]');
+  const stFail = await page.waitForFunction(() => {
+    const c = document.querySelectorAll('.ck')[1];
+    return c && c.dataset.state === 'fail' && !document.querySelector('.ck-menu');
+  }, null, { timeout: 3000 }).then(() => true, () => false);
+  ok(stFail, 'меню клетки ставит «проблема» и закрывается');
+  ok((await page.textContent('.act-bar')).includes('Отмечена 1 проблема'), 'липкая панель показывает число проблем');
+  // Тап по строке с проблемой не стирает отметку — открывает меню
+  await page.click('.ck-main[data-i="1"]');
+  await page.waitForSelector('.ck-menu [data-act="ck-set"][data-state="ok"]');
+  ok(await page.evaluate(() => document.querySelectorAll('.ck')[1].dataset.state === 'fail'), 'тап по строке с проблемой открывает меню, отметка на месте');
+  await page.click('.ck-menu [data-act="ck-set"][data-state="ok"]');
+  await page.waitForTimeout(150);
 
   // 2б. Ставим АКБ прямо с чек-листа через «+ Добавить аккумулятор…»
   await page.selectOption('select[name="prepBatt"]', '__new');
@@ -82,6 +98,22 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.click('dialog button[type="submit"]');
   await page.waitForSelector('.stat .v');
   ok((await page.textContent('.stat .v')) === '1', 'в карточке 1 полёт');
+
+  // 4б. Карточка борта: сегменты и версия прошивки компонента
+  await page.click('[data-act="model-tab"][data-tab="components"]');
+  await page.waitForSelector('[data-act="edit-comp"][data-key="fc"]');
+  ok((await page.locator('[data-act="edit-comp"]').count()) === 10, 'сегмент «Компоненты»: все строки, АКБ — информационная');
+  await page.click('[data-act="edit-comp"][data-key="fc"]');
+  await page.fill('dialog input[name="name"]', 'Matek F405');
+  await page.fill('dialog input[name="fw"]', 'INAV 7.1');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  await page.click('[data-act="model-tab"][data-tab="overview"]');
+  await page.waitForSelector('[data-act="model-tab"][data-tab="overview"][aria-pressed="true"]');
+  ok((await page.textContent('#views')).includes('INAV 7.1'), 'версия прошивки компонента видна в «Обзоре»');
+  await page.click('[data-act="model-tab"][data-tab="history"]');
+  await page.waitForSelector('[data-act="session-info"]');
+  ok(true, 'сегмент «История» показывает полёт борта');
 
   // 5. Перезагрузка — данные на месте (IndexedDB)
   await page.reload();

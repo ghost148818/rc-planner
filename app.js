@@ -42,6 +42,10 @@ const UI = {
   modalReturn: null,  // форма, к которой вернуться после вложенного диалога
   journalTab: 'log',  // экран «Журнал»: сегмент log|stats
   journalAircraft: '', // экран «Журнал»: фильтр по борту ('' — все)
+  modelTab: 'overview', // карточка борта: сегмент overview|components|maint|history
+  modelTabFor: null,  // id борта, для которого выбран сегмент — смена борта сбрасывает на «Обзор»
+  wakeLock: null,     // WakeLockSentinel, пока экран полёта держит экран включённым
+  wakeLockPending: false, // запрос замка в пути — второй не посылаем
 };
 
 const WX_DEFAULT_WIND = 16; // м/с, порог без выбранной модели
@@ -128,6 +132,15 @@ function fmtDur(min) {
   if (min < 60) return min + ' мин';
   // trim снаружи: у круглых часов иначе оставался хвостовой пробел («3 ч »)
   return (Math.floor(min / 60) + ' ч ' + (min % 60 ? (min % 60) + ' мин' : '')).trim();
+}
+
+// Короткий налёт для узких плиток: «48 мин», «1,1 ч», «12,5 ч» — иначе
+// «1 ч 6 мин» не влезает в плитку героя на телефоне.
+function fmtDurShort(min) {
+  if (min == null || isNaN(min)) return '—';
+  min = Math.round(min);
+  if (min < 60) return min + ' мин';
+  return (min / 60).toFixed(1).replace('.', ',').replace(',0', '') + ' ч';
 }
 
 function fmtClock(ms) {
@@ -304,6 +317,54 @@ function reducedMotion() {
   return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
+// Wake Lock: экран не гаснет, пока на экране полёта идёт полёт (борт в
+// воздухе, посадки ещё нет). Прогрессивное улучшение: без API ничего не
+// происходит. Локальный API — никуда ничего не отправляет. Систему не
+// обманываем: замок отпускается при посадке, отмене и уходе с экрана
+// (syncWakeLock из paint), а при уходе вкладки в фон его снимает сам
+// браузер — по возвращении (visibilitychange) запрашиваем заново.
+// Индикатор «экран не гаснет» показывается только когда замок реально
+// получен: request асинхронный и может быть отклонён (низкий заряд).
+function wakeLockWanted() {
+  if (UI.view !== 'session') return false;
+  const s = S.sessions.find((x) => x.id === UI.arg);
+  return !!(s && !s.end && !s.landedAt);
+}
+async function requestWakeLock() {
+  if (!navigator.wakeLock || UI.wakeLock || UI.wakeLockPending || document.hidden) return;
+  UI.wakeLockPending = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    UI.wakeLockPending = false;
+    // Пока ждали, экран могли покинуть — замок не нужен, отдаём сразу
+    if (!wakeLockWanted()) { lock.release().catch(() => {}); return; }
+    UI.wakeLock = lock;
+    lock.addEventListener('release', () => {
+      if (UI.wakeLock === lock) UI.wakeLock = null;
+      wakeIndicator();
+    });
+  } catch (e) {
+    UI.wakeLockPending = false;
+    UI.wakeLock = null;
+  }
+  wakeIndicator();
+}
+function releaseWakeLock() {
+  const lock = UI.wakeLock;
+  UI.wakeLock = null;
+  if (lock) lock.release().catch(() => {});
+  wakeIndicator();
+}
+function syncWakeLock() {
+  if (wakeLockWanted()) requestWakeLock(); else releaseWakeLock();
+}
+// Индикатор в шапке экрана полёта правится точечно, без render():
+// перерисовка ради одной надписи заново собирала бы экран.
+function wakeIndicator() {
+  const el = $('#wake-ind');
+  if (el) el.hidden = !UI.wakeLock;
+}
+
 /* ============================================================
    3. СТАТУСЫ МОДЕЛЕЙ
 ============================================================ */
@@ -407,10 +468,12 @@ function svcLeftText(sv) {
 // клик перехватывается делегатом раньше родительской кнопки строки.
 // aircraftId: чип «Обслуживание» кликабелен — открывает запись работы
 // (одна открытая — сразу «Изменить запись», несколько — карточку борта).
+// Подпись — в своём span (.cl): в строке флота чип ограничен 40 % ширины
+// и длинный статус обрезается многоточием, а не выдавливает имя борта.
 function chip(st, aircraftId) {
   const s = STATUS[st] || STATUS.unknown;
   const link = st === 'maintenance' && aircraftId;
-  return `<span class="chip ${s.cls}${link ? ' chip-link' : ''}"${link ? ` data-aid="${esc(aircraftId)}"` : ''}>${s.label}</span>`;
+  return `<span class="chip ${s.cls}${link ? ' chip-link' : ''}"${link ? ` data-aid="${esc(aircraftId)}"` : ''}><span class="cl">${s.label}</span></span>`;
 }
 
 // Полётов может идти несколько (два пилота, два борта) — но у одного
@@ -646,6 +709,8 @@ const ICONS = {
   bolt: ic('<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/>'),
   takeoff: ic('<path d="M4 20h16"/><path d="M12 16V5"/><path d="m7 10 5-5 5 5"/>', 2),
   landing: ic('<path d="M4 20h16"/><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/>', 2),
+  // глаз — индикатор «экран не гаснет» на экране полёта
+  eye: ic('<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>'),
 };
 // Знак клетки чек-листа по состоянию пункта (ok/fail/skip/пусто).
 const CK_MARK = { ok: 'check', fail: 'x', skip: 'minus' };
@@ -674,10 +739,11 @@ const TAB_OF = {
 };
 
 // actIcon — КЛЮЧ из ICONS: кнопка справа становится квадратной с иконкой,
-// actLabel уходит в aria-label (меню «⋯» журнала).
+// actLabel уходит в aria-label (меню «⋯» журнала). right — готовая
+// разметка справа вместо кнопки (индикатор «экран не гаснет»).
 function pageHead(title, opts) {
   opts = opts || {};
-  const act = !opts.act ? ''
+  const act = !opts.act ? (opts.right || '')
     : opts.actIcon && ICONS[opts.actIcon]
       ? `<button class="head-act head-ic" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}" aria-haspopup="menu">${ICONS[opts.actIcon]}</button>`
       : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
@@ -1203,9 +1269,11 @@ function fleetSortCmp() {
 
 function fleetRow(a) {
   const b = armedBattery(a);
-  return `<div class="row">
-    <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:var(--tap);min-width:0">
-      ${aircraftThumb(a)}<span class="grow" style="min-width:0"><span class="t">${esc(a.name)}</span>
+  // Имя не ужимается: кнопке имени — не меньше 45 % строки, чип статуса
+  // (не больше 40 %) при нехватке места обрезается многоточием.
+  return `<div class="row fleet-row">
+    <button class="grow row-main" data-nav="#/model/${a.id}">
+      ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
       <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
     ${chip(statusOf(a), a.id)}
     <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
@@ -1359,15 +1427,27 @@ async function installBattery(aId, bId) {
   S.aircraft = await RCDB.all('aircraft');
 }
 
+/* ---------- Карточка борта: герой + сегменты ----------
+   Герой — статус, АКБ-пилюля, три числа, полоска регламента и одна
+   кнопка «Чек-лист и полёт». Ниже сегменты «Обзор · Компоненты ·
+   Обслуживание · История» (UI.modelTab): сегмент живёт при render(true)
+   и сбрасывается на «Обзор» при смене борта (UI.modelTabFor). */
+const MODEL_TABS = [
+  ['overview', 'Обзор'], ['components', 'Компоненты'],
+  ['maint', 'Обслуживание'], ['history', 'История'],
+];
+
 function viewModel() {
   const a = S.aircraft.find((x) => x.id === UI.arg);
   if (!a) return pageHead('Борт не найден', { back: '#/fleet' });
+  if (UI.modelTabFor !== a.id) { UI.modelTab = 'overview'; UI.modelTabFor = a.id; }
+  const tab = MODEL_TABS.some(([id]) => id === UI.modelTab) ? UI.modelTab : 'overview';
   const flights = sessionsOf(a.id).filter((s) => s.end);
-  const total = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
-  const st = statusOf(a);
-  const bat = armedBattery(a);
 
-  let h = pageHead(esc(a.name), { back: '#/fleet', act: 'edit-model', actLabel: 'Изменить' });
+  let h = pageHead(esc(a.name), {
+    back: '#/fleet', act: 'edit-model', actLabel: 'Изменить',
+    sub: [TYPES[a.type], a.manufacturer ? esc(a.manufacturer) : ''].filter(Boolean).join(' · '),
+  });
 
   if (UI.justCreated === a.id) {
     const learning = !!lsGet('rcp.tour') || !(S.sites.length && S.sessions.some((x) => x.end));
@@ -1376,101 +1456,141 @@ function viewModel() {
       ${learning ? '<button class="btn-sm btn right" data-nav="#/today">К обучению</button>' : ''}</div>`;
   }
 
-  const u = photoURL(a);
-  if (u) h += `<img src="${u}" alt="" style="width:100%;max-height:240px;object-fit:cover;border-radius:12px;margin-bottom:10px">`;
+  h += modelHeroHtml(a, flights);
+  h += `<div class="seg four model-tabs">` + MODEL_TABS.map(([id, label]) =>
+    `<button data-act="model-tab" data-tab="${id}" aria-pressed="${tab === id}">${label}</button>`).join('') + '</div>';
+  h += tab === 'components' ? modelComponentsHtml(a)
+    : tab === 'maint' ? modelMaintHtml(a)
+    : tab === 'history' ? modelHistoryHtml(a, flights)
+    : modelOverviewHtml(a);
+  return h;
+}
 
-  h += `<div class="card"><div style="display:flex;align-items:center;gap:10px">
-    ${chip(st, a.id)}
-    <select data-change="status-manual" data-id="${a.id}" style="flex:1;min-height:var(--seg)">
-      <option value="" ${!a.statusManual ? 'selected' : ''}>Статус: авто</option>
-      ${Object.keys(STATUS).filter((k) => k !== 'unknown').map((k) =>
-        `<option value="${k}" ${a.statusManual === k ? 'selected' : ''}>Вручную: ${STATUS[k].label}</option>`).join('')}
-    </select></div>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-      <span class="row-ic">${ICONS.batteries}</span>
-      ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }), a.batteryId || '', `data-change="model-batt" data-id="${a.id}" style="flex:1;min-height:var(--seg)"`)}
-      ${bat && bat.status !== 'retired' ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
-        data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
-    </div>
-    <div class="hint" style="margin-top:4px">Борт с установленным АКБ считается собранным к вылету
-      и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>
-    <div class="stat-line" style="margin-bottom:0">
-      <div class="stat"><div class="v">${flights.length}</div><div class="k">${plural(flights.length, 'полёт', 'полёта', 'полётов')}</div></div>
-      <div class="stat"><div class="v">${fmtDur(total)}</div><div class="k">налёт</div></div>
-      <div class="stat"><div class="v">${flights[0] ? fmtDate(flights[0].date) : '—'}</div><div class="k">последний полёт</div></div>
-    </div></div>`;
-
-  // Регламент осмотра (svcEvery / svcEveryMin) — напоминание, полёты не запрещает.
+// Герой: превью 72 px, чип статуса + компактный селект «авто/вручную»,
+// АКБ-пилюля (тот же селект model-batt) с чипом заряда, три плитки,
+// полоска регламента, кнопка «Чек-лист и полёт».
+function modelHeroHtml(a, flights) {
+  const st = statusOf(a);
+  const bat = armedBattery(a);
+  const total = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
   const svc = svcState(a);
-  if (svc) {
-    h += svc.due
-      ? `<div class="banner warn">Пора осмотреть борт: ${svcSinceText(svc)}
-         с последнего обслуживания при регламенте ${svcEveryText(svc)}.
-         <button class="btn-sm btn right" data-act="add-maint" data-id="${a.id}">Записать осмотр</button></div>`
-      : `<div class="small muted" style="margin:-2px 0 10px">До осмотра ${svcLeftText(svc)}
-         · регламент ${svcEveryText(svc)}, пройдено ${svcSinceText(svc)}.</div>`;
-  }
+  return `<div class="card hero model-hero">
+    <div class="hero-top">
+      ${aircraftThumb(a, true)}
+      <span class="grow">
+        <span class="hero-line">${chip(st, a.id)}
+          <select class="sel-sm" data-change="status-manual" data-id="${a.id}" aria-label="Статус: авто или вручную">
+            <option value="" ${!a.statusManual ? 'selected' : ''}>авто</option>
+            ${Object.keys(STATUS).filter((k) => k !== 'unknown').map((k) =>
+              `<option value="${k}" ${a.statusManual === k ? 'selected' : ''}>вручную: ${STATUS[k].label}</option>`).join('')}
+          </select></span>
+        <span class="hero-line wrap">
+          ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), a.batteryId || '',
+            `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"`)}
+          ${bat ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
+            data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
+        </span>
+      </span>
+    </div>
+    ${bat ? '' : `<div class="hint">Борт с установленным АКБ считается собранным к вылету
+      и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>`}
+    <div class="stat-line">
+      <div class="stat"><div class="v">${flights.length}</div><div class="k">${plural(flights.length, 'полёт', 'полёта', 'полётов')}</div></div>
+      <div class="stat"><div class="v">${fmtDurShort(total)}</div><div class="k">налёт</div></div>
+      <div class="stat"><div class="v">${flights[0] ? fmtDate(flights[0].date) : '—'}</div><div class="k">последний</div></div>
+    </div>
+    ${svc ? svcLineHtml(a, svc) : ''}
+    <button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">${ICONS.templates}Чек-лист и полёт</button>
+  </div>`;
+}
 
-  h += `<button class="btn btn-primary" data-act="start-prep" data-id="${a.id}">Чек-лист и полёт</button>`;
+// Регламент осмотра полоской: заполнение — доля пройденного по тому
+// счётчику, что ближе к сроку; при due — цвет --maint и кнопка «Осмотр».
+// Регламент — напоминание, полёты не запрещает.
+function svcLineHtml(a, svc) {
+  const frac = Math.max(svc.every ? svc.flights / svc.every : 0, svc.everyMin ? svc.minutes / svc.everyMin : 0);
+  const pct = Math.round(Math.min(1, frac) * 100);
+  return `<div class="svc-line">
+      <span class="small nowrap" style="color:var(--${svc.due ? 'maint' : 'mut'})">${svc.due ? 'Пора осмотреть' : `До осмотра ${svcLeftText(svc)}`}</span>
+      <span class="progress"><i style="width:${pct}%${svc.due ? ';background:var(--maint)' : ''}"></i></span>
+    </div>
+    <div class="svc-sub"><span class="grow">пройдено ${svcSinceText(svc)} · регламент ${svcEveryText(svc)}</span>
+      ${svc.due ? `<button class="btn btn-sm" data-act="add-maint" data-id="${a.id}" data-kind="inspection" data-title="Осмотр по регламенту">Осмотр</button>` : ''}
+    </div>`;
+}
 
-  // Паспорт
-  const specs = [
-    ['Тип', TYPES[a.type] || '—'], ['Производитель', a.manufacturer],
-    ['Вес (сухой)', a.weight ? a.weight + ' г' : ''], ['Размах', a.wingspan ? a.wingspan + ' мм' : ''],
-    ['АКБ борта', bat ? bat.label + (bat.weight && a.weight ? ` → взлётный ${a.weight + bat.weight} г` : bat.weight ? ` · ${bat.weight} г` : '') : ''],
-  ].filter((x) => x[1]);
-  if (specs.length) {
-    h += '<div class="h2">Паспорт</div><div class="card">' +
-      specs.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:4px 0"><span class="muted">${k}</span><span>${esc(v)}</span></div>`).join('') +
-      '</div>';
-  }
+// Строка компонента: название и версия прошивки (c.fw), если есть.
+function compRow(a, key, label, c) {
+  const d = c && c.name
+    ? esc(c.name) + (c.fw ? ` · <span style="color:var(--info)">${esc(c.fw)}</span>` : '')
+    : '<span class="muted">не указано</span>';
+  return rowBtn(`data-act="edit-comp" data-id="${a.id}" data-key="${key}"`,
+    `<span class="grow"><span class="t">${label}</span><span class="d">${d}</span></span>`);
+}
 
-  // Компоненты
+// «Аккумулятор» — информационная строка: показывает установленную АКБ
+// (или подсказку), отдельно не редактируется — источник один.
+function compBatteryRow(a) {
   const comps = a.components || {};
-  h += '<div class="h2">Компоненты</div><div class="card flat">';
-  h += COMPONENTS.map(([key, label]) => {
-    // «Аккумулятор» — информационная строка: показывает установленную
-    // АКБ (или подсказку), отдельно не редактируется — источник один.
-    if (key === 'battery') {
-      const ab = armedBattery(a);
-      const legacy = comps.battery && (comps.battery.name || comps.battery.notes)
-        ? ` · <span class="muted">заметка: ${esc([comps.battery.name, comps.battery.notes].filter(Boolean).join(' — '))}</span>` : '';
-      return `<div class="row"><span class="grow"><span class="t">${label}</span>
-        <span class="d">${ab
-          ? `${battTag(ab)} · ${esc(ab.chem || '')} ${ab.cells ? ab.cells + 'S' : ''}${ab.p > 1 ? ab.p + 'P' : ''}${ab.capacity ? ' · ' + ab.capacity + ' мА·ч' : ''}`
-          : '<span class="muted">не установлен — ставится в карточке выше</span>'}${legacy}</span></span></div>`;
-    }
-    const c = comps[key];
-    return rowBtn(`data-act="edit-comp" data-id="${a.id}" data-key="${key}"`,
-      `<span class="grow"><span class="t">${label}</span>
-       <span class="d">${c && c.name ? esc(c.name) : '<span class="muted">не указано</span>'}</span></span>`);
-  }).join('');
+  const ab = armedBattery(a);
+  const legacy = comps.battery && (comps.battery.name || comps.battery.notes)
+    ? ` · <span class="muted">заметка: ${esc([comps.battery.name, comps.battery.notes].filter(Boolean).join(' — '))}</span>` : '';
+  return `<div class="row"><span class="grow"><span class="t">Аккумулятор</span>
+    <span class="d">${ab
+      ? `${battTag(ab)} · ${esc(ab.chem || '')} ${ab.cells ? ab.cells + 'S' : ''}${ab.p > 1 ? ab.p + 'P' : ''}${ab.capacity ? ' · ' + ab.capacity + ' мА·ч' : ''}`
+      : '<span class="muted">не установлен — ставится в карточке выше</span>'}${legacy}</span></span></div>`;
+}
+
+// Открытые работы с «Выполнено» одним касанием — после краша это
+// следующий очевидный шаг.
+function maintOpenRows(list) {
+  return list.map((m) => `<div class="row">
+    ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:var(--seg)">
+      <span class="t">${esc(m.title)}</span>
+      <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
+    <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}">Выполнено</button>
+  </div>`).join('');
+}
+
+function maintOf(a) {
+  return S.maintenance.filter((m) => m.aircraftId === a.id)
+    .sort((x, y) => (y.date || '').localeCompare(x.date || ''));
+}
+
+// Обзор: паспорт, заполненные компоненты, открытые работы, конфигурации,
+// заметки, внизу «Экспорт борта» / «Удалить».
+function modelOverviewHtml(a) {
+  const bat = armedBattery(a);
+  const svc = svcState(a);
+  let h = '';
+
+  // Паспорт — сетка 2 колонки. Числа нормализованы в loadAll (число или
+  // null), но в разметку всё равно идут через esc() — привычка дешевле.
+  const kv = [];
+  if (a.weight) {
+    kv.push(['Вес сухой' + (bat && bat.weight ? ' / взлётный' : ''),
+      `${esc(a.weight)} г` + (bat && bat.weight ? ` / ${esc(a.weight + bat.weight)} г` : '')]);
+  }
+  if (a.wingspan) kv.push(['Размах', `${esc(a.wingspan)} мм`]);
+  const own = wxOwnWind(a);
+  kv.push(['Ветер · высота', `${own ? 'до ' + own : '≈' + wxEstimate(a, bat && bat.weight)} м/с · до ${wxOwnAlt(a)} м`]);
+  if (svc) kv.push(['Регламент', svcEveryText(svc)]);
+  h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>
+    `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div></div>`;
+
+  // Заполненные компоненты (с версией прошивки); пустые — за «Добавить»
+  const comps = a.components || {};
+  const filled = COMPONENTS.filter(([key]) => key !== 'battery' && comps[key] && comps[key].name);
+  h += `<div class="h2">Компоненты${filled.length ? ` <span class="cnt">${filled.length}</span>` : ''}</div><div class="card flat">`;
+  h += filled.map(([key, label]) => compRow(a, key, label, comps[key])).join('');
+  h += rowBtn('data-act="model-tab" data-tab="components"',
+    `<span class="grow"><span class="t muted">${filled.length ? 'Все компоненты' : 'Добавить компонент'}</span></span>`, 'plus');
   h += '</div>';
 
-  // Обслуживание
-  const maint = S.maintenance.filter((m) => m.aircraftId === a.id).sort((x, y) => (y.date || '').localeCompare(x.date || ''));
-  const openM = maint.filter((m) => !m.done);
-  h += `<div class="h2">Обслуживание</div><div class="card flat">`;
+  // Открытые работы
+  const openM = maintOf(a).filter((m) => !m.done);
   if (openM.length) {
-    // «Выполнено» одним касанием — после краша это следующий очевидный шаг
-    h += openM.map((m) => `<div class="row">
-      ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:var(--seg)">
-        <span class="t">${esc(m.title)}</span>
-        <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
-      <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}">Выполнено</button>
-    </div>`).join('');
-  } else {
-    h += '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
-  }
-  h += '</div>';
-  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">Добавить запись обслуживания</button>`;
-  const doneM = maint.filter((m) => m.done);
-  if (doneM.length) {
-    h += `<details class="fold"><summary>История обслуживания (${doneM.length})</summary><div class="fold-body"><div class="card flat">`;
-    h += doneM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
-      `${maintThumb(m)}<span class="grow"><span class="t" style="color:var(--mut)">${esc(m.title)}</span>
-       <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}</span></span>`)).join('');
-    h += '</div></div></details>';
+    h += `<div class="h2">Обслуживание <span class="cnt">${openM.length}</span></div><div class="card flat">${maintOpenRows(openM)}</div>`;
   }
 
   // Конфигурации
@@ -1490,13 +1610,6 @@ function viewModel() {
   }
   h += `<button class="btn" data-act="add-config" data-id="${a.id}">Сохранить конфигурацию</button>`;
 
-  // Полёты
-  if (flights.length) {
-    h += `<div class="h2">Полёты</div><div class="card flat">` +
-      flights.slice(0, 5).map(sessionRow).join('') + '</div>';
-    if (flights.length > 5) h += `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
-  }
-
   // Заметки
   if (a.notes) h += `<div class="h2">Заметки</div><div class="card" style="white-space:pre-wrap">${esc(a.notes)}</div>`;
 
@@ -1506,6 +1619,43 @@ function viewModel() {
       <button class="btn btn-danger" data-act="del-model" data-id="${a.id}">Удалить</button>
     </div>`;
   return h;
+}
+
+// Компоненты: все строки, АКБ — информационная.
+function modelComponentsHtml(a) {
+  const comps = a.components || {};
+  return '<div class="card flat">' + COMPONENTS.map(([key, label]) =>
+    key === 'battery' ? compBatteryRow(a) : compRow(a, key, label, comps[key])).join('') +
+    '</div><p class="small muted" style="margin-top:8px">У компонента есть поле «Версия прошивки» — она видна в «Обзоре».</p>';
+}
+
+// Обслуживание: открытые работы, «Добавить запись», история закрытых.
+function modelMaintHtml(a) {
+  const maint = maintOf(a);
+  const openM = maint.filter((m) => !m.done);
+  const doneM = maint.filter((m) => m.done);
+  let h = '<div class="card flat">';
+  h += openM.length ? maintOpenRows(openM)
+    : '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
+  h += '</div>';
+  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">Добавить запись обслуживания</button>`;
+  if (doneM.length) {
+    h += `<div class="h2">История <span class="cnt">${doneM.length}</span></div><div class="card flat">`;
+    h += doneM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
+      `${maintThumb(m)}<span class="grow"><span class="t" style="color:var(--mut)">${esc(m.title)}</span>
+       <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}</span></span>`)).join('');
+    h += '</div>';
+  }
+  return h;
+}
+
+// История: все полёты борта по дням, кнопка «Весь журнал».
+function modelHistoryHtml(a, flights) {
+  if (!flights.length) {
+    return `<div class="empty">${ICONS.flight}<p>Полётов у этого борта ещё не было.</p>
+      <button class="btn btn-sm" data-act="start-prep" data-id="${a.id}">Чек-лист и полёт</button></div>`;
+  }
+  return logGroupedHtml(flights) + `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
 }
 
 /* ---------- Полёт ---------- */
@@ -1578,9 +1728,10 @@ function viewPrep() {
   const tpls = templatesFor(a.type);
   const items = UI.prep.items;
   const doneCount = items.filter((i) => i.state).length;
-  const fails = items.filter((i) => i.state === 'fail').length;
+  const failed = items.filter((i) => i.state === 'fail');
+  const curBatt = (armedBattery(a) || {}).id || '';
 
-  let h = pageHead('Чек-лист', { back: '#/flight', sub: esc(a.name) });
+  let h = pageHead('Чек-лист', { back: '#/flight', sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -1589,63 +1740,146 @@ function viewPrep() {
     h += `<div class="banner warn">Подошёл регламент: ${svcSinceText(svcPrep)}
       с последнего обслуживания (${svcEveryText(svcPrep)}). Осмотрите борт внимательнее.</div>`;
   }
+  // Локация и АКБ — пилюли в один ряд (прокрутка вбок, названия не
+  // режутся внутри пилюли). Выбор АКБ здесь ставит её в борт.
+  h += `<div class="pill-row prep-pills">
+    ${selectHtml('prepSite', siteOptions(null, { emptyLabel: 'Локация' }), UI.prep.siteId,
+      `class="sel-pill${UI.prep.siteId ? ' sel' : ''}" data-change="prep-site" aria-label="Локация"`)}
+    <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
+    ${selectHtml('prepBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true }), curBatt,
+      `class="sel-pill${curBatt ? ' sel' : ''}" data-change="prep-batt" aria-label="Аккумулятор — выбор ставит его в борт"`)}
+  </div>`;
   if (tpls.length > 1) {
     h += field('Шаблон', selectHtml('tpl',
       tpls.map((t) => [t.id, t.name + (t.builtin ? '' : ' (свой)')]),
       UI.prep.tplId, 'data-change="prep-template"'));
   }
-  h += `<div class="grid2">
-    ${field('Локация', `<div style="display:flex;gap:8px">
-      ${selectHtml('prepSite', siteOptions(), UI.prep.siteId, 'data-change="prep-site" style="flex:1;min-width:0"')}
-      <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
-    </div>`)}
-    ${field('Аккумулятор', selectHtml('prepBatt',
-      battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: '— без АКБ —', addNew: true }),
-      (armedBattery(a) || {}).id || '', 'data-change="prep-batt"'), 'Выбор здесь ставит АКБ в борт')}
-  </div>`;
-  h += `<div class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></div>
-    <div class="small muted" style="margin-bottom:8px">${doneCount} из ${items.length} · касание: ок → проблема → пропуск</div>`;
+  h += `<div class="prog-line"><span class="progress"><i style="width:${items.length ? Math.round(doneCount / items.length * 100) : 0}%"></i></span>
+      <span class="small muted mono">${doneCount} / ${items.length}</span></div>
+    <div class="small muted" style="margin-bottom:8px">тап по строке — ок, по клетке — выбор</div>`;
   h += '<div class="card flat">';
-  // view-transition-name получает только последняя тронутая клетка: при
-  // render(true) анимируется она одна, остальные не моргают. Имя уникально
-  // в пределах страницы (ck-<i>).
-  h += items.map((it, i) => `<button class="ck" data-act="ck-toggle" data-i="${i}" data-state="${it.state || ''}" style="width:100%;text-align:left">
-      <span class="grow"><span class="t">${esc(it.t)}</span>${it.hint ? `<span class="d">${esc(it.hint)}</span>` : ''}</span>
-      <span class="st"${UI.prep.lastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''}>${ckMark(it.state)}</span>
-    </button>`).join('');
+  // Тап по строке — ок ↔ пусто; тап по клетке — меню трёх состояний
+  // (UI.prep.menuIdx), встроенное в строку. view-transition-name получает
+  // только последняя тронутая клетка: при render(true) анимируется она
+  // одна, остальные не моргают. Имя уникально в пределах страницы (ck-<i>).
+  h += items.map((it, i) => {
+    const open = UI.prep.menuIdx === i;
+    return `<div class="ck" data-state="${it.state || ''}">
+      <button class="ck-main" data-act="ck-toggle" data-i="${i}">
+        <span class="grow"><span class="t">${esc(it.t)}</span>${it.hint ? `<span class="d">${esc(it.hint)}</span>` : ''}</span>
+      </button>
+      <button class="st" data-act="ck-menu" data-i="${i}" aria-label="Состояние пункта" aria-expanded="${open}"${UI.prep.lastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''}>${ckMark(it.state)}</button>
+      ${open ? `<div class="ck-menu" role="group" aria-label="Состояние пункта">
+        <button data-act="ck-set" data-i="${i}" data-state="ok" aria-pressed="${it.state === 'ok'}">${ICONS.check}<span>Ок</span></button>
+        <button data-act="ck-set" data-i="${i}" data-state="fail" aria-pressed="${it.state === 'fail'}">${ICONS.x}<span>Проблема</span></button>
+        <button data-act="ck-set" data-i="${i}" data-state="skip" aria-pressed="${it.state === 'skip'}">${ICONS.minus}<span>Пропустить</span></button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
   h += '</div>';
-  if (fails) h += `<div class="banner warn">Отмечены проблемы: ${fails}. Убедитесь, что лететь безопасно, или устраните их.</div>`;
+  // Липкая панель действий: держится над нижней панелью, пока список
+  // прокручивается. Гард «без АКБ не летаем» остаётся.
+  const lower = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  h += '<div class="act-bar">';
+  if (failed.length) {
+    const n = failed.length;
+    h += `<div class="banner warn">${ICONS.x}<span class="grow">${plural(n, 'Отмечена', 'Отмечены', 'Отмечено')} ${n} ${plural(n, 'проблема', 'проблемы', 'проблем')}: ${failed.map((i) => esc(lower(i.t))).join(', ')}</span></div>`;
+  }
   if (armedBattery(a)) {
-    h += `<button class="btn btn-primary" data-act="start-flight">Начать полёт</button>
+    h += `<button class="btn btn-primary" data-act="start-flight">${ICONS.takeoff}Начать полёт</button>
       <button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
   } else {
-    h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — и кнопки появятся.</div>`;
+    h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — он встанет в борт, и кнопки появятся.</div>`;
   }
-  h += `<button class="btn" data-act="cancel-prep">Отменить подготовку</button>`;
+  h += `<button class="btn" data-act="cancel-prep">Отменить подготовку</button></div>`;
   return h;
+}
+
+/* ---------- Экран полёта: кольцо, пилюли, посадка ----------
+   Кольцо — прошедшее время относительно средней длительности
+   завершённых полётов этого борта; нет полётов — кольцо пустое,
+   подпись «первый полёт». Живое обновление — в интервале paint(). */
+const RING_R = 102;
+const RING_C = 2 * Math.PI * RING_R;
+
+function avgFlightMs(aircraftId) {
+  const done = sessionsOf(aircraftId).filter((s) => s.end && +s.durationMin > 0);
+  if (!done.length) return 0;
+  return done.reduce((n, s) => n + +s.durationMin, 0) / done.length * 60000;
+}
+
+function ringOffset(ms, avgMs) {
+  if (!avgMs) return RING_C.toFixed(1);
+  const p = Math.min(1, Math.max(0, ms / avgMs));
+  return (RING_C * (1 - p)).toFixed(1);
+}
+
+function ringHtml(s, a) {
+  const landed = !!s.landedAt;
+  const ms = (landed ? s.landedAt : Date.now()) - s.start;
+  const avg = a ? avgFlightMs(a.id) : 0;
+  return `<div class="ring${landed ? ' landed' : ''}">
+    <svg class="r" viewBox="0 0 220 220" aria-hidden="true">
+      <circle class="ring-track" cx="110" cy="110" r="${RING_R}"/>
+      <circle class="ring-fill" id="ring-fill" cx="110" cy="110" r="${RING_R}" data-avg="${Math.round(avg)}"
+        stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${ringOffset(ms, avg)}"/>
+    </svg>
+    <div class="ring-in">
+      <div class="timer${landed ? ' landed' : ''}" id="timer" data-sid="${s.id}">${clockHtml(ms)}</div>
+      <div class="small muted ring-sub">${avg ? `обычно <span class="mono">${fmtClock(avg)}</span>` : 'первый полёт'}</div>
+    </div>
+  </div>`;
 }
 
 function viewSession() {
   const s = S.sessions.find((x) => x.id === UI.arg);
   if (!s) return pageHead('Полёт не найден', { back: '#/flight' });
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
-  let h = pageHead('Полёт', { back: '#/flight', sub: esc(a ? a.name : '') + ` · <span class="mono">${flightNoText(s)}</span>` });
-  // Два шага (2.0): «Посадка» только останавливает таймер (land-flight),
-  // итог записывают отдельной кнопкой — в поле руки заняты бортом.
-  if (!s.end && s.landedAt) {
-    h += `<div class="timer landed" id="timer" data-sid="${s.id}">${clockHtml(s.landedAt - s.start)}</div>
-      <div class="banner">Посадка зафиксирована — таймер остановлен. Осталось записать итог.</div>
-      <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
-      <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
-      <p class="small muted center" style="margin-top:12px">«Продолжить полёт» снова запустит таймер.</p>`;
-  } else if (!s.end) {
-    h += `<div class="timer" id="timer" data-sid="${s.id}">${clockHtml(Date.now() - s.start)}</div>
-      <button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">Посадка</button>
-      <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
-      <p class="small muted center" style="margin-top:12px">Таймер идёт. Можно свернуть приложение — время не потеряется.</p>`;
-  } else {
+  const inAir = !s.end && !s.landedAt;
+  // Индикатор «экран не гаснет» — только пока борт в воздухе и только
+  // когда замок реально получен (hidden снимает wakeIndicator).
+  const wake = inAir
+    ? `<span class="wake-ind" id="wake-ind"${UI.wakeLock ? '' : ' hidden'}><span class="ico14">${ICONS.eye}</span>экран не гаснет</span>` : '';
+  let h = pageHead(s.end ? 'Полёт' : s.landedAt ? 'Сел' : 'В полёте', {
+    back: '#/flight', right: wake,
+    sub: esc(a ? a.name : 'Борт удалён') + ` · <span class="mono">${flightNoText(s)}</span>`,
+  });
+  if (s.end) {
     h += sessionDetailHtml(s);
     h += `<button class="btn" data-act="finish-flight" data-id="${s.id}">Изменить итог</button>`;
+    return h;
+  }
+
+  h += ringHtml(s, a);
+  // Пилюли контекста: АКБ, локация, ветер у земли из кэша (если свежий)
+  const b = S.batteries.find((x) => x.id === s.batteryId);
+  const site = S.sites.find((x) => x.id === s.siteId);
+  const wind = wxWindNowText(site, a);
+  const pills = [
+    b ? `<span class="pill">${ICONS.batteries}${battTag(b)}</span>` : '',
+    site ? `<span class="pill">${ICONS.sites}<span>${esc(site.name)}</span></span>` : '',
+    wind ? `<span class="pill">${ICONS.weather}<span>${wind}</span></span>` : '',
+  ].filter(Boolean).join('');
+  if (pills) h += `<div class="pills">${pills}</div>`;
+
+  // Два шага (2.0): «Посадка» только останавливает таймер (land-flight),
+  // итог записывают отдельной кнопкой — в поле руки заняты бортом.
+  if (s.landedAt) {
+    h += `<button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
+      <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
+      <p class="small muted session-hint">Посадка зафиксирована, таймер остановлен. «Продолжить полёт» снова запустит его.</p>`;
+  } else {
+    h += `<button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">${ICONS.landing}Посадка</button>
+      <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
+      <p class="small muted session-hint">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже. Можно свернуть приложение — время не потеряется.</p>`;
+  }
+
+  // Полёты за сегодня — как на вкладке «Полёт»
+  const today = S.sessions.filter((x) => x.end && x.date === todayISO()).sort((x, y) => y.start - x.start);
+  if (today.length) {
+    const mins = today.reduce((n, x) => n + (x.durationMin || 0), 0);
+    h += `<div class="h2">Сегодня <span class="cnt">${today.length} ${plural(today.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span></div>`;
+    h += logGroupedHtml(today, null, true);
   }
   return h;
 }
@@ -2363,6 +2597,25 @@ function wxCacheFresh() {
   return c;
 }
 
+// Ветер у земли сейчас — пилюля на экране полёта. Только из кэша
+// прогноза (никаких запросов), если он не старше 6 часов и снят для
+// локации полёта. Нет свежего кэша или локации — пустая строка, пилюли нет.
+function wxWindNowText(site, a) {
+  try {
+    const c = S.settings.weatherCache;
+    if (!site || !c || !c.json || !c.json.daily || c.place !== site.name) return '';
+    if (Date.now() - (+c.fetched || 0) > WX_FRESH_MS) return '';
+    const idx = (c.json.daily.time || []).indexOf(wxTodayISO());
+    if (idx < 0) return '';
+    const lim = wxLimitsOf(a);
+    const day = wxDay(c.json, idx, lim.maxW, lim.alt);
+    const hr = day && day.hours.find((x) => x.hh === wxNowHour());
+    return hr && hr.w10 != null ? `${wxNum(hr.w10)} м/с` : '';
+  } catch (e) {
+    return '';
+  }
+}
+
 // Вердикт дня из кэша для борта a (или порога по умолчанию): заголовок
 // с окнами, полоска 24 часов и подпись. Тап по карточке ведёт в окна.
 // compact — вариант для «на поле»/«в полёте»: короче подпись.
@@ -2966,6 +3219,7 @@ const ACTIONS = {
     const label = (COMPONENTS.find((x) => x[0] === key) || [])[1] || key;
     openModal(label, `<form data-form="comp" data-id="${a.id}" data-key="${key}">
       ${field('Название / модель', `<input type="text" name="name" value="${esc(c.name || '')}" placeholder="напр. T-Motor F60 2550KV">`)}
+      ${field('Версия прошивки', `<input type="text" name="fw" value="${esc(c.fw || '')}" placeholder="напр. 4.5.1">`, 'Показывается в «Обзоре» рядом с компонентом')}
       ${field('Заметки', `<textarea name="notes" placeholder="настройки, особенности, дата установки">${esc(c.notes || '')}</textarea>`)}
       <button class="btn btn-primary" type="submit">Сохранить</button>
     </form>`);
@@ -2997,12 +3251,36 @@ const ACTIONS = {
     beginPrep(el.dataset.id);
     render();
   },
+  // Тап по строке: ок ↔ пусто. Проблема и пропуск — через меню клетки;
+  // у такой строки тап открывает меню, а не стирает отметку (в поле
+  // случайное касание не должно молча снять «проблему»).
   'ck-toggle': (el) => {
     const it = UI.prep && UI.prep.items[+el.dataset.i];
     if (!it) return;
-    const order = [null, 'ok', 'fail', 'skip'];
-    it.state = order[(order.indexOf(it.state || null) + 1) % order.length];
-    UI.prep.lastIdx = +el.dataset.i; // эта клетка получит анимацию отметки
+    const i = +el.dataset.i;
+    if (it.state === 'fail' || it.state === 'skip') {
+      UI.prep.menuIdx = UI.prep.menuIdx === i ? null : i;
+      render(true);
+      return;
+    }
+    it.state = it.state === 'ok' ? null : 'ok';
+    UI.prep.lastIdx = i; // эта клетка получит анимацию отметки
+    UI.prep.menuIdx = null;
+    render(true);
+  },
+  // Тап по клетке: встроенное меню трёх состояний; повторный тап закрывает.
+  'ck-menu': (el) => {
+    if (!UI.prep) return;
+    const i = +el.dataset.i;
+    UI.prep.menuIdx = UI.prep.menuIdx === i ? null : i;
+    render(true);
+  },
+  'ck-set': (el) => {
+    const it = UI.prep && UI.prep.items[+el.dataset.i];
+    if (!it) return;
+    it.state = ['ok', 'fail', 'skip'].includes(el.dataset.state) ? el.dataset.state : null;
+    UI.prep.lastIdx = +el.dataset.i;
+    UI.prep.menuIdx = null;
     render(true);
   },
   'cancel-prep': () => { UI.prep = null; go('#/flight'); },
@@ -3084,6 +3362,8 @@ const ACTIONS = {
     const pr = a.prepared;
     await takeoff(a.id, pr.runId, pr.siteId);
   },
+  /* --- Карточка борта --- */
+  'model-tab': (el) => { UI.modelTab = el.dataset.tab; render(true); },
   /* --- Журнал --- */
   'journal-tab': (el) => { UI.journalTab = el.dataset.tab === 'stats' ? 'stats' : 'log'; render(true); },
   'journal-menu': (el) => toggleMenu(el, 'journal-menu'),
@@ -3745,7 +4025,7 @@ function battOptions(o) {
   return [['', o.emptyLabel || '—']]
     .concat(S.batteries
       .filter((b) => b.status !== 'retired' && (!o.freeOnly || b.id === o.keepId || !battOwner(b.id)))
-      .map((b) => [b.id, b.label + (b.weight ? ' · ' + b.weight + ' г' : '')]))
+      .map((b) => [b.id, b.label + (b.weight && !o.noWeight ? ' · ' + b.weight + ' г' : '')]))
     .concat(o.addNew ? [[NEW_OPT, '+ Добавить аккумулятор…']] : []);
 }
 function siteOptions(list, o) {
@@ -3870,7 +4150,11 @@ const FORMS = {
     const a = S.aircraft.find((x) => x.id === form.dataset.id);
     const fd = new FormData(form);
     a.components = a.components || {};
-    a.components[form.dataset.key] = { name: fd.get('name').trim(), notes: fd.get('notes').trim() };
+    a.components[form.dataset.key] = {
+      name: fd.get('name').trim(),
+      fw: (fd.get('fw') || '').trim(), // версия прошивки компонента (2.0)
+      notes: fd.get('notes').trim(),
+    };
     await put('aircraft', a);
     closeModal();
     render();
@@ -4309,8 +4593,12 @@ function render(keepScroll, toTop) {
 function paint(keepScroll, toTop) {
   const y = window.scrollY;
   const focused = document.activeElement;
-  const focusSel = focused && focused.dataset && focused.dataset.act && focused.dataset.i != null
-    ? `[data-act="${focused.dataset.act}"][data-i="${focused.dataset.i}"]` : null;
+  // Кнопка меню клетки (ck-set) исчезает вместе с меню — фокус возвращаем
+  // на клетку той же строки (ck-menu), иначе с клавиатуры он уйдёт на body.
+  const fAct = focused && focused.dataset && focused.dataset.act;
+  const focusAct = fAct === 'ck-set' ? 'ck-menu' : fAct;
+  const focusSel = focusAct && focused.dataset.i != null
+    ? `[data-act="${focusAct}"][data-i="${focused.dataset.i}"]` : null;
 
   if (TIMER) { clearInterval(TIMER); TIMER = null; }
   $('#views').innerHTML = (RENDERERS[UI.view] || viewToday)();
@@ -4331,10 +4619,18 @@ function paint(keepScroll, toTop) {
     TIMER = setInterval(() => {
       const t = $('#timer');
       const cur = S.sessions.find((x) => x.id === s.id);
-      if (t && cur && !cur.end && !cur.landedAt) t.innerHTML = clockHtml(Date.now() - cur.start);
-      else { clearInterval(TIMER); TIMER = null; }
+      if (t && cur && !cur.end && !cur.landedAt) {
+        const ms = Date.now() - cur.start;
+        t.innerHTML = clockHtml(ms);
+        // кольцо экрана полёта: заполнение относительно обычной длительности
+        const ring = $('#ring-fill');
+        if (ring) ring.setAttribute('stroke-dashoffset', ringOffset(ms, +ring.dataset.avg || 0));
+      } else { clearInterval(TIMER); TIMER = null; }
     }, 1000);
   }
+  // Экран не гаснет только на экране полёта в воздухе; в остальных
+  // случаях (посадка, отмена, уход с экрана) замок отпускается здесь.
+  syncWakeLock();
 }
 
 /* ============================================================
@@ -4443,6 +4739,8 @@ document.addEventListener('change', (e) => {
     if (tpl) {
       UI.prep.tplId = tpl.id;
       UI.prep.items = tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null }));
+      UI.prep.menuIdx = null;
+      UI.prep.lastIdx = null;
       render();
     }
   } else if (kind === 'prep-site') {
@@ -4506,6 +4804,11 @@ document.addEventListener('paste', (e) => {
 
 window.addEventListener('hashchange', () => onRoute());
 window.addEventListener('popstate', () => onRoute());
+// Замок экрана браузер снимает, когда вкладка уходит в фон; по
+// возвращении на экран полёта запрашиваем его заново.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) syncWakeLock();
+});
 
 /* ============================================================
    11. PWA И ОБНОВЛЕНИЯ
