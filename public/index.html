@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="f11f03e545">
+  <meta name="build" content="5253b110a4">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -889,6 +889,61 @@ html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
   }
   #print-area th { background: #eee; }
 }
+
+/* ---------- «Сегодня»: состояния дня ----------
+   Герой (борт на поле / полёт), карточка погоды из кэша с полоской
+   24 часов, строки-действия «Перед выездом» и «Разобраться». */
+.row .row-main {
+  display: flex; align-items: center; gap: 12px;
+  text-align: left;
+  min-height: var(--seg);
+  min-width: 0;
+}
+.thumb.lg { width: 72px; height: 72px; border-radius: 14px; }
+.thumb.lg.ph svg { width: 34px; height: 34px; }
+.hero { padding: 16px; }
+.hero-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.hero-top .grow { flex: 1; min-width: 0; }
+.hero-name { display: block; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
+.hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--ok); }
+.ico14 { display: inline-flex; }
+.ico14 svg { width: 14px; height: 14px; }
+.hero .btn { margin-top: 0; }
+.hero .btn + .btn { margin-top: 8px; }
+.hero-flight .timer { margin: 4px 0 14px; font-size: 52px; }
+/* Карточка погоды — целиком кнопка в окна */
+.wx-hero { display: block; width: 100%; text-align: left; padding: 12px 14px; }
+.wx-hero:active { background: var(--card-2); }
+.wx-hero-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.wx-hero-top .grow { flex: 1; min-width: 0; }
+.wx-hero .t { display: block; font-size: 17px; font-weight: 700; line-height: 1.25; }
+.wx-hero .t.ok { color: var(--ok); }
+.wx-hero .t.warn { color: var(--warn); }
+.wx-hero .t.muted { color: var(--mut); }
+.wx-hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
+.wx-hero .chev { color: var(--dim); flex: none; }
+.wx-hero .chev svg { width: 18px; height: 18px; }
+/* Полоска 24 часов: сегмент на час, ночь приглушена, «сейчас» обведён */
+.strip { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
+.strip i { flex: 1 1 0; display: block; background: var(--card-2); }
+.strip .g { background: var(--ok); }
+.strip .y { background: var(--warn); }
+.strip .r { background: var(--bad); }
+.strip .n { opacity: 0.55; }
+.strip .now { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; opacity: 1; }
+.ticks {
+  display: flex; justify-content: space-between;
+  color: var(--dim); font-size: 11px; font-family: var(--mono);
+  margin-top: 4px;
+}
+.stat .v.warn { color: var(--warn); }
+/* Баннер копии: иконка, текст и кнопка в одну линию */
+.banner.backup { align-items: center; }
+.banner.backup > svg { margin-top: 0; }
+/* Чип-действие (заряд АКБ): статус тот же, но касание — как у малых
+   кнопок, растёт в режиме «В перчатках» через --seg */
+button.chip { cursor: pointer; min-height: var(--seg); padding: 0 12px; }
 
 </style>
 </head>
@@ -2212,6 +2267,53 @@ function download(name, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+// Сохранить файл на устройство. На телефоне — системный лист
+// «Поделиться» (Web Share с файлами): куда положить копию, решает
+// пользователь; приложение само ничего никуда не отправляет. Без
+// поддержки — обычная загрузка. Возвращает true, если файл ушёл
+// (по нему ставится дата резервной копии); закрытый лист — false.
+// Лист — только на сенсорных устройствах: настольный Safari тоже умеет
+// Web Share с файлами, но в его листе нет «Сохранить в файл» — копию
+// на диск с Mac было бы не положить (ревью пакета 3).
+function touchDevice() {
+  try {
+    return navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
+  } catch (e) { return false; }
+}
+async function saveFile(name, blob) {
+  let file = null;
+  try { file = new File([blob], name, { type: blob.type }); } catch (e) { /* нет File — только download */ }
+  if (file && touchDevice() && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name });
+      return true;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return false; // пользователь закрыл лист — тихо
+      // любая другая ошибка (нет жеста, лист не поддержал тип) — обычная загрузка
+    }
+  }
+  download(name, blob);
+  return true;
+}
+
+// Резервная копия просрочена: данные есть, а копии не было или она
+// старше двух недель. Баннер на «Сегодня» и строка в «Разобраться».
+const BACKUP_DUE_DAYS = 14;
+function backupDue() {
+  const hasData = S.aircraft.length > 0 || S.sessions.some((s) => s.end);
+  const at = +S.settings.lastBackupAt || 0;
+  return hasData && (!at || Date.now() - at > BACKUP_DUE_DAYS * 86400000);
+}
+function backupAgeDays() {
+  const at = +S.settings.lastBackupAt || 0;
+  return at ? Math.floor((Date.now() - at) / 86400000) : null;
+}
+// Полёты, завершённые после последней копии (нет копии — все).
+function flightsSinceBackup() {
+  const at = +S.settings.lastBackupAt || 0;
+  return S.sessions.filter((s) => s.end && s.end > at).length;
+}
+
 // Кэш object URL для фото моделей.
 const PHOTO_URLS = new Map();
 function photoURL(a) {
@@ -2411,8 +2513,10 @@ function staleSession(s) {
   return (Date.now() - s.start) / 60000 > STALE_FLIGHT_MIN;
 }
 // Общий блок баннеров об идущих полётах (Сегодня и «Полёт»).
-function activeFlightBanners() {
-  return activeSessions().map((s) => {
+// exceptId — полёт, который экран уже показал героем (карточка на
+// «Сегодня» в состоянии «в полёте»): баннер о нём был бы дублем.
+function activeFlightBanners(exceptId) {
+  return activeSessions().filter((s) => s.id !== exceptId).map((s) => {
     const a = S.aircraft.find((x) => x.id === s.aircraftId);
     if (s.landedAt) {
       // сел, но итог не записан — не «идёт полёт» и не «забыли завершить»
@@ -2445,11 +2549,22 @@ async function loadAll() {
   // Координаты локаций — строго числа. Импортированная копия может
   // принести в lat/lon произвольные строки; они попадают в value и href
   // без esc() — нормализуем при каждой загрузке, а не надеемся на формы.
+  const num = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
   for (const s of S.sites || []) {
-    const num = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
     s.lat = num(s.lat);
     s.lon = num(s.lon);
     if (s.lat == null || s.lon == null) { s.lat = null; s.lon = null; }
+  }
+  // Числовые поля бортов и АКБ — тоже строго числа (или null). Копия
+  // проверяется только по id, а `a.maxWind`/`b.cycles` идут в разметку
+  // «Сегодня» без esc() (ревью пакета 3: тег в maxWind исполнялся на
+  // стартовом экране). Нормализуем один раз здесь, а не в каждом шаблоне.
+  for (const a of S.aircraft || []) {
+    for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = num(a[k]);
+  }
+  for (const b of S.batteries || []) {
+    for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = num(b[k]);
+    b.cycles = Math.max(0, Math.round(num(b.cycles) || 0));
   }
   // Группы флота из импортированной копии: только валидные записи
   // (id/parentId — безопасные строки, name — строка).
@@ -2613,6 +2728,10 @@ const ICONS = {
   plus: ic('<path d="M12 5.5v13M5.5 12h13"/>', 2),
   star: ic('<path fill="currentColor" d="M12 3.2l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 17.1 6.6 20l1.1-6.1-4.5-4.3 6.1-.8Z"/>'),
   starOff: ic('<path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 17.1 6.6 20l1.1-6.1-4.5-4.3 6.1-.8Z"/>'),
+  // «Сегодня»: зарядка АКБ, взлёт и посадка (стрелки над полосой)
+  bolt: ic('<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13L13 2Z"/>'),
+  takeoff: ic('<path d="M4 20h16"/><path d="M12 16V5"/><path d="m7 10 5-5 5 5"/>', 2),
+  landing: ic('<path d="M4 20h16"/><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/>', 2),
 };
 // Знак клетки чек-листа по состоянию пункта (ok/fail/skip/пусто).
 const CK_MARK = { ok: 'check', fail: 'x', skip: 'minus' };
@@ -2783,11 +2902,13 @@ function confirmModal(text, act, dataAttrs, btnLabel) {
     </div>`);
 }
 
-function aircraftThumb(a) {
+// lg — крупное превью 72 px (герой на «Сегодня»).
+function aircraftThumb(a, lg) {
   const u = photoURL(a);
+  const cls = lg ? 'thumb lg' : 'thumb';
   return u
-    ? `<img class="thumb" src="${u}" alt="">`
-    : `<span class="thumb ph">${ICONS[a.type] || ICONS.plane}</span>`;
+    ? `<img class="${cls}" src="${u}" alt="">`
+    : `<span class="${cls} ph">${ICONS[a.type] || ICONS.plane}</span>`;
 }
 
 // Фото повреждения к записи обслуживания. Кэш object URL общий с фото
@@ -2801,8 +2922,94 @@ function maintThumb(m) {
    6. ЭКРАНЫ
 ============================================================ */
 
+/* ---------- «Сегодня»: один экран, четыре состояния дня ----------
+   flying — идёт полёт (или сел без итога); field — есть борт с
+   пройденным чек-листом (takeoffReady); debrief — сегодня уже летали;
+   home — всё остальное. Одна главная кнопка на состояние. */
+function todayState() {
+  if (activeSessions().length) return 'flying';
+  if (S.aircraft.some((a) => takeoffReady(a))) return 'field';
+  if (S.sessions.some((s) => s.end && s.date === todayISO())) return 'debrief';
+  return 'home';
+}
+
+// Строка борта на «Сегодня»: превью, имя, тип и АКБ; справа — right
+// (кнопка «Чек-лист»/«Взлёт» или чип статуса). Тап по строке — карточка.
+function todayAircraftRow(a, right) {
+  const b = armedBattery(a);
+  return `<div class="row">
+    <button class="grow row-main" data-nav="#/model/${a.id}">
+      ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
+      <span class="d">${TYPES[a.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
+    ${right}
+  </div>`;
+}
+
+// Правая часть строки борта: подготовлен — «Взлёт» (только через
+// takeoffReady), готов — «Чек-лист», иначе чип статуса.
+function todayAircraftAction(a) {
+  if (takeoffReady(a)) return `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>`;
+  const st = statusOf(a);
+  return st === 'ready' || st === 'unknown'
+    ? `<button class="btn btn-sm" data-act="start-prep" data-id="${a.id}">Чек-лист</button>`
+    : chip(st, a.id);
+}
+
+// Блок бортов: title — заголовок, list — борта, cnt — счётчик в заголовке.
+function todayFleetBlock(title, list, cnt) {
+  if (!list.length) return '';
+  return `<div class="h2">${title}${cnt ? ` <span class="cnt">${cnt}</span>` : ''}</div><div class="card flat">` +
+    list.map((a) => todayAircraftRow(a, todayAircraftAction(a))).join('') + '</div>';
+}
+
+// Строка «Пора осмотреть» по регламенту — на «Сегодня» в трёх состояниях.
+function todayDueRow(a, sv) {
+  return `<div class="row"><span class="row-ic">${ICONS.tools}</span>
+    <button class="grow row-main" data-nav="#/model/${a.id}"><span class="grow">
+      <span class="t" style="color:var(--maint)">Пора осмотреть: ${esc(a.name)}</span>
+      <span class="d">${svcSinceText(sv)} с последнего обслуживания · регламент ${svcEveryText(sv)}</span></span></button>
+    <button class="btn btn-sm" data-act="add-maint" data-id="${a.id}" data-kind="inspection" data-title="Осмотр по регламенту">Осмотр</button>
+  </div>`;
+}
+
+function todayOpenMaintRow(m) {
+  const a = S.aircraft.find((x) => x.id === m.aircraftId);
+  return rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
+    `<span class="grow"><span class="t">${esc(m.title)}</span>
+     <span class="d">${esc(a ? a.name : '')} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`, 'tools');
+}
+
+// «Обслуживание»: подошедший регламент + открытые работы (до пяти).
+function todayMaintBlock(withDue, skipIds) {
+  const open = S.maintenance.filter((m) => !m.done && !(skipIds && skipIds.has(m.id)));
+  const due = withDue ? S.aircraft.map((a) => [a, svcState(a)]).filter(([, sv]) => sv && sv.due) : [];
+  if (!open.length && !due.length) return '';
+  return `<div class="h2">Обслуживание <span class="cnt">${open.length + due.length}</span></div><div class="card flat">` +
+    due.map(([a, sv]) => todayDueRow(a, sv)).join('') +
+    open.slice(0, 5).map(todayOpenMaintRow).join('') + '</div>';
+}
+
+// Баннер резервной копии (home/field): копии не было или она старше 14 дней.
+function backupBannerHtml() {
+  if (!backupDue()) return '';
+  const days = backupAgeDays();
+  return `<div class="banner backup">${ICONS.backup}<span class="grow">${days == null
+    ? 'Резервной копии ещё не было'
+    : `Резервная копия — ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span>
+    <button class="btn-sm btn" data-act="export-all">Сохранить</button></div>`;
+}
+
+// Подпись под датой в шапке: состояние дня словами.
+const TODAY_HINT = {
+  field: '<span style="color:var(--ok)">на поле</span>',
+  flying: '<span style="color:var(--ok)">в полёте</span>',
+  debrief: '<span class="muted">разбор дня</span>',
+};
+
 function viewToday() {
-  let h = pageHead('RC Planner', { sub: new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }) });
+  const state = todayState();
+  const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  let h = pageHead('Сегодня', { sub: date + (TODAY_HINT[state] ? ' · ' + TODAY_HINT[state] : '') });
 
   if (UI.updateReady) {
     h += `<div class="banner ok">Доступно обновление приложения.
@@ -2813,8 +3020,6 @@ function viewToday() {
     h += `<div class="banner">Ваши данные хранятся на этом устройстве. Приложение не отправляет
       их в интернет и работает без сети. <button class="btn-sm btn" data-act="dismiss-hi">Понятно</button></div>`;
   }
-
-  h += activeFlightBanners();
 
   // «Начало работы»: четыре шага с галочками, ведут прямо к действию.
   // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
@@ -2830,7 +3035,14 @@ function viewToday() {
   ];
   const todo = steps.filter((s) => !s[2]).length;
   const tour = !!lsGet('rcp.tour');
-  if (todo || tour) {
+  const onboarding = todo || tour;
+
+  // В полёте герой — сам полёт; в остальных состояниях баннеры идущих
+  // полётов невозможны (иначе состояние было бы flying).
+  const live = state === 'flying' ? activeSessions()[0] : null;
+  h += activeFlightBanners(live && live.id);
+
+  if (onboarding) {
     // «Обучение заново» — полноценная экскурсия: все шаги активны и
     // ведут к действию, галочек нет — маршрут проходится с нуля.
     h += `<div class="h2">${tour ? 'Обучение · пройдитесь по шагам' : `Начало работы · осталось ${todo} из 4`}</div><div class="card flat">`;
@@ -2842,64 +3054,196 @@ function viewToday() {
     h += '</div>';
   }
 
-  if (!S.aircraft.length) return h;
+  if (!S.aircraft.length && state !== 'flying') return h;
 
-  h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
+  if (state === 'flying') h += todayFlying(live);
+  else if (state === 'field') h += todayField();
+  else if (state === 'debrief') h += todayDebrief();
+  else h += todayHome(onboarding);
+  return h;
+}
 
-  h += `<div class="card flat" style="margin-top:8px">` +
-    rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов
-      <span class="badge online">online</span></span>
-      <span class="d">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
+// Дома: погода из кэша, «Перед выездом», главная кнопка, «К вылету»,
+// открытое обслуживание, напоминание о копии.
+function todayHome(onboarding) {
+  let h = '';
+  const armed = armedFleet();
+  h += wxHeroOrRow(armed[0]);
 
-  // К вылету: только собранные модели (с установленным АКБ) — весь
-  // флот не дублируем, он живёт во вкладке «Флот». Пустой блок при
-  // видимом «Начале работы» не показываем — шаг 2 говорит то же самое.
-  const armed = S.aircraft.map((a) => [a, armedBattery(a)]).filter(([, b]) => b);
-  if (armed.length || !todo) {
-  h += '<div class="h2">К вылету</div><div class="card flat">';
-  if (armed.length) {
-    h += armed.map(([a, b]) => takeoffReady(a)
-      ? `<div class="row">
-          <button class="grow" data-nav="#/model/${a.id}" style="display:flex;align-items:center;gap:12px;text-align:left;min-height:var(--seg)">
-            ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-            <span class="d">${TYPES[a.type] || ''} · ${battTag(b)} · чек-лист пройден</span></span></button>
-          <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>
-        </div>`
-      : rowBtn(`data-nav="#/model/${a.id}"`,
-        `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-         <span class="d">${TYPES[a.type] || ''} · ${battTag(b)}</span></span>
-         ${chip(statusOf(a), a.id)}`)).join('');
-  } else {
-    h += rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
-      <span class="d">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries');
-  }
-  h += '</div>';
-  }
-
-  // Незакрытое обслуживание и подошедший регламент осмотра
-  const open = S.maintenance.filter((m) => !m.done);
+  // Перед выездом: сборы, разряженные АКБ, подошедший регламент
+  const packs = S.packing.slice().sort((x, y) => {
+    const dx = x.items.every((i) => i.done) ? 1 : 0, dy = y.items.every((i) => i.done) ? 1 : 0;
+    return dx - dy;
+  });
+  const flown = S.batteries.filter((b) => b.charge === 'flown' && b.status !== 'retired');
   const due = S.aircraft.map((a) => [a, svcState(a)]).filter(([, sv]) => sv && sv.due);
-  if (open.length || due.length) {
-    h += '<div class="h2">Обслуживание</div><div class="card flat">';
-    h += due.map(([a, sv]) => rowBtn(`data-nav="#/model/${a.id}"`,
-      `<span class="grow"><span class="t" style="color:var(--maint)">Пора осмотреть: ${esc(a.name)}</span>
-       <span class="d">${svcSinceText(sv)} с последнего обслуживания · регламент ${svcEveryText(sv)}</span></span>`)).join('');
-    h += open.slice(0, 5).map((m) => {
-      const a = S.aircraft.find((x) => x.id === m.aircraftId);
-      return rowBtn(`data-nav="#/model/${m.aircraftId}"`,
-        `<span class="grow"><span class="t">${esc(m.title)}</span>
-         <span class="d">${esc(a ? a.name : '')} · ${fmtDate(m.date)}</span></span>`);
+  if (packs.length || flown.length || due.length) {
+    h += '<div class="h2">Перед выездом</div><div class="card flat">';
+    h += packs.map((p) => {
+      const done = p.items.filter((i) => i.done).length;
+      const full = p.items.length > 0 && done === p.items.length;
+      return `<div class="row"><span class="row-ic">${ICONS.packing}</span>
+        <button class="grow row-main" data-nav="#/pack/${p.id}"><span class="grow">
+          <span class="t">${esc(p.name)}</span>
+          <span class="d">${p.items.length ? (full ? 'собран' : `${done} из ${p.items.length} собрано`) : 'пустой набор'}</span></span></button>
+        ${full ? `<span class="chip st-ready">собран</span>` : `<button class="btn btn-sm" data-nav="#/pack/${p.id}">Продолжить</button>`}
+      </div>`;
     }).join('');
+    h += flown.map((b) => {
+      const cyc = Math.round(+b.cycles) || 0; // из копии — не обязательно число
+      return `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+        <button class="grow row-main" data-act="edit-batt" data-id="${b.id}"><span class="grow">
+          <span class="t">Зарядить: ${esc(b.label)}</span>
+          <span class="d">после полёта · ${cyc} ${plural(cyc, 'цикл', 'цикла', 'циклов')}</span></span></button>
+        <button class="chip st-flown" data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL.flown}</button>
+      </div>`;
+    }).join('');
+    h += due.map(([a, sv]) => todayDueRow(a, sv)).join('');
     h += '</div>';
   }
 
-  // Последние полёты
-  const recent = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start).slice(0, 3);
-  if (recent.length) {
-    h += '<div class="h2">Последние полёты</div><div class="card flat">';
-    h += recent.map(sessionRow).join('');
-    h += '</div>';
+  if (armed.length) h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
+
+  // К вылету: только собранные борта (с установленным АКБ) — весь флот
+  // живёт во вкладке «Флот». Пустой блок при видимом «Начале работы»
+  // не показываем — шаг 2 говорит то же самое.
+  if (armed.length) {
+    h += todayFleetBlock('К вылету', armed, `${armed.length} из ${S.aircraft.length}`);
+  } else if (!onboarding) {
+    h += '<div class="h2">К вылету</div><div class="card flat">' +
+      rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
+      <span class="d">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries') + '</div>';
   }
+
+  h += todayMaintBlock(false);
+  h += backupBannerHtml();
+  return h;
+}
+
+// На поле: герой — подготовленный борт с кнопкой «Взлёт», ниже
+// полоска погоды, остальные собранные борта и обслуживание.
+function todayField() {
+  const ready = S.aircraft.filter((a) => takeoffReady(a))
+    .sort((x, y) => (y.prepared.at || 0) - (x.prepared.at || 0));
+  const hero = ready[0];
+  const b = armedBattery(hero);
+  const site = S.sites.find((s) => s.id === hero.prepared.siteId);
+  let h = `<div class="card hero">
+    <div class="hero-top">
+      ${aircraftThumb(hero, true)}
+      <span class="grow">
+        <span class="hero-name">${esc(hero.name)}</span>
+        <span class="d">${TYPES[hero.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span>
+        <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в ${fmtTime(hero.prepared.at)}${site ? ' · ' + esc(site.name) : ''}</span>
+      </span>
+    </div>
+    <button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>
+  </div>`;
+  h += wxHeroOrRow(hero, true);
+  const rest = armedFleet().filter((a) => a.id !== hero.id);
+  h += todayFleetBlock('Остальные борта', rest, String(rest.length));
+  h += todayMaintBlock(true);
+  h += backupBannerHtml();
+  return h;
+}
+
+// В полёте: карточка полёта с живым таймером, «Открыть полёт» и
+// «Посадка»; ниже — как на поле, без героя взлёта.
+function todayFlying(s) {
+  const a = S.aircraft.find((x) => x.id === s.aircraftId);
+  const landed = !!s.landedAt;
+  const ms = (landed ? s.landedAt : Date.now()) - s.start;
+  let h = `<div class="card hero hero-flight">
+    <div class="hero-top">
+      ${a ? aircraftThumb(a, true) : ''}
+      <span class="grow">
+        <span class="hero-name">${esc(a ? a.name : 'Борт удалён')} <span class="mono muted">${flightNoText(s)}</span></span>
+        <span class="d">${landed ? 'сел — осталось записать итог' : staleSession(s) ? 'идёт уже очень долго — забыли завершить?' : 'полёт идёт, таймер не потеряется'}</span>
+      </span>
+    </div>
+    <div class="timer${landed ? ' landed' : ''}" id="timer" data-sid="${s.id}">${clockHtml(ms)}</div>
+    ${landed
+      ? `<button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
+         <button class="btn" data-nav="#/session/${s.id}">Открыть полёт</button>`
+      : `<button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">${ICONS.landing}Посадка</button>
+         <button class="btn" data-nav="#/session/${s.id}">Открыть полёт</button>`}
+  </div>`;
+  h += wxHeroOrRow(a, true);
+  const rest = armedFleet().filter((x) => !activeSessionOf(x.id));
+  h += todayFleetBlock('Остальные борта', rest, String(rest.length));
+  h += todayMaintBlock(true);
+  return h;
+}
+
+// Разбор: итоги дня, «Разобраться», полёты за сегодня, «Ещё один полёт».
+function todayDebrief() {
+  const today = S.sessions.filter((s) => s.end && s.date === todayISO()).sort((x, y) => y.start - x.start);
+  const mins = today.reduce((n, s) => n + (s.durationMin || 0), 0);
+  const trouble = today.filter((s) => s.result && s.result !== 'normal');
+  let h = `<div class="stat-line">
+    <div class="stat"><div class="v">${today.length}</div><div class="k">${plural(today.length, 'полёт сегодня', 'полёта сегодня', 'полётов сегодня')}</div></div>
+    <div class="stat"><div class="v">${fmtDur(mins)}</div><div class="k">налёт</div></div>
+    <div class="stat"><div class="v${trouble.length ? ' warn' : ''}">${trouble.length}</div><div class="k">с проблемой</div></div>
+  </div>`;
+
+  h += wxHeroOrRow(armedFleet()[0]);
+
+  // Разобраться: проблемные полёты без закрытой работы новее них,
+  // разряженные АКБ, резервная копия, сборы.
+  let rows = '';
+  const shown = new Set(); // осмотры, уже показанные в «Разобраться»
+  for (const s of trouble) {
+    const a = S.aircraft.find((x) => x.id === s.aircraftId);
+    if (!a) continue;
+    const fixed = S.maintenance.some((m) => m.aircraftId === a.id && m.done && m.createdAt >= s.start);
+    if (fixed) continue;
+    // Авто-осмотр после итога уже создан (открытая работа новее полёта) —
+    // кнопка ведёт в него, а не заводит второй.
+    const open = S.maintenance.find((m) => m.aircraftId === a.id && !m.done && (m.createdAt || 0) >= s.start);
+    if (open) shown.add(open.id);
+    const btn = open
+      ? `<button class="btn btn-sm" data-act="edit-maint" data-id="${open.id}">Осмотр</button>`
+      : `<button class="btn btn-sm" data-act="add-maint" data-id="${a.id}" data-kind="inspection" data-title="Осмотр после полёта ${flightNoText(s)}">Осмотр</button>`;
+    rows += `<div class="row"><span class="row-ic">${ICONS.tools}</span>
+      <button class="grow row-main" data-act="session-info" data-id="${s.id}"><span class="grow">
+        <span class="t" style="color:var(--warn)">Полёт <span class="mono">${flightNoText(s)}</span> · ${esc(a.name)}</span>
+        <span class="d">${s.problems ? 'проблема: «' + esc(s.problems) + '»' : (RESULTS[s.result] || '').toLowerCase()}</span></span></button>
+      ${btn}
+    </div>`;
+  }
+  const flown = S.batteries.filter((b) => b.charge === 'flown' && b.status !== 'retired');
+  if (flown.length) {
+    rows += `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+      <button class="grow row-main" data-nav="#/batteries"><span class="grow">
+        <span class="t">${flown.length === 1 ? 'Зарядить: ' + esc(flown[0].label) : `Зарядить ${flown.length} ${plural(flown.length, 'аккумулятор', 'аккумулятора', 'аккумуляторов')}`}</span>
+        <span class="d">${flown.length === 1 ? 'после полёта' : flown.map((b) => esc(b.label)).join(' · ')}</span></span></button>
+      ${flown.length === 1
+        ? `<button class="chip st-flown" data-act="batt-charge" data-id="${flown[0].id}">${CHARGE_LABEL.flown}</button>`
+        : `<button class="btn btn-sm" data-act="batts-charged-all">Все заряжены</button>`}
+    </div>`;
+  }
+  const since = flightsSinceBackup();
+  if (since || backupDue()) {
+    const days = backupAgeDays();
+    rows += `<div class="row"><span class="row-ic">${ICONS.backup}</span>
+      <button class="grow row-main" data-nav="#/backup"><span class="grow">
+        <span class="t">Сохранить резервную копию</span>
+        <span class="d">${since ? `${since} ${plural(since, 'полёт', 'полёта', 'полётов')} с последней копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
+      <button class="btn btn-sm" data-act="export-all">Сохранить</button>
+    </div>`;
+  }
+  if (S.packing.length) {
+    rows += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Проверить, что всё собрано</span>
+      <span class="d">Сборы: ничего не забыть на поле</span></span>`, 'packing');
+  }
+  if (rows) h += `<div class="h2">Разобраться</div><div class="card flat">${rows}</div>`;
+
+  h += `<div class="h2">Полёты сегодня <span class="cnt">${today.length}</span></div>` + logGroupedHtml(today, null, true);
+  h += `<button class="btn" data-act="start-prep">${ICONS.flight}Ещё один полёт</button>`;
+  // Открытые работы, не связанные с сегодняшними полётами (старый ремонт
+  // другого борта), иначе пропали бы с «Сегодня» до конца дня; те, что
+  // уже в «Разобраться», не повторяем.
+  h += todayMaintBlock(false, shown);
   return h;
 }
 
@@ -3375,13 +3719,13 @@ function viewSession() {
   // Два шага (2.0): «Посадка» только останавливает таймер (land-flight),
   // итог записывают отдельной кнопкой — в поле руки заняты бортом.
   if (!s.end && s.landedAt) {
-    h += `<div class="timer landed" id="timer">${clockHtml(s.landedAt - s.start)}</div>
+    h += `<div class="timer landed" id="timer" data-sid="${s.id}">${clockHtml(s.landedAt - s.start)}</div>
       <div class="banner">Посадка зафиксирована — таймер остановлен. Осталось записать итог.</div>
       <button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
       <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
       <p class="small muted center" style="margin-top:12px">«Продолжить полёт» снова запустит таймер.</p>`;
   } else if (!s.end) {
-    h += `<div class="timer" id="timer">${clockHtml(Date.now() - s.start)}</div>
+    h += `<div class="timer" id="timer" data-sid="${s.id}">${clockHtml(Date.now() - s.start)}</div>
       <button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">Посадка</button>
       <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
       <p class="small muted center" style="margin-top:12px">Таймер идёт. Можно свернуть приложение — время не потеряется.</p>`;
@@ -3673,7 +4017,7 @@ function csvSave(name, head, rows) {
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const line = (cells) => cells.map(q).join(';');
   const csv = '﻿' + [line(head)].concat(rows.map(line)).join('\r\n') + '\r\n';
-  download(name + '-' + todayISO() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  saveFile(name + '-' + todayISO() + '.csv', new Blob([csv], { type: 'text/csv;charset=utf-8' }));
 }
 
 function exportLogCsv() {
@@ -3779,10 +4123,11 @@ function wxLimits() {
   const a = S.aircraft.find((x) => x.id === UI.wx.aircraftId);
   if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false, name: '', battName: '' };
   const b = S.batteries.find((x) => x.id === UI.wx.batteryId);
+  const own = wxOwnWind(a);
   return {
-    maxW: a.maxWind || wxEstimate(a, b && b.weight),
-    alt: a.maxAlt || WX_DEFAULT_ALT[a.type] || 100,
-    est: !a.maxWind,
+    maxW: own || wxEstimate(a, b && b.weight),
+    alt: wxOwnAlt(a),
+    est: !own,
     name: a.name,
     battName: b ? b.label : '',
   };
@@ -3922,21 +4267,25 @@ function wxDay(json, dayIdx, maxW, altM) {
   const riseH = parseInt(sunrise.slice(11, 13), 10);
   const setH = parseInt(sunset.slice(11, 13), 10);
   const hours = [];
+  // Open-Meteo отдаёт null для недостающих часов, а кэш приезжает и из
+  // копии: каждое значение — число или null, чтобы .toFixed() в
+  // шаблонах не ронял «Сегодня» (запасной экран) и «Окна».
+  const num = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
   for (let i = 0; i < H.time.length; i++) {
     if (!H.time[i].startsWith(date)) continue;
     const hh = parseInt(H.time[i].slice(11, 13), 10);
+    const at = (key) => num((H[key] || [])[i]);
+    const lvl = levels.map((l) => at('wind_speed_' + l + 'm')).filter((v) => v != null);
     const hr = {
       hh,
       light: hh >= riseH && hh <= setH,
-      temp: H.temperature_2m[i],
-      w10: H.wind_speed_10m[i],
-      gust: H.wind_gusts_10m[i],
-      alt: levels.length
-        ? Math.max(...levels.map((l) => H['wind_speed_' + l + 'm'][i]))
-        : H.wind_speed_10m[i],
-      prec: H.precipitation[i],
-      pp: H.precipitation_probability[i] || 0,
-      code: H.weather_code[i],
+      temp: at('temperature_2m'),
+      w10: at('wind_speed_10m'),
+      gust: at('wind_gusts_10m'),
+      alt: lvl.length ? Math.max(...lvl) : at('wind_speed_10m'),
+      prec: at('precipitation'),
+      pp: at('precipitation_probability') || 0,
+      code: at('weather_code'),
     };
     // Запрет и сложность считаются один раз здесь; вердикт, иконка и
     // строка часа читают готовое — ничего не расходится и не считается дважды.
@@ -4030,6 +4379,134 @@ function wxDayOptions() {
   return out;
 }
 
+// Число из часа прогноза в подпись: «12», а без данных — «—»
+// (Open-Meteo отдаёт null, выдумывать «0 м/с» нельзя).
+function wxNum(v) {
+  return Number.isFinite(v) ? v.toFixed(0) : '—';
+}
+
+// «получен 20 мин назад» — одна формулировка на экран окон и герой «Сегодня».
+function wxAgoText(fetched) {
+  const age = Date.now() - fetched;
+  return age < 90000 ? 'только что'
+    : age < 3600000 ? Math.round(age / 60000) + ' мин назад'
+    : Math.round(age / 3600000) + ' ч назад';
+}
+
+// Текущий час по МСК (0–23) — отметка «сейчас» на полоске дня.
+function wxNowHour() {
+  return +new Date().toLocaleString('en-GB', { timeZone: WX_TZ, hour: 'numeric', hourCycle: 'h23' }) || 0;
+}
+
+// Полоска 24 часов: сегмент на час, цвет — вердикт (g/y/r), ночь
+// приглушена (.n), выбранный час обведён (.now). Под полоской — деления.
+function wxStripHtml(day, hour) {
+  const cls = (hr) => (hr.verdict === 'ok' ? 'g' : hr.verdict === 'warn' ? 'y' : 'r') +
+    (hr.light ? '' : ' n') + (hr.hh === hour ? ' now' : '');
+  const words = { ok: 'можно', warn: 'на пределе', bad: 'не стоит' };
+  return `<span class="strip" role="img" aria-label="Час за часом: ${day.hours.map((hr) =>
+    String(hr.hh).padStart(2, '0') + ' ' + words[hr.verdict]).join(', ')}">${
+    day.hours.map((hr) => `<i class="${cls(hr)}"></i>`).join('')}</span>
+    <span class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></span>`;
+}
+
+// Порог ветра и высота борта для окон — как wxLimits, но для любого
+// борта (герой на «Сегодня» считает по первому собранному).
+function wxLimitsOf(a) {
+  if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false };
+  const own = wxOwnWind(a);
+  return {
+    maxW: own || wxEstimate(a, (armedBattery(a) || {}).weight),
+    alt: wxOwnAlt(a),
+    est: !own,
+  };
+}
+
+// Собственные пороги борта — только как положительные числа: loadAll
+// уже нормализует поля, но порог идёт в разметку без esc(), поэтому
+// защита стоит и здесь (иначе строка из копии — прямо в HTML).
+function wxOwnWind(a) {
+  const w = +a.maxWind;
+  return isFinite(w) && w > 0 ? w : 0;
+}
+function wxOwnAlt(a) {
+  const h = +a.maxAlt;
+  return isFinite(h) && h > 0 ? h : (WX_DEFAULT_ALT[a.type] || 100);
+}
+
+// Свежий кэш прогноза для основной локации: не старше 6 часов и снят
+// именно для неё (по имени места). Никаких запросов — только кэш;
+// иначе «Сегодня» показывает обычную строку «Окна для полётов».
+const WX_FRESH_MS = 6 * 3600 * 1000;
+// После трёх часов прогноз помечается «устарел» — одинаково в герое
+// «Сегодня» и на экране «Окна», чтобы оценка свежести не расходилась.
+const WX_STALE_MS = 3 * 3600 * 1000;
+function wxCacheFresh() {
+  const c = S.settings.weatherCache;
+  const home = S.sites.find((s) => s.isDefault);
+  if (!c || !c.json || !c.json.daily || !home || c.place !== home.name) return null;
+  if (Date.now() - (+c.fetched || 0) > WX_FRESH_MS) return null;
+  return c;
+}
+
+// Вердикт дня из кэша для борта a (или порога по умолчанию): заголовок
+// с окнами, полоска 24 часов и подпись. Тап по карточке ведёт в окна.
+// compact — вариант для «на поле»/«в полёте»: короче подпись.
+function wxHeroHtml(a, compact) {
+  const c = wxCacheFresh();
+  if (!c) return '';
+  const idx = (c.json.daily.time || []).indexOf(wxTodayISO());
+  const lim = wxLimitsOf(a);
+  const day = idx < 0 ? null : wxDay(c.json, idx, lim.maxW, lim.alt);
+  if (!day || !day.hours.length) return '';
+  const now = wxNowHour();
+  const span = (w) => `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`;
+  // Заголовок — про ближайшее: текущее окно или следующее сегодня.
+  const cur = day.windows.find((w) => w.from <= now && now <= w.to);
+  const next = day.windows.find((w) => w.from > now);
+  let title, cls;
+  if (cur) { title = cur.to >= 23 ? 'Можно лететь до конца дня' : `Можно лететь до ${String(cur.to + 1).padStart(2, '0')}:00`; cls = 'ok'; }
+  else if (next) { title = `Можно лететь ${span(next)}`; cls = 'ok'; }
+  else if (day.windows.length) { title = 'Окна на сегодня прошли'; cls = 'muted'; }
+  else { title = 'Сегодня лучше не лететь'; cls = 'warn'; }
+  const hr = day.hours.find((x) => x.hh === now) || day.hours[0];
+  const windNow = `${wxNum(hr.w10)} м/с у земли${day.topLevel ? ` · ${wxNum(hr.alt)} на ${day.topLevel} м` : ''} · порывы до ${wxNum(hr.gust)}`;
+  const stale = Date.now() - (+c.fetched || 0) > WX_STALE_MS
+    ? ' · <span style="color:var(--warn)">устарел</span>' : '';
+  const sub = compact ? windNow + stale
+    : `${esc(c.place)} · ${a ? `${esc(a.name)} держит ${lim.est ? '≈' : 'до '}${lim.maxW} м/с` : `порог ${lim.maxW} м/с`} · обновлено ${wxAgoText(c.fetched)}${stale}`;
+  // Без aria-label на кнопке: он заменил бы всё доступное имя, а
+  // заголовок-вердикт и ветер и есть смысл карточки. Внутри — только
+  // фразовый контент (span), как требует модель содержимого <button>.
+  return `<button class="card wx-hero" data-nav="#/weather">
+    <span class="wx-hero-top"><span class="row-ic">${ICONS.weather}</span>
+      <span class="grow"><span class="t ${cls}">${title}</span>
+      <span class="d">${sub} <span class="badge online">online</span></span></span>
+      <span class="chev">${ICONS.chev}</span></span>
+    ${wxStripHtml(day, now)}
+  </button>`;
+}
+
+// Герой или строка «Окна для полётов». Стартовый экран не должен
+// зависеть от содержимого кэша (он приезжает и из копии): любая ошибка
+// в разборе прогноза — обычная строка, а не пустой экран.
+function wxHeroOrRow(a, compact) {
+  try {
+    return wxHeroHtml(a, compact) || wxRowHtml();
+  } catch (e) {
+    console.warn('герой погоды: кэш прогноза не разобран', e);
+    return wxRowHtml();
+  }
+}
+
+// Строка «Окна для полётов» — когда свежего кэша нет.
+function wxRowHtml() {
+  return `<div class="card flat">` +
+    rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов
+      <span class="badge online">online</span></span>
+      <span class="d">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
+}
+
 function viewWeather() {
   const wx = UI.wx;
   if (!wx.data && S.settings.weatherCache) wx.data = S.settings.weatherCache;
@@ -4090,11 +4567,8 @@ function viewWeather() {
     const baseIdx = (wx.data.json.daily.time || []).indexOf(wxTodayISO());
     const day = baseIdx < 0 ? null : wxDay(wx.data.json, baseIdx + wx.day, lim.maxW, lim.alt);
     const age = Date.now() - wx.data.fetched;
-    const ago = age < 90000 ? 'только что'
-      : age < 3600000 ? Math.round(age / 60000) + ' мин назад'
-      : Math.round(age / 3600000) + ' ч назад';
-    h += `<p class="small muted">${esc(wx.data.place)} · прогноз получен ${ago}
-      ${age > 3 * 3600 * 1000 ? ' — <span style="color:var(--warn)">устарел, обновите</span>' : ''}</p>`;
+    h += `<p class="small muted">${esc(wx.data.place)} · прогноз получен ${wxAgoText(wx.data.fetched)}
+      ${age > WX_STALE_MS ? ' — <span style="color:var(--warn)">устарел, обновите</span>' : ''}</p>`;
     if (!day) {
       h += `<div class="banner warn">Сохранённый прогноз устарел или не покрывает эту дату — нажмите «Показать прогноз».</div>`;
     } else {
@@ -4131,8 +4605,8 @@ function viewWeather() {
             <div class="gauge"><i style="width:${Math.round(load * 100 / 1.15)}%;background:${col}"></i></div>
             <span class="chip ${chipCls}">${word}</span>
           </div>
-          <div class="wxr-sub">ветер у земли ${hr.w10.toFixed(0)} м/с${day.topLevel
-            ? ` · на высоте ${hr.alt.toFixed(0)}` : ''} · порывы до ${hr.gust.toFixed(0)} · ${Math.round(hr.temp)}°${rain}${marks}</div>
+          <div class="wxr-sub">ветер у земли ${wxNum(hr.w10)} м/с${day.topLevel
+            ? ` · на высоте ${wxNum(hr.alt)}` : ''} · порывы до ${wxNum(hr.gust)} · ${wxNum(hr.temp)}°${rain}${marks}</div>
         </div>`;
       }).join('');
       h += '</div>';
@@ -4152,8 +4626,8 @@ function viewWeather() {
 function viewMore() {
   const ver = ($('meta[name="build"]') || {}).content || 'dev';
   let h = pageHead('Ещё');
+  // «Окна для полётов» здесь нет (2.0): они всегда на «Сегодня» — героем или строкой.
   h += '<div class="card flat">';
-  h += rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов <span class="badge online">online</span></span><span class="d">Погода по локации: когда можно лететь</span></span>`, 'weather');
   h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d">Что взять с собой: наборы и галочки</span></span>`, 'packing');
   h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
   h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d">Запомненные места полётов</span></span>`, 'sites');
@@ -4385,6 +4859,10 @@ function viewBackup() {
   h += `<div class="banner">Все данные RC Planner живут в этом браузере на этом устройстве.
     Резервная копия — обычный файл, вы сами решаете, где его хранить.</div>`;
   h += `<button class="btn btn-primary" data-act="export-all">Сохранить резервную копию</button>`;
+  const lb = +S.settings.lastBackupAt || 0;
+  h += `<p class="small muted" style="margin:6px 2px 0">Последняя копия: ${lb
+    ? `${fmtDate(new Date(lb).toLocaleDateString('en-CA'))}, ${fmtTime(lb)}${backupDue() ? ' — <span style="color:var(--warn)">пора обновить</span>' : ''}`
+    : 'ещё не было'}. На телефоне файл предлагается через системный лист «Поделиться».</p>`;
   h += `<div class="card" style="margin-top:8px">` +
     field('Восстановить из файла', `<input type="file" accept=".rcpilot,.json,application/json" data-change="import-file">`,
       'Файл .rcpilot или .json, созданный RC Planner') + '</div>';
@@ -4418,6 +4896,8 @@ function viewPrivacy() {
     приложение передаёт только своё доменное имя, без каких-либо ваших данных.</p>
     <p style="margin-top:8px">Статистика, печать журнала и экспорт в CSV считаются и собираются прямо
     в браузере: файл сохраняется на устройство, никуда не отправляется.</p>
+    <p style="margin-top:8px">Резервная копия и CSV на телефоне предлагаются через системный лист
+    «Поделиться»: куда положить файл, решаете вы; приложение само никуда его не отправляет.</p>
     <p style="margin-top:8px">Удаление данных в настройках стирает их безвозвратно: копий нигде нет.
     Резервная копия — файл, который вы сохраняете сами.</p>
   </div>`;
@@ -4739,7 +5219,8 @@ const ACTIONS = {
   'del-session-yes': async (el) => { await del('sessions', el.dataset.id); closeModal(); render(); },
 
   /* --- Обслуживание --- */
-  'add-maint': (el) => openMaintForm(null, el.dataset.id),
+  // data-title/data-kind — предзаполнение с «Сегодня» («Осмотр после полёта #N»)
+  'add-maint': (el) => openMaintForm(null, el.dataset.id, { title: el.dataset.title || '', kind: el.dataset.kind || '' }),
   'edit-maint': (el) => openMaintForm(S.maintenance.find((m) => m.id === el.dataset.id)),
   'del-maint': (el) => confirmModal('Удалить запись обслуживания?', 'del-maint-yes', `data-id="${el.dataset.id}"`),
   'del-maint-yes': async (el) => {
@@ -4948,7 +5429,23 @@ const ACTIONS = {
   /* --- Данные --- */
   'export-all': async () => {
     const snap = await RCDB.snapshot();
-    await exportData(snap, 'rc-planner-backup-' + todayISO() + '.rcpilot', 'full');
+    const saved = await exportData(snap, 'rc-planner-backup-' + todayISO() + '.rcpilot', 'full');
+    // Дата копии — только если файл действительно ушёл (лист «Поделиться»
+    // закрыт — копии не было). От неё считается напоминание backupDue().
+    if (saved) {
+      S.settings.lastBackupAt = Date.now();
+      await saveSettings();
+      render(true);
+    }
+  },
+  // «Разобраться»: все АКБ «после полёта» разом помечаются заряженными.
+  'batts-charged-all': async () => {
+    for (const b of S.batteries.filter((x) => x.charge === 'flown' && x.status !== 'retired')) {
+      b.charge = 'ready';
+      await RCDB.put('batteries', b);
+    }
+    S.batteries = await RCDB.all('batteries');
+    render(true);
   },
   'import-replace': async () => { await doImport('replace'); },
   'import-merge': async () => { await doImport('merge'); },
@@ -5049,9 +5546,11 @@ function openModelForm(a, presetId, saved) {
   </form>`);
 }
 
-function openMaintForm(m, aircraftId) {
+// preset — {title, kind} для новой записи (осмотр с «Сегодня»).
+function openMaintForm(m, aircraftId, preset) {
   const isNew = !m;
-  m = m || { aircraftId, date: todayISO(), kind: 'repair' };
+  preset = preset || {};
+  m = m || { aircraftId, date: todayISO(), kind: MAINT_KINDS[preset.kind] ? preset.kind : 'repair', title: preset.title || '' };
   openModal(isNew ? 'Обслуживание' : 'Изменить запись', `<form data-form="maint" ${m.id ? `data-id="${m.id}"` : `data-aid="${m.aircraftId}"`}>
     ${field('Что сделано / нужно сделать', `<input type="text" name="title" required value="${esc(m.title || '')}" placeholder="напр. Замена мотора №3">`)}
     <div class="grid2">
@@ -5715,7 +6214,7 @@ async function exportData(data, filename, scope) {
       out.data[store].push(copy);
     }
   }
-  download(filename, new Blob([JSON.stringify(out)], { type: 'application/json' }));
+  return saveFile(filename, new Blob([JSON.stringify(out)], { type: 'application/json' }));
 }
 
 function validateBackup(obj) {
@@ -5910,17 +6409,17 @@ function paint(keepScroll, toTop) {
     window.scrollTo(0, 0);
   }
 
-  // Живой таймер на экране активного полёта.
-  if (UI.view === 'session') {
-    const s = S.sessions.find((x) => x.id === UI.arg);
-    if (s && !s.end && !s.landedAt) {
-      TIMER = setInterval(() => {
-        const t = $('#timer');
-        const cur = S.sessions.find((x) => x.id === s.id);
-        if (t && cur && !cur.end && !cur.landedAt) t.innerHTML = clockHtml(Date.now() - s.start);
-        else { clearInterval(TIMER); TIMER = null; }
-      }, 1000);
-    }
+  // Живой таймер: #timer с data-sid есть на экране полёта и в карточке
+  // полёта на «Сегодня» — интервал один на любой экран.
+  const tm = $('#timer[data-sid]');
+  const s = tm && S.sessions.find((x) => x.id === tm.dataset.sid);
+  if (s && !s.end && !s.landedAt) {
+    TIMER = setInterval(() => {
+      const t = $('#timer');
+      const cur = S.sessions.find((x) => x.id === s.id);
+      if (t && cur && !cur.end && !cur.landedAt) t.innerHTML = clockHtml(Date.now() - cur.start);
+      else { clearInterval(TIMER); TIMER = null; }
+    }, 1000);
   }
 }
 

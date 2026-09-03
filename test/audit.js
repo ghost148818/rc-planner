@@ -104,6 +104,54 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok((await page.textContent('#views')).includes('#—'), 'нечисловой номер полёта показан как «#—»');
   await page.evaluate(async () => { await window.RCDB.del('sessions', 'no-probe'); await window.loadAll(); });
 
+  // XSS-проба четвёртая: «Сегодня» с героем погоды из кэша. Порог ветра
+  // борта (maxWind) и циклы АКБ идут в разметку стартового экрана без
+  // esc(), а из копии приходят непроверенными (закрыто нормализацией
+  // в loadAll, ревью пакета 3). Заодно: null в почасовых данных кэша
+  // (так Open-Meteo отдаёт пропуски) не должен ронять «Сегодня» и «Окна».
+  await page.evaluate(async () => {
+    const today = wxTodayISO();
+    const keys = ['temperature_2m', 'wind_speed_10m', 'wind_gusts_10m', 'wind_speed_80m',
+      'wind_speed_120m', 'wind_speed_180m', 'precipitation', 'precipitation_probability', 'weather_code'];
+    const H = { time: [] };
+    keys.forEach((k) => { H[k] = []; });
+    for (let h = 0; h < 24; h++) {
+      H.time.push(today + 'T' + String(h).padStart(2, '0') + ':00');
+      keys.forEach((k) => H[k].push(k === 'weather_code' ? 1 : k === 'temperature_2m' ? 15 : 3));
+    }
+    H.wind_speed_10m[wxNowHour()] = null; // пропуск именно в текущем часе — его читает герой
+    const json = { latitude: 55.7, longitude: 37.6, hourly: H,
+      daily: { time: [today], sunrise: [today + 'T05:00'], sunset: [today + 'T20:00'] } };
+    const tag = '<img src=x onerror="window.__xss4=1">';
+    await window.RCDB.put('sites', { id: 'wx-site', name: 'Проба места', isDefault: true, lat: 55.7, lon: 37.6 });
+    await window.RCDB.put('batteries', { id: 'xss-batt', label: 'Проба циклов', chem: 'lipo', charge: 'flown', cycles: tag });
+    await window.RCDB.put('aircraft', { id: 'xss-wind', name: 'Проба ветра', type: 'plane', components: {},
+      batteryId: 'xss-batt', maxWind: tag, maxAlt: tag });
+    S.settings.weatherCache = { fetched: Date.now(), place: 'Проба места', json };
+    await saveSettings();
+    await window.loadAll();
+    location.hash = '#/today';
+  });
+  await page.waitForTimeout(250);
+  const todayHtml = await page.evaluate(() => document.getElementById('views').innerHTML);
+  ok(todayHtml.includes('wx-hero'), '«Сегодня»: герой погоды собран из кэша с пропуском в часе');
+  ok(todayHtml.includes('Зарядить: Проба циклов'), '«Сегодня»: строка «Зарядить» показана');
+  ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0,
+    '«Сегодня»: порог ветра и циклы из копии не стали тегом');
+  ok(!(await page.evaluate(() => window.__xss4)), 'обработчик в maxWind/cycles не исполнился');
+  await page.evaluate(() => { location.hash = '#/weather'; });
+  await page.waitForTimeout(250);
+  const wxHtml = await page.evaluate(() => document.getElementById('views').innerHTML);
+  ok(wxHtml.includes('ветер у земли —'), '«Окна»: пропуск в кэше показан как «—», экран не упал');
+  await page.evaluate(async () => {
+    await window.RCDB.del('sites', 'wx-site');
+    await window.RCDB.del('aircraft', 'xss-wind');
+    await window.RCDB.del('batteries', 'xss-batt');
+    delete S.settings.weatherCache;
+    await saveSettings();
+    await window.loadAll();
+  });
+
   // Модальное окно закрывается.
   await page.evaluate(() => { location.hash = '#/more'; });
   await page.click('[data-act="whatsnew"]');

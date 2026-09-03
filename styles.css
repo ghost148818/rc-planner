@@ -859,3 +859,58 @@ html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
   }
   #print-area th { background: #eee; }
 }
+
+/* ---------- «Сегодня»: состояния дня ----------
+   Герой (борт на поле / полёт), карточка погоды из кэша с полоской
+   24 часов, строки-действия «Перед выездом» и «Разобраться». */
+.row .row-main {
+  display: flex; align-items: center; gap: 12px;
+  text-align: left;
+  min-height: var(--seg);
+  min-width: 0;
+}
+.thumb.lg { width: 72px; height: 72px; border-radius: 14px; }
+.thumb.lg.ph svg { width: 34px; height: 34px; }
+.hero { padding: 16px; }
+.hero-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.hero-top .grow { flex: 1; min-width: 0; }
+.hero-name { display: block; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
+.hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--ok); }
+.ico14 { display: inline-flex; }
+.ico14 svg { width: 14px; height: 14px; }
+.hero .btn { margin-top: 0; }
+.hero .btn + .btn { margin-top: 8px; }
+.hero-flight .timer { margin: 4px 0 14px; font-size: 52px; }
+/* Карточка погоды — целиком кнопка в окна */
+.wx-hero { display: block; width: 100%; text-align: left; padding: 12px 14px; }
+.wx-hero:active { background: var(--card-2); }
+.wx-hero-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.wx-hero-top .grow { flex: 1; min-width: 0; }
+.wx-hero .t { display: block; font-size: 17px; font-weight: 700; line-height: 1.25; }
+.wx-hero .t.ok { color: var(--ok); }
+.wx-hero .t.warn { color: var(--warn); }
+.wx-hero .t.muted { color: var(--mut); }
+.wx-hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
+.wx-hero .chev { color: var(--dim); flex: none; }
+.wx-hero .chev svg { width: 18px; height: 18px; }
+/* Полоска 24 часов: сегмент на час, ночь приглушена, «сейчас» обведён */
+.strip { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
+.strip i { flex: 1 1 0; display: block; background: var(--card-2); }
+.strip .g { background: var(--ok); }
+.strip .y { background: var(--warn); }
+.strip .r { background: var(--bad); }
+.strip .n { opacity: 0.55; }
+.strip .now { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; opacity: 1; }
+.ticks {
+  display: flex; justify-content: space-between;
+  color: var(--dim); font-size: 11px; font-family: var(--mono);
+  margin-top: 4px;
+}
+.stat .v.warn { color: var(--warn); }
+/* Баннер копии: иконка, текст и кнопка в одну линию */
+.banner.backup { align-items: center; }
+.banner.backup > svg { margin-top: 0; }
+/* Чип-действие (заряд АКБ): статус тот же, но касание — как у малых
+   кнопок, растёт в режиме «В перчатках» через --seg */
+button.chip { cursor: pointer; min-height: var(--seg); padding: 0 12px; }
