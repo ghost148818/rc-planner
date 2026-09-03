@@ -544,6 +544,17 @@ async function loadAll() {
     for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = num(b[k]);
     b.cycles = Math.max(0, Math.round(num(b.cycles) || 0));
   }
+  // Кэш прогноза тоже приезжает из копии: его latitude/longitude идут
+  // в data-атрибуты кнопки Windy (финальное ревью 2.0: строка с
+  // `" autofocus onfocus=` исполнялась без единого касания). Координаты —
+  // строго числа; иначе кэш целиком в мусор — «Окна» запросят прогноз заново.
+  const wc = S.settings.weatherCache;
+  if (wc) {
+    const j = wc.json;
+    const lat = j && num(j.latitude), lon = j && num(j.longitude);
+    if (lat == null || lon == null) delete S.settings.weatherCache;
+    else { j.latitude = lat; j.longitude = lon; }
+  }
   // Группы флота из импортированной копии: только валидные записи
   // (id/parentId — безопасные строки, name — строка).
   const idOk = (v) => typeof v === 'string' && /^[\w-]{1,64}$/.test(v);
@@ -2272,8 +2283,8 @@ function viewPack() {
     <div class="small muted" style="margin-bottom:8px">${done} из ${p.items.length}</div>`;
   h += '<div class="card flat">';
   h += p.items.map((it, i) => `<div class="ck" data-state="${it.done ? 'ok' : ''}">
-      <button class="grow" data-act="pack-toggle" data-i="${i}" style="text-align:left;min-height:var(--seg)">
-        <span class="t">${esc(it.t)}</span></button>
+      <button class="ck-main" data-act="pack-toggle" data-i="${i}">
+        <span class="grow"><span class="t">${esc(it.t)}</span></span></button>
       <button class="st" data-act="pack-toggle" data-i="${i}"${UI.packLastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''} aria-label="${it.done ? 'Собрано' : 'Не собрано'}">${it.done ? ICONS.check : ''}</button>
       <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
     </div>`).join('');
@@ -2984,10 +2995,14 @@ function viewWeather() {
         </div>`;
       }).join('');
       h += '</div></div></details>';
-      const wlat = wx.data.json.latitude, wlon = wx.data.json.longitude;
-      h += `<button class="btn" style="margin-top:8px" data-act="wx-windy" data-lat="${wlat}" data-lon="${wlon}">
-        Windy: карта ветра <span class="badge online">online</span></button>
-        <div class="windy-box" hidden></div>`;
+      // Координаты — только через numVal (правило проекта): кэш нормализует
+      // loadAll, но wx.data может держать объект из прошлого прогона.
+      const wlat = numVal(wx.data.json.latitude), wlon = numVal(wx.data.json.longitude);
+      if (wlat !== '' && wlon !== '') {
+        h += `<button class="btn" style="margin-top:8px" data-act="wx-windy" data-lat="${wlat}" data-lon="${wlon}">
+          Windy: карта ветра <span class="badge online">online</span></button>
+          <div class="windy-box" hidden></div>`;
+      }
       h += `<p class="small muted" style="margin-top:8px">Данные: Open-Meteo (бесплатно, без регистрации).
         Прогноз — ориентир, решение о вылете всегда за пилотом.</p>`;
     }
@@ -4714,18 +4729,24 @@ function handleImportFile(input) {
    9. НАВИГАЦИЯ И ОТРИСОВКА
 ============================================================ */
 
-// #/log и #/stats остались как старые адреса (закладки, ссылки в
-// changelog): открывают «Журнал» на нужном сегменте.
 const RENDERERS = {
   today: viewToday, fleet: viewFleet, model: viewModel,
   flight: viewFlight, prep: viewPrep, session: viewSession,
   journal: viewJournal,
-  log: () => { UI.journalTab = 'log'; return viewJournal(); },
-  stats: () => { UI.journalTab = 'stats'; return viewJournal(); },
   packing: viewPacking, pack: viewPack, weather: viewWeather,
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,
   backup: viewBackup, privacy: viewPrivacy,
+};
+
+// Старые адреса (закладки, ссылки в changelog): #/log и #/stats
+// открывают «Журнал» на нужном сегменте. Псевдоним разрешается ОДИН раз
+// при разборе маршрута в onRoute, а не в рендерере: рендерер зовётся при
+// каждой перерисовке, и сегмент «Полёты · Статистика» на таком адресе
+// был мёртв — render(true) возвращал его назад (финальное ревью 2.0).
+const ROUTE_ALIAS = {
+  log: { view: 'journal', journalTab: 'log' },
+  stats: { view: 'journal', journalTab: 'stats' },
 };
 
 // Тап по текущему адресу — перерисовать и прокрутить к началу. Сравниваем
@@ -4771,7 +4792,9 @@ function onRoute(force) {
   if (!force && hash === UI.routeHash) return;
   UI.routeHash = hash;
   const parts = hash.replace(/^#\/?/, '').split('/');
-  const view = parts[0] || 'today';
+  let view = parts[0] || 'today';
+  const alias = ROUTE_ALIAS[view];
+  if (alias) { UI.journalTab = alias.journalTab; view = alias.view; }
   const prevView = UI.view;
   UI.view = RENDERERS[view] ? view : 'today';
   UI.arg = parts[1] ? decodeURIComponent(parts[1]) : null;

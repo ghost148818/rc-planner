@@ -95,7 +95,7 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
       durationMin: 3, flightNo: '<img src=x onerror="window.__xss3=1">', result: 'normal',
     });
     await window.loadAll();
-    location.hash = '#/log'; // не #/journal: после обхода экранов сегмент стоит на «Статистике»
+    location.hash = '#/log'; // старый адрес: открывает журнал на «Полётах» (после обхода VIEWS сегмент стоит на «Статистике»)
   });
   await page.waitForTimeout(200);
   ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0,
@@ -176,11 +176,44 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   await page.waitForTimeout(120);
   ok((await page.locator('.strip.tap button.now').count()) === 1 && (await page.locator('.strip.tap button.now[data-h="5"]').count()) === 0,
     '«Окна»: смена дня сбрасывает выбранный час на умолчание');
+  // XSS-проба пятая: координаты кэша прогноза. latitude/longitude из
+  // копии идут в data-атрибуты кнопки Windy; строка с `" autofocus
+  // onfocus=` исполнялась без единого касания (финальное ревью 2.0).
+  // Закрыто дважды: loadAll выбрасывает кэш с нечисловыми координатами,
+  // а шаблон пишет их только через numVal — проверяем оба пути.
+  const latPayload = '" autofocus onfocus="window.__xss5=1" x="';
+  await page.evaluate(async (payload) => {
+    const c = S.settings.weatherCache;
+    S.settings.weatherCache = { fetched: c.fetched, place: c.place, json: Object.assign({}, c.json, { latitude: payload }) };
+    await saveSettings();
+    await window.loadAll();
+    UI.wx.data = null; // как после перезагрузки: экран берёт кэш из настроек
+    window.go('#/weather'); // адрес тот же — go() перерисовывает, hash сам не сработал бы
+  }, latPayload);
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => !S.settings.weatherCache), '«Окна»: кэш с нечисловой широтой выброшен в loadAll');
+  ok((await page.locator('[data-act="wx-windy"]').count()) === 0 && (await page.locator('#views [onfocus], #views [autofocus]').count()) === 0,
+    '«Окна»: кнопки Windy нет, мусор из координат не стал атрибутом');
+  await page.evaluate(async (payload) => {
+    // Обход loadAll: объект прогноза прямо в UI.wx (как из прошлого прогона)
+    const H = { time: [], temperature_2m: [], wind_speed_10m: [], wind_gusts_10m: [], precipitation: [], precipitation_probability: [], weather_code: [] };
+    const today = wxTodayISO();
+    for (let h = 0; h < 24; h++) { H.time.push(today + 'T' + String(h).padStart(2, '0') + ':00'); H.temperature_2m.push(15); H.wind_speed_10m.push(3); H.wind_gusts_10m.push(4); H.precipitation.push(0); H.precipitation_probability.push(0); H.weather_code.push(1); }
+    UI.wx.data = { fetched: Date.now(), place: 'Проба места', json: { latitude: payload, longitude: 37.6, hourly: H,
+      daily: { time: [today], sunrise: [today + 'T05:00'], sunset: [today + 'T20:00'] } } };
+    render();
+  }, latPayload);
+  await page.waitForTimeout(250);
+  ok((await page.locator('.strip.tap button[data-act="weather-hour"]').count()) === 24, '«Окна»: прогноз с битой широтой показан');
+  ok((await page.locator('[data-act="wx-windy"]').count()) === 0 && (await page.locator('#views [onfocus], #views [autofocus]').count()) === 0,
+    '«Окна»: без числовых координат кнопки Windy нет, атрибут не вырвался');
+  ok(!(await page.evaluate(() => window.__xss5)), 'обработчик в координатах кэша не исполнился');
   await page.evaluate(async () => {
     await window.RCDB.del('sites', 'wx-site');
     await window.RCDB.del('aircraft', 'xss-wind');
     await window.RCDB.del('batteries', 'xss-batt');
     delete S.settings.weatherCache;
+    UI.wx.data = null;
     await saveSettings();
     await window.loadAll();
   });

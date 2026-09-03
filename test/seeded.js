@@ -19,11 +19,11 @@ const { ok, finish, serve, newPage } = require('./helpers');
 const PUB = path.join(__dirname, '..', 'public');
 const OUT = path.join(__dirname, 'shots', 'seeded');
 
-// Порог касания: 44 px, в перчатках 52. Элементы на токене --seg
-// (сегменты, малые кнопки, чипы, пилюли, кнопки шапки) по §1.2
-// спецификации ниже — 40/48; для них порог — сам токен (кто на нём
-// сидит, определяется на месте, см. checkScreen). Открытый вопрос
-// владельцу (spec §6): поднять токен до 44/52 или оставить исключение.
+// Порог касания: 44 px, в перчатках 52 — для ВСЕХ кнопок, ссылок-кнопок,
+// строк и селектов без исключений. Токен --seg (сегменты, малые кнопки,
+// чипы, пилюли, кнопки шапки) поднят до тех же 44/52 по финальному
+// ревью 2.0: прежнее исключение «по токену» отключало порог для самых
+// частых кнопок («Чек-лист», сегменты, «Назад», «Открыть» в каталоге).
 const TAP_MIN = 44;
 const TAP_MIN_GLOVES = 52;
 
@@ -127,31 +127,23 @@ const STATE_STEPS = {
 
 // Проверки одного экрана: горизонтальная прокрутка и размеры касания.
 async function checkScreen(page, tag, name, viewport, gloves) {
-  const r = await page.evaluate(({ min, minSeg }) => {
+  const r = await page.evaluate((min) => {
     const hscroll = document.scrollingElement.scrollWidth - window.innerWidth;
-    const root = document.documentElement;
-    const segPx = parseFloat(getComputedStyle(root).getPropertyValue('--seg')) || minSeg;
     // Только то, что нарисовано: скрытые (hidden/display:none) и
-    // нулевые по размеру элементы пользователь не нажимает.
-    const els = [...document.querySelectorAll('button, .row, select')];
-    const h1 = els.map((el) => el.getBoundingClientRect().height);
-    // Кто сидит на токене --seg: поднимаем токен на 1 px и смотрим,
-    // чья высота сдвинулась, — без списка классов, который устаревает.
-    root.style.setProperty('--seg', (segPx + 1) + 'px');
-    const h2 = els.map((el) => el.getBoundingClientRect().height);
-    root.style.removeProperty('--seg');
+    // нулевые по размеру элементы пользователь не нажимает. a.btn —
+    // ссылки-кнопки каталога инструментов («Открыть»).
+    const els = [...document.querySelectorAll('button, a.btn, .row, select')];
     const short = [];
-    els.forEach((el, i) => {
-      if (!h1[i] || !el.getBoundingClientRect().width) return;
-      const onSeg = Math.abs(h2[i] - h1[i] - 1) < 0.5;
-      const need = onSeg ? segPx : min;
-      if (h1[i] < need - 0.5) {
+    els.forEach((el) => {
+      const b = el.getBoundingClientRect();
+      if (!b.height || !b.width) return;
+      if (b.height < min - 0.5) {
         const id = el.dataset.act || el.dataset.nav || el.name || el.className || el.tagName;
-        short.push(`${el.tagName.toLowerCase()}[${id}] ${Math.round(h1[i])}px < ${need}`);
+        short.push(`${el.tagName.toLowerCase()}[${id}] ${Math.round(b.height)}px < ${min}`);
       }
     });
     return { hscroll, short };
-  }, { min: gloves ? TAP_MIN_GLOVES : TAP_MIN, minSeg: gloves ? 48 : 40 });
+  }, gloves ? TAP_MIN_GLOVES : TAP_MIN);
   ok(r.hscroll <= 1, `${tag}/${name}: без горизонтальной прокрутки`);
   ok(r.short.length === 0, `${tag}/${name}: кнопки, строки и селекты не ниже порога касания` +
     (r.short.length ? ` — ${r.short.length}: ${r.short.slice(0, 6).join('; ')}` : ''));
@@ -301,6 +293,12 @@ async function run(browser, tag, opts) {
 
   // --- Остальные экраны ---
   await shot('packing', '#/packing');
+  // Набор сборов: пункт — кнопка .ck-main высотой с клетку (финальное
+  // ревью 2.0: 40-пиксельная полоса внутри строки 65 px — тап мимо).
+  const packId = await page.evaluate(() => S.packing[0] && S.packing[0].id);
+  ok(!!packId, `${tag}: стартовые наборы сборов посеяны`);
+  await shot('pack', '#/pack/' + packId);
+  ok((await count('.ck > .ck-main[data-act="pack-toggle"]')) >= 3, `${tag}: пункты набора — кнопки на всю строку`);
   await shot('more', '#/more');
   await shot('tools', '#/tools');
   await shot('batteries', '#/batteries');
@@ -310,6 +308,16 @@ async function run(browser, tag, opts) {
   ok(await page.evaluate(() => document.body.textContent.includes('Последняя копия')), `${tag}: «Данные» показывают дату последней копии`);
   await shot('privacy', '#/privacy');
   await shot('form-model', '#/model/a1', async (p) => { await p.click('[data-act="edit-model"]'); await p.waitForSelector('dialog[open]'); }, { viewportOnly: true });
+  // prefers-reduced-motion обязан гасить и затемнение под окном: ::backdrop —
+  // псевдоэлемент, универсальный * его не выбирает (финальное ревью 2.0).
+  // С RCP_MOTION=1 контекст без reduce — там проверять нечего.
+  if (!process.env.RCP_MOTION) {
+    const dur = await page.evaluate(() => {
+      const d = document.querySelector('dialog[open]');
+      return d ? getComputedStyle(d).transitionDuration + ' | ' + getComputedStyle(d, '::backdrop').transitionDuration : 'нет окна';
+    });
+    ok(dur === '0s | 0s', `${tag}: при reduced-motion окно и ::backdrop без переходов (${dur})`);
+  }
   await page.keyboard.press('Escape');
 
   ok(errors.length === 0, `${tag}: ошибок консоли нет` + (errors.length ? ': ' + errors.slice(0, 3).join('; ') : ''));

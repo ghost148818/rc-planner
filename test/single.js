@@ -127,10 +127,21 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.click('[data-act="journal-tab"][data-tab="stats"]');
   await page.waitForSelector('.stat-line.four');
   ok(true, 'сегмент «Статистика» в журнале открывается');
-  // Старый адрес журнала остаётся рабочим (закладки, changelog)
+  // Старые адреса журнала остаются рабочими (закладки, changelog) —
+  // и сегмент на них живой: псевдоним разрешается в onRoute один раз,
+  // а не при каждой перерисовке (финальное ревью 2.0).
   await page.evaluate(() => { location.hash = '#/log'; });
   await page.waitForTimeout(80);
   ok((await page.textContent('#views')).includes('#001'), '#/log открывает журнал на полётах');
+  await page.click('[data-act="journal-tab"][data-tab="stats"]');
+  const statsOnLog = await page.waitForSelector('.stat-line.four', { timeout: 3000 }).then(() => true, () => false);
+  ok(statsOnLog, 'на #/log сегмент «Статистика» переключается');
+  await page.evaluate(() => { location.hash = '#/stats'; });
+  await page.waitForTimeout(80);
+  ok((await page.locator('.stat-line.four').count()) === 1, '#/stats открывает журнал на статистике');
+  await page.click('[data-act="journal-tab"][data-tab="log"]');
+  const logOnStats = await page.waitForFunction(() => document.body.textContent.includes('#001') && !document.querySelector('.stat-line.four'), null, { timeout: 3000 }).then(() => true, () => false);
+  ok(logOnStats, 'на #/stats сегмент «Полёты» переключается');
 
   // 6. Экспорт
   await page.evaluate(() => { location.hash = '#/backup'; });

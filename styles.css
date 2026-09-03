@@ -39,7 +39,7 @@
   --row-pad: 10px;  /* вертикальный отступ строки; его же вычитает .row > button.grow */
   --btn: 48px;      /* обычная кнопка */
   --primary: 56px;  /* главная кнопка экрана */
-  --seg: 40px;      /* сегменты, малые кнопки, кнопки в строке */
+  --seg: 44px;      /* сегменты, малые кнопки, кнопки в строке — не ниже порога касания 44 */
   --font: 16px;     /* основной текст */
   --font-d: 13px;   /* вторичная строка, подписи */
   --ck-box: 44px;   /* клетка чек-листа */
@@ -52,7 +52,7 @@
   --row: 64px;
   --btn: 56px;
   --primary: 64px;
-  --seg: 48px;
+  --seg: 52px;
   --font: 17px;
   --font-d: 14px;
   --ck-box: 52px;
@@ -874,9 +874,11 @@ html[data-vt="update"]::view-transition-new(*) { animation: ck-pop 0.2s var(--ea
 html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
 
 /* Универсальный * не выбирает псевдоэлементы, а transition не наследуется:
-   без ::before/::after анимация сегмента полоски не гасла (ревью пакета 5) */
+   без ::before/::after анимация сегмента полоски не гасла (ревью пакета 5);
+   ::backdrop — тоже псевдоэлемент, и затемнение под окном продолжало
+   проявляться 0.22 с (финальное ревью 2.0) */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; animation: none !important; }
+  *, *::before, *::after, ::backdrop { transition: none !important; animation: none !important; }
 }
 
 /* ---------- Печать журнала ---------- */

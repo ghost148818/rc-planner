@@ -125,6 +125,13 @@ const renderers = (app.match(/const RENDERERS = \{([\s\S]*?)\};/) || [])[1] || '
 const keys = (src) => [...src.matchAll(/(?:^|[\s{,])(?:'([\w-]+)'|([\w]+))\s*:/g)].map((m) => m[1] || m[2]);
 const rKeys = new Set(keys(renderers));
 ok(rKeys.size >= 10, 'RENDERERS распознан (' + rKeys.size + ' экранов)');
+// Псевдонимы маршрутов (#/log, #/stats → journal) разрешаются в onRoute:
+// маршрут считается существующим, если его цель — экран из RENDERERS.
+const aliases = (app.match(/const ROUTE_ALIAS = \{([\s\S]*?)\n\};/) || [])[1] || '';
+for (const m of aliases.matchAll(/(\w+):\s*\{\s*view:\s*'(\w+)'/g)) {
+  ok(rKeys.has(m[2]), 'псевдоним #/' + m[1] + ' ведёт на существующий экран ' + m[2]);
+  rKeys.add(m[1]);
+}
 for (const k of new Set(keys(tabOf))) ok(rKeys.has(k), 'экран ' + k + ' имеет отрисовщик');
 // Каждый маршрут data-nav="#/x" ведёт на существующий экран.
 for (const m of app.matchAll(/data-nav="#\/([\w-]+)/g)) {
