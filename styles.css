@@ -381,7 +381,7 @@ input[type="file"] { color: var(--mut); font-size: 14px; }
 .pill-row::-webkit-scrollbar { display: none; }
 select.sel-pill {
   width: auto;
-  max-width: 70%;
+  max-width: 100%;
   min-height: var(--seg);
   padding: 6px 30px 6px 12px;
   border-radius: 999px;
@@ -395,6 +395,25 @@ select.sel-pill {
   background-repeat: no-repeat;
 }
 select.sel-pill.sel { border-color: var(--text); }
+/* Селект по ширине ВЫБРАННОГО пункта (pillSelect в app.js): нативный
+   select с width:auto растёт по самому длинному <option> и на телефоне
+   уезжал за край. В одной grid-клетке лежат невидимая копия подписи
+   (::after из data-v — она задаёт ширину; отступы и кегль повторяют
+   селект) и сам селект поверх — абсолютно, вне потока: иначе его
+   внутренняя ширина (самый длинный пункт) всё равно раздувает клетку.
+   В flex-ряду обёртка ужимается (min-width: 0), а не переполняет ряд. */
+.sel-fit { display: inline-grid; position: relative; flex: 0 1 auto; min-width: 0; max-width: 100%; vertical-align: middle; }
+.sel-fit::after {
+  content: attr(data-v);
+  visibility: hidden;
+  white-space: nowrap;
+  font-size: 14px;
+  padding: 6px 30px 6px 12px;
+  border: 1px solid transparent;
+  min-height: var(--seg);
+}
+.sel-fit.sm::after { font-size: 13px; padding: 4px 26px 4px 10px; }
+.sel-fit > select { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; }
 
 /* Меню действий (popover): верхний слой, позиция под кнопкой ставится
    в toggleMenu. Переопределяем UA-стили popover (inset/margin/border).
@@ -1005,16 +1024,15 @@ button.chip { cursor: pointer; min-height: var(--seg); padding: 0 12px; }
 /* На узких телефонах четыре подписи стоят вплотную — чуть мельче */
 @media (max-width: 399px) { .seg.four button { font-size: 12.5px; padding: 0 1px; } }
 .seg.model-tabs { margin: 4px 0 12px; }
-/* Строки героя переносятся: рядом с превью 72 px остаётся ~240 px,
-   и селект статуса ужимать нельзя — нативный select режет текст
-   («вручную: (» вместо «вручную: Обслуживание»); не влез — уходит
-   под чип. Селект растёт по самому длинному пункту, это нормально. */
+/* Строки героя: селекты — по ширине выбранного пункта (.sel-fit).
+   Рядом с превью 72 px остаётся ~270 px — там только «Готов · авто»;
+   строка АКБ с чипом заряда идёт ниже на всю ширину карточки. Не влезло
+   (длинное имя АКБ, «вручную: Обслуживание») — переносится, а не
+   режется: нативный select при ужатии обрезает текст без многоточия. */
 .hero-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
-.hero-line + .hero-line { margin-top: 6px; }
-.hero-line > select.sel-sm { flex: none; max-width: 100%; }
+.hero-line > .sel-fit { flex: none; max-width: 100%; }
 .hero-line > .chip { flex: none; }
-/* Строка АКБ: пилюле — вся ширина, чип заряда при нехватке места уходит вниз */
-.hero-line > select.sel-pill { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.hero-batt { margin: -4px 0 12px; }
 /* Компактный селект статуса: ширина по содержимому, стрелка как у пилюли */
 select.sel-sm {
   width: auto;
@@ -1055,7 +1073,9 @@ select.sel-sm {
 .fleet-row .row-main { min-width: 45%; }
 
 /* ---------- Чек-лист: пилюли, меню клетки, липкая панель (2.0) ---------- */
-.prep-pills { align-items: center; margin-bottom: 10px; }
+/* Пилюли чек-листа помещаются в ширину экрана: без прокрутки вбок,
+   при нехватке места ужимаются обе (пропорционально ширине подписи) */
+.prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
 /* Кнопка карты — цель касания --tap (48 / 56), как у всех кнопок карты */
 .prep-pills .map-btn { width: var(--tap); min-height: var(--tap); border-radius: 999px; }
 .prog-line { display: flex; align-items: center; gap: 10px; margin: 4px 0; }

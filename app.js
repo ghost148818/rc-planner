@@ -374,11 +374,14 @@ function wakeIndicator() {
    3. СТАТУСЫ МОДЕЛЕЙ
 ============================================================ */
 
+// short — подпись чипа в тесных строках списков (флот, выбор борта):
+// «Обслуживание» и «Полёты запрещены» рядом с именем на телефоне резались
+// многоточием, а статус — главное в строке. Без short берётся label.
 const STATUS = {
   ready: { label: 'Готов', cls: 'st-ready' },
   check: { label: 'Проверить', cls: 'st-check' },
-  maintenance: { label: 'Обслуживание', cls: 'st-maintenance' },
-  grounded: { label: 'Полёты запрещены', cls: 'st-grounded' },
+  maintenance: { label: 'Обслуживание', short: 'ТО', cls: 'st-maintenance' },
+  grounded: { label: 'Полёты запрещены', short: 'Запрет', cls: 'st-grounded' },
   unknown: { label: 'Нет данных', cls: 'st-unknown' },
 };
 
@@ -485,10 +488,13 @@ function svcLeftText(sv) {
 // (одна открытая — сразу «Изменить запись», несколько — карточку борта).
 // Подпись — в своём span (.cl): в строке флота чип ограничен 40 % ширины
 // и длинный статус обрезается многоточием, а не выдавливает имя борта.
-function chip(st, aircraftId) {
+// short — короткая подпись для строк списков (см. STATUS); полная остаётся
+// в title, чтобы «ТО» можно было прочитать по долгому нажатию/наведению.
+function chip(st, aircraftId, short) {
   const s = STATUS[st] || STATUS.unknown;
   const link = st === 'maintenance' && aircraftId;
-  return `<span class="chip ${s.cls}${link ? ' chip-link' : ''}"${link ? ` data-aid="${esc(aircraftId)}"` : ''}><span class="cl">${s.label}</span></span>`;
+  const label = short && s.short ? s.short : s.label;
+  return `<span class="chip ${s.cls}${link ? ' chip-link' : ''}"${link ? ` data-aid="${esc(aircraftId)}"` : ''}${label !== s.label ? ` title="${s.label}"` : ''}><span class="cl">${label}</span></span>`;
 }
 
 // Полётов может идти несколько (два пилота, два борта) — но у одного
@@ -860,6 +866,16 @@ function selectHtml(name, options, current, extra) {
   return `<select name="${name}" ${extra || ''}>` +
     options.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(current) ? 'selected' : ''}>${esc(t)}</option>`).join('') +
     '</select>';
+}
+// Селект-пилюля по ширине ВЫБРАННОГО пункта. Нативный select с width:auto
+// растёт по самому длинному <option> («+ Добавить аккумулятор…»,
+// «вручную: Обслуживание») и на телефоне уезжал за край экрана. Обёртка
+// .sel-fit кладёт в ту же grid-клетку невидимую копию подписи (::after из
+// data-v) — она задаёт ширину, селект растянут поверх. small — компактный
+// вариант (.sel-sm), у него другие отступы и кегль.
+function pillSelect(name, options, current, extra, small) {
+  const hit = options.find(([v]) => String(v) === String(current)) || options[0] || ['', ''];
+  return `<span class="sel-fit${small ? ' sm' : ''}" data-v="${esc(hit[1])}">${selectHtml(name, options, current, extra)}</span>`;
 }
 
 function openModal(title, body) {
@@ -1349,13 +1365,13 @@ function fleetSortCmp() {
 
 function fleetRow(a) {
   const b = armedBattery(a);
-  // Имя не ужимается: кнопке имени — не меньше 45 % строки, чип статуса
-  // (не больше 40 %) при нехватке места обрезается многоточием.
+  // Имя не ужимается: кнопке имени — не меньше 45 % строки; чип статуса
+  // с короткой подписью (short), чтобы не резаться многоточием.
   return `<div class="row fleet-row">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
       <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
-    ${chip(statusOf(a), a.id)}
+    ${chip(statusOf(a), a.id, true)}
     <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
   </div>`;
 }
@@ -1546,9 +1562,12 @@ function viewModel() {
   return h;
 }
 
-// Герой: превью 72 px, чип статуса + компактный селект «авто/вручную»,
-// АКБ-пилюля (тот же селект model-batt) с чипом заряда, три плитки,
-// полоска регламента, кнопка «Чек-лист и полёт».
+// Герой: превью 72 px и рядом чип статуса + компактный селект
+// «авто/вручную»; ниже, на всю ширину карточки, АКБ-пилюля (тот же селект
+// model-batt) с чипом заряда; три плитки, полоска регламента, кнопка
+// «Чек-лист и полёт». Строка АКБ вынесена из-под превью: рядом с ним
+// остаётся ~270 px, и пилюля с чипом в одну строку не помещались —
+// герой складывался в четыре строки, превью висело посреди столбца.
 function modelHeroHtml(a, flights) {
   const st = statusOf(a);
   const bat = armedBattery(a);
@@ -1557,20 +1576,16 @@ function modelHeroHtml(a, flights) {
   return `<div class="card hero model-hero">
     <div class="hero-top">
       ${aircraftThumb(a, true)}
-      <span class="grow">
-        <span class="hero-line">${chip(st, a.id)}
-          <select class="sel-sm" data-change="status-manual" data-id="${a.id}" aria-label="Статус: авто или вручную">
-            <option value="" ${!a.statusManual ? 'selected' : ''}>авто</option>
-            ${Object.keys(STATUS).filter((k) => k !== 'unknown').map((k) =>
-              `<option value="${k}" ${a.statusManual === k ? 'selected' : ''}>вручную: ${STATUS[k].label}</option>`).join('')}
-          </select></span>
-        <span class="hero-line wrap">
-          ${selectHtml('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), a.batteryId || '',
-            `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"`)}
-          ${bat ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
-            data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
-        </span>
-      </span>
+      <span class="grow hero-line">${chip(st, a.id)}
+        ${pillSelect('statusManual', [['', 'авто']].concat(Object.keys(STATUS).filter((k) => k !== 'unknown')
+          .map((k) => [k, 'вручную: ' + STATUS[k].label])), a.statusManual || '',
+          `class="sel-sm" data-change="status-manual" data-id="${a.id}" aria-label="Статус: авто или вручную"`, true)}</span>
+    </div>
+    <div class="hero-line hero-batt">
+      ${pillSelect('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), a.batteryId || '',
+        `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"`)}
+      ${bat ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
+        data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
     </div>
     ${bat ? '' : `<div class="hint">Борт с установленным АКБ считается собранным к вылету
       и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>`}
@@ -1797,7 +1812,7 @@ function viewPrep() {
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-       <span class="d">${TYPES[a.type] || ''}${preparedFresh(a) ? ` · подготовлен в ${fmtTime(a.prepared.at)}` : ''}</span></span>${chip(statusOf(a), a.id)}`)).join('');
+       <span class="d">${TYPES[a.type] || ''}${preparedFresh(a) ? ` · подготовлен в ${fmtTime(a.prepared.at)}` : ''}</span></span>${chip(statusOf(a), a.id, true)}`)).join('');
     h += '</div>';
     return h;
   }
@@ -1820,13 +1835,15 @@ function viewPrep() {
     h += `<div class="banner warn">Подошёл регламент: ${svcSinceText(svcPrep)}
       с последнего обслуживания (${svcEveryText(svcPrep)}). Осмотрите борт внимательнее.</div>`;
   }
-  // Локация и АКБ — пилюли в один ряд (прокрутка вбок, названия не
-  // режутся внутри пилюли). Выбор АКБ здесь ставит её в борт.
+  // Локация и АКБ — пилюли в один ряд по ширине выбранного (pillSelect);
+  // при нехватке места ужимаются, а не уезжают за край. Подпись АКБ без
+  // веса (noWeight), как в герое борта: «Li-Ion 6S2P 7000 · 610 г» на
+  // телефоне не помещалась. Выбор АКБ здесь ставит её в борт.
   h += `<div class="pill-row prep-pills">
-    ${selectHtml('prepSite', siteOptions(null, { emptyLabel: 'Локация' }), UI.prep.siteId,
+    ${pillSelect('prepSite', siteOptions(null, { emptyLabel: 'Локация' }), UI.prep.siteId,
       `class="sel-pill${UI.prep.siteId ? ' sel' : ''}" data-change="prep-site" aria-label="Локация"`)}
     <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
-    ${selectHtml('prepBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true }), curBatt,
+    ${pillSelect('prepBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), curBatt,
       `class="sel-pill${curBatt ? ' sel' : ''}" data-change="prep-batt" aria-label="Аккумулятор — выбор ставит его в борт"`)}
   </div>`;
   if (tpls.length > 1) {
@@ -2074,7 +2091,7 @@ function viewJournal() {
   if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт');
   const fid = journalFilterId();
   if (S.aircraft.length > 1) {
-    h += `<div class="pill-row">${selectHtml('journalAircraft',
+    h += `<div class="pill-row">${pillSelect('journalAircraft',
       [['', 'Все борта']].concat(S.aircraft.map((a) => [a.id, a.name])),
       fid, `class="sel-pill${fid ? ' sel' : ''}" data-change="journal-aircraft" aria-label="Фильтр по борту"`)}</div>`;
   }
@@ -2870,7 +2887,8 @@ function wxHeroHtml(a, compact) {
   const day = idx < 0 ? null : wxDay(c.json, idx, lim.maxW, lim.alt);
   if (!day || !day.hours.length) return '';
   const now = wxNowHour();
-  const span = (w) => `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`;
+  // Диапазон неразрывный: иначе браузер переносит строку после «–»
+  const span = (w) => `<span class="nowrap">${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00</span>`;
   // Заголовок — про ближайшее: текущее окно или следующее сегодня.
   const cur = day.windows.find((w) => w.from <= now && now <= w.to);
   const next = day.windows.find((w) => w.from > now);
@@ -2880,11 +2898,11 @@ function wxHeroHtml(a, compact) {
   else if (day.windows.length) { title = 'Окна на сегодня прошли'; cls = 'muted'; }
   else { title = 'Сегодня лучше не лететь'; cls = 'warn'; }
   const hr = day.hours.find((x) => x.hh === now) || day.hours[0];
-  const windNow = `${wxNum(hr.w10)} м/с у земли${day.topLevel ? ` · ${wxNum(hr.alt)} на ${day.topLevel} м` : ''} · порывы до ${wxNum(hr.gust)}`;
+  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${day.topLevel ? ` · ${wxNum(hr.alt)} на ${day.topLevel} м` : ''} · порывы до ${wxNum(hr.gust)}`;
   const stale = Date.now() - (+c.fetched || 0) > WX_STALE_MS
     ? ' · <span style="color:var(--warn)">устарел</span>' : '';
   const sub = compact ? windNow + stale
-    : `${esc(c.place)} · ${a ? `${esc(a.name)} держит ${lim.est ? '≈' : 'до '}${lim.maxW} м/с` : `порог ${lim.maxW} м/с`} · обновлено ${wxAgoText(c.fetched)}${stale}`;
+    : `${esc(c.place)} · ${a ? `${esc(a.name)} держит <span class="nowrap">${lim.est ? '≈' : 'до '}${lim.maxW} м/с</span>` : `порог <span class="nowrap">${lim.maxW} м/с</span>`} · обновлено ${wxAgoText(c.fetched)}${stale}`;
   // Без aria-label на кнопке: он заменил бы всё доступное имя, а
   // заголовок-вердикт и ветер и есть смысл карточки. Внутри — только
   // фразовый контент (span), как требует модель содержимого <button>.
@@ -2985,12 +3003,14 @@ function viewWeather() {
       h += `<div class="banner warn">Сохранённый прогноз устарел или не покрывает эту дату — нажмите «Показать прогноз».</div>`;
     } else {
       if (day.windows.length) {
+        // Диапазон часов и «м/с» — неразрывно: браузер переносил строку
+        // после «–» и «/» («20:00–\n24:00», «20 м/\nс»).
         h += `<div class="banner ok" style="font-size:16px"><span>Можно лететь:
-          <strong>${day.windows.map((w) =>
-            `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join('</strong> и <strong>')}</strong></span></div>`;
+          <strong class="nowrap">${day.windows.map((w) =>
+            `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join('</strong> и <strong class="nowrap">')}</strong></span></div>`;
       } else {
         h += `<div class="banner warn" style="font-size:16px">${wx.day === 0 ? 'Сегодня' : 'В этот день'} лучше не лететь${lim.name ? ' на «' + esc(lim.name) + '»' : ''}:
-          весь день ветер выше ${lim.maxW} м/с или осадки.</div>`;
+          весь день ветер выше <span class="nowrap">${lim.maxW} м/с</span> или осадки.</div>`;
       }
 
       // Полоска дня с выбором часа; под ней — восход/закат и порог.
@@ -2998,8 +3018,8 @@ function viewWeather() {
       h += `<div class="card wx-strip-card">
         ${wxStripHtml(day, hour, true)}
         <div class="xs dim wx-strip-sub">восход ${day.sunrise} · закат ${day.sunset} ·
-          ${lim.name ? '«' + esc(lim.name) + '» держит' : 'порог'} ${lim.est && lim.name ? '≈' : 'до '}${lim.maxW} м/с ·
-          до ${lim.alt} м · ночь не запрещает, но снижает порог</div>
+          ${lim.name ? '«' + esc(lim.name) + '» держит' : 'порог'} <span class="nowrap">${lim.est && lim.name ? '≈' : 'до '}${lim.maxW} м/с</span> ·
+          <span class="nowrap">до ${lim.alt} м</span> · ночь не запрещает, но снижает порог</div>
       </div>`;
 
       const hr = day.hours.find((x) => x.hh === hour) || day.hours[0];
