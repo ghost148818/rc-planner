@@ -36,6 +36,7 @@
   /* Размеры касания и шрифта: всё, что должно расти в перчатках */
   --tap: 48px;      /* поля ввода, кнопки карты, квадратные кнопки */
   --row: 56px;      /* строка списка, пункт чек-листа */
+  --row-pad: 10px;  /* вертикальный отступ строки; его же вычитает .row > button.grow */
   --btn: 48px;      /* обычная кнопка */
   --primary: 56px;  /* главная кнопка экрана */
   --seg: 40px;      /* сегменты, малые кнопки, кнопки в строке */
@@ -208,7 +209,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   gap: 12px;
   width: 100%;
   min-height: var(--row);
-  padding: 10px 14px;
+  padding: var(--row-pad) 14px;
   text-align: left;
   border-bottom: 1px solid var(--line);
   background: var(--card);
@@ -903,6 +904,15 @@ html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
   text-align: left;
   min-height: var(--seg);
   min-width: 0;
+}
+/* Кнопка внутри строки-контейнера (div.row) растягивается на всю высоту
+   строки, включая её отступы: иначе область касания — 43 px по тексту,
+   а не 56/64 строки (набор test:seeded, порог 44/52). Отступ — тот же
+   токен, что у .row: изменится один — подстроится и другой. */
+.row > button.grow {
+  align-self: stretch;
+  margin-top: calc(-1 * var(--row-pad)); margin-bottom: calc(-1 * var(--row-pad));
+  padding-top: var(--row-pad); padding-bottom: var(--row-pad);
 }
 .thumb.lg { width: 72px; height: 72px; border-radius: 14px; }
 .thumb.lg.ph svg { width: 34px; height: 34px; }

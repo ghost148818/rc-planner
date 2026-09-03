@@ -4,7 +4,7 @@
 // управление передаётся только по кнопке «Обновить» в настройках.
 'use strict';
 
-const VERSION = '4b086dd98d';
+const VERSION = '5e6f78893e';
 const CACHE = 'rcplanner-' + VERSION;
 const ASSETS = [
   './',
