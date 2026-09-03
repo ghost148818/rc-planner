@@ -341,6 +341,19 @@ input[type="search"], select, textarea {
 textarea { min-height: 84px; resize: vertical; field-sizing: content; }
 select { appearance: none; }
 input[type="file"] { color: var(--mut); font-size: 14px; }
+/* Чекбокс в форме («Выполнено», «Основная локация»): цель касания — вся
+   строка-подпись высотой с сегмент, а не клетка 22 px; в перчатках растёт
+   вместе с токенами (ревью 2.0, раунд 2). */
+.check-row {
+  display: flex; gap: 12px; align-items: center;
+  min-height: var(--seg); padding: 4px 0;
+  color: var(--text); font-size: var(--font); cursor: pointer;
+}
+.check-row input[type="checkbox"] {
+  width: 24px; height: 24px; flex: none; margin: 0;
+  accent-color: var(--ok);
+}
+:root[data-gloves] .check-row input[type="checkbox"] { width: 28px; height: 28px; }
 .field .hint { font-size: 12px; color: var(--dim); margin-top: 3px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 

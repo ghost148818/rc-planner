@@ -91,6 +91,11 @@
     put: function (store, obj) {
       return withStore(store, 'readwrite', function (s) { s.put(obj); }).then(function () { return obj; });
     },
+    // Пачка записей одной транзакцией — для закрепления нормализованной
+    // копии после импорта (по одной put() на запись — сотни транзакций).
+    putAll: function (store, list) {
+      return withStore(store, 'readwrite', function (s) { list.forEach(function (obj) { s.put(obj); }); });
+    },
     del: function (store, id) {
       return withStore(store, 'readwrite', function (s) { s.delete(id); });
     },

@@ -115,10 +115,14 @@ function wxTodayISO() {
 
 const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
+// Дата не по маске возвращается как текст — обязательно через esc():
+// date полётов, работ и конфигураций приезжает из копии непроверенной,
+// а вызывающие вставляют результат в разметку как есть (ревью 2.0, раунд 2).
+// Основная защита — нормализация в NORM (не-дата → null), это второй рубеж.
 function fmtDate(iso) {
   if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
+  const [y, m, d] = String(iso).split('-').map(Number);
+  if (!y || !m || !d || m > 12) return esc(String(iso));
   const now = new Date();
   return d + ' ' + MONTHS_RU[m - 1] + (y === now.getFullYear() ? '' : ' ' + y);
 }
@@ -388,6 +392,16 @@ const RESULTS = {
   maintenance: 'Нужно обслуживание',
 };
 
+// Подпись результата полёта — только по СОБСТВЕННОМУ ключу словаря.
+// `RESULTS[s.result]` с ключом прототипа ('constructor', 'toString')
+// из копии отдавал функцию, и `.toLowerCase()` ронял «Сегодня» на
+// старте (ревью 2.0, раунд 2). NORM приводит result к известным ключам,
+// здесь — второй рубеж для сессий, собранных в памяти.
+function resultLabel(s, dflt) {
+  const k = s && s.result;
+  return Object.prototype.hasOwnProperty.call(RESULTS, k) ? RESULTS[k] : (dflt == null ? '—' : dflt);
+}
+
 function sessionsOf(id) {
   return S.sessions.filter((s) => s.aircraftId === id).sort((a, b) => b.start - a.start);
 }
@@ -516,34 +530,58 @@ function activeFlightBanners(exceptId) {
    4. ДАННЫЕ
 ============================================================ */
 
+// Нормализация записей из базы. Резервная копия проверяется только по
+// id (validateBackup), а поля идут в разметку без esc(): числа бортов и
+// АКБ, координаты локаций (в value и href), даты полётов/работ/конфигураций,
+// результат полёта как ключ словаря RESULTS. Правило: всё, что попадает
+// в S из RCDB, проходит через normalizeStore — и в loadAll, и в refresh()
+// после каждой записи. Ревью 2.0 (раунд 2): нормализация только в loadAll
+// держалась до первого put() — перечитка store возвращала сырые строки.
+const numOrNull = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const dateOrNull = (v) => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
+const NORM = {
+  sites(s) {
+    s.lat = numOrNull(s.lat);
+    s.lon = numOrNull(s.lon);
+    if (s.lat == null || s.lon == null) { s.lat = null; s.lon = null; }
+  },
+  aircraft(a) {
+    for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = numOrNull(a[k]);
+  },
+  batteries(b) {
+    for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = numOrNull(b[k]);
+    b.cycles = Math.max(0, Math.round(numOrNull(b.cycles) || 0));
+  },
+  sessions(s) {
+    s.date = dateOrNull(s.date);
+    // Незнакомый результат — «—», а не выдуманный «Нормальный»
+    if (s.result != null && s.result !== '' && !Object.prototype.hasOwnProperty.call(RESULTS, s.result)) s.result = null;
+  },
+  maintenance(m) { m.date = dateOrNull(m.date); },
+  configs(c) { c.date = dateOrNull(c.date); },
+  runs(r) { r.date = dateOrNull(r.date); },
+};
+
+function normalizeStore(store, list) {
+  const f = NORM[store];
+  if (f) for (const r of list) if (r) f(r);
+  return list;
+}
+
+// Единственный способ перечитать store из базы в S.
+async function refresh(store) {
+  S[store] = normalizeStore(store, await RCDB.all(store));
+}
+
 async function loadAll() {
   const snap = await RCDB.snapshot();
   Object.keys(snap).forEach((k) => {
     if (k === 'settings') return;
-    S[k] = snap[k];
+    S[k] = normalizeStore(k, snap[k]);
   });
   const st = snap.settings.find((x) => x.id === 'main');
   if (st) S.settings = Object.assign({ favTools: [] }, st);
-  // Координаты локаций — строго числа. Импортированная копия может
-  // принести в lat/lon произвольные строки; они попадают в value и href
-  // без esc() — нормализуем при каждой загрузке, а не надеемся на формы.
-  const num = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
-  for (const s of S.sites || []) {
-    s.lat = num(s.lat);
-    s.lon = num(s.lon);
-    if (s.lat == null || s.lon == null) { s.lat = null; s.lon = null; }
-  }
-  // Числовые поля бортов и АКБ — тоже строго числа (или null). Копия
-  // проверяется только по id, а `a.maxWind`/`b.cycles` идут в разметку
-  // «Сегодня» без esc() (ревью пакета 3: тег в maxWind исполнялся на
-  // стартовом экране). Нормализуем один раз здесь, а не в каждом шаблоне.
-  for (const a of S.aircraft || []) {
-    for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = num(a[k]);
-  }
-  for (const b of S.batteries || []) {
-    for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = num(b[k]);
-    b.cycles = Math.max(0, Math.round(num(b.cycles) || 0));
-  }
   // Кэш прогноза тоже приезжает из копии: его latitude/longitude идут
   // в data-атрибуты кнопки Windy (финальное ревью 2.0: строка с
   // `" autofocus onfocus=` исполнялась без единого касания). Координаты —
@@ -551,7 +589,7 @@ async function loadAll() {
   const wc = S.settings.weatherCache;
   if (wc) {
     const j = wc.json;
-    const lat = j && num(j.latitude), lon = j && num(j.longitude);
+    const lat = j && numOrNull(j.latitude), lon = j && numOrNull(j.longitude);
     if (lat == null || lon == null) delete S.settings.weatherCache;
     else { j.latitude = lat; j.longitude = lon; }
   }
@@ -572,14 +610,12 @@ async function loadAll() {
 
 async function put(store, obj) {
   await RCDB.put(store, obj);
-  S[store === 'settings' ? 'settings' : store] = store === 'settings'
-    ? S.settings
-    : await RCDB.all(store);
+  if (store !== 'settings') await refresh(store);
 }
 
 async function del(store, id) {
   await RCDB.del(store, id);
-  S[store] = await RCDB.all(store);
+  await refresh(store);
 }
 
 async function saveSettings() {
@@ -647,7 +683,7 @@ async function migrateIfNeeded() {
       }
       if (changed) await RCDB.put('packing', p);
     }
-    S.packing = await RCDB.all('packing');
+    await refresh('packing');
     S.settings.migrPack1 = true;
     touched = true;
   }
@@ -1230,7 +1266,7 @@ function todayDebrief() {
     rows += `<div class="row"><span class="row-ic">${ICONS.tools}</span>
       <button class="grow row-main" data-act="session-info" data-id="${s.id}"><span class="grow">
         <span class="t" style="color:var(--warn)">Полёт <span class="mono">${flightNoText(s)}</span> · ${esc(a.name)}</span>
-        <span class="d">${s.problems ? 'проблема: «' + esc(s.problems) + '»' : (RESULTS[s.result] || '').toLowerCase()}</span></span></button>
+        <span class="d">${s.problems ? 'проблема: «' + esc(s.problems) + '»' : resultLabel(s, '').toLowerCase()}</span></span></button>
       ${btn}
     </div>`;
   }
@@ -1275,7 +1311,7 @@ function sessionRow(s) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
     `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
-     <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${RESULTS[s.result] || '—'}</span></span></span>`);
+     <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span></span></span>`);
 }
 
 // Флот — это модели и батареи: два списка одной вкладки.
@@ -1468,7 +1504,7 @@ async function installBattery(aId, bId) {
   if (bId) await releaseBattery(bId, aId);
   const a = aId && S.aircraft.find((x) => x.id === aId);
   if (a) { a.batteryId = bId || null; await RCDB.put('aircraft', a); }
-  S.aircraft = await RCDB.all('aircraft');
+  await refresh('aircraft');
 }
 
 /* ---------- Карточка борта: герой + сегменты ----------
@@ -1940,7 +1976,7 @@ function sessionDetailHtml(s) {
     ['Аккумулятор', b ? b.label : '—'],
     ['Локация', site ? site.name : '—'],
     ['Погода', s.weather || '—'],
-    ['Результат', RESULTS[s.result] || '—'],
+    ['Результат', resultLabel(s)],
   ];
   let h = '<div class="card">' + rows.map(([k, v]) =>
     `<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0"><span class="muted">${k}</span><span style="text-align:right">${esc(v)}</span></div>`).join('') + '</div>';
@@ -2067,7 +2103,7 @@ function printLog() {
     const site = S.sites.find((y) => y.id === x.siteId);
     return `<tr>${cell(flightNoText(x))}${cell(fmtDate(x.date))}${cell(a ? a.name : '')}` +
       `${cell(x.durationMin != null ? x.durationMin + ' мин' : '')}${cell(b ? b.label : '')}${cell(site ? site.name : '')}` +
-      `${cell(RESULTS[x.result] || '')}${cell(x.notes || x.problems || '')}</tr>`;
+      `${cell(resultLabel(x, ''))}${cell(x.notes || x.problems || '')}</tr>`;
   }).join('');
   const area = document.createElement('div');
   area.id = 'print-area';
@@ -2231,7 +2267,7 @@ function exportLogCsv() {
     return [
       String(x.flightNo == null ? '' : x.flightNo), x.date, a ? a.name : '',
       x.durationMin == null ? '' : x.durationMin, b ? b.label : '', site ? site.name : '',
-      RESULTS[x.result] || '', x.weather || '', x.notes || '', x.problems || '',
+      resultLabel(x, ''), x.weather || '', x.notes || '', x.problems || '',
     ];
   });
   csvSave('rc-planner-log', head, rows);
@@ -3427,7 +3463,7 @@ const ACTIONS = {
     const id = el.dataset.id;
     for (const st of ['sessions', 'runs', 'maintenance', 'configs']) {
       for (const r of S[st].filter((x) => x.aircraftId === id)) await RCDB.del(st, r.id);
-      S[st] = await RCDB.all(st);
+      await refresh(st);
     }
     dropPhotoURL(id);
     await del('aircraft', id);
@@ -3564,7 +3600,7 @@ const ACTIONS = {
       a.groupId = null;
       await RCDB.put('aircraft', a);
     }
-    S.aircraft = await RCDB.all('aircraft');
+    await refresh('aircraft');
     closeModal();
     render();
   },
@@ -3875,7 +3911,7 @@ const ACTIONS = {
       b.charge = 'ready';
       await RCDB.put('batteries', b);
     }
-    S.batteries = await RCDB.all('batteries');
+    await refresh('batteries');
     render(true);
   },
   'import-replace': async () => { await doImport('replace'); },
@@ -3993,10 +4029,8 @@ function openMaintForm(m, aircraftId, preset) {
     ${m.photo ? `<img src="${photoURL(m)}" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:8px">` : ''}
     ${field('Фото повреждения', `<input type="file" name="photo" accept="image/*">`,
       m.photo ? 'Фото уже есть — новое заменит его' : 'Снимок хранится на устройстве и попадает в резервную копию')}
-    ${m.photo ? field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
-      <input type="checkbox" name="dropPhoto" style="width:22px;height:22px"> Удалить фото</label>`) : ''}
-    ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
-      <input type="checkbox" name="done" ${m.done ? 'checked' : ''} style="width:22px;height:22px"> Выполнено</label>`)}
+    ${m.photo ? field('', `<label class="check-row"><input type="checkbox" name="dropPhoto"> Удалить фото</label>`) : ''}
+    ${field('', `<label class="check-row"><input type="checkbox" name="done" ${m.done ? 'checked' : ''}> Выполнено</label>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${m.id ? `<button class="btn btn-danger" type="button" data-act="del-maint" data-id="${m.id}">Удалить</button>` : ''}
   </form>`);
@@ -4186,8 +4220,7 @@ function openSiteForm(s, showMap) {
     <div class="hint" style="margin:6px 0 10px">Координаты нужны для окон погоды. GPS работает без
       интернета; на карте тапните точку — координаты впишутся сами.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
-    ${field('', `<label style="display:flex;gap:10px;align-items:center;color:var(--text);font-size:16px">
-      <input type="checkbox" name="isDefault" ${s.isDefault ? 'checked' : ''} style="width:22px;height:22px"> Основная локация</label>`)}
+    ${field('', `<label class="check-row"><input type="checkbox" name="isDefault" ${s.isDefault ? 'checked' : ''}> Основная локация</label>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
     ${s.id ? `<button class="btn btn-danger" type="button" data-act="del-site" data-id="${s.id}">Удалить</button>` : ''}
   </form>`);
@@ -4551,7 +4584,7 @@ const FORMS = {
       await put('maintenance', {
         id: uid(), aircraftId: s.aircraftId, date: todayISO(), kind: 'inspection',
         title: s.result === 'crash' ? 'Осмотр после краша' : 'Осмотр после полёта #' + s.flightNo,
-        reason: s.problems || RESULTS[s.result], next: '', done: false, createdAt: Date.now(),
+        reason: s.problems || resultLabel(s), next: '', done: false, createdAt: Date.now(),
       });
       // борт с проблемой не может оставаться «подготовленным»
       if (ta && ta.prepared) { ta.prepared = null; await put('aircraft', ta); }
@@ -4690,6 +4723,11 @@ async function doImport(mode) {
   PHOTO_URLS.forEach((u) => URL.revokeObjectURL(u));
   PHOTO_URLS.clear();
   await loadAll();
+  // Закрепляем нормализованные записи в самой базе: сырые строки из
+  // копии не должны жить в IndexedDB и всплывать при любой перечитке.
+  for (const store of Object.keys(NORM)) {
+    if (Array.isArray(parsed.data[store]) && S[store].length) await RCDB.putAll(store, S[store]);
+  }
   UI.importData = null;
   closeModal();
   openModal('Готово', '<p>Данные восстановлены.</p><div class="spacer"></div><button class="btn btn-primary" data-act="close-modal">Ок</button>');

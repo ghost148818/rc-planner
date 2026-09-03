@@ -139,6 +139,19 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0,
     '«Сегодня»: порог ветра и циклы из копии не стали тегом');
   ok(!(await page.evaluate(() => window.__xss4)), 'обработчик в maxWind/cycles не исполнился');
+  // Путь put() → перечитка store: нормализация обязана держаться не только
+  // в loadAll. Тап по чипу заряда ДРУГОЙ (чистой) АКБ перечитывает
+  // batteries из базы, где циклы xss-batt лежат сырым тегом (ревью 2.0,
+  // раунд 2: после первого же действия тег возвращался в разметку).
+  await page.evaluate(() => { location.hash = '#/batteries'; });
+  await page.waitForTimeout(200);
+  await page.click('[data-act="batt-charge"][data-id="attr-batt"]');
+  await page.waitForTimeout(200);
+  ok((await page.evaluate(() => S.batteries.find((b) => b.id === 'xss-batt').cycles)) === 0,
+    'после put() циклы из копии снова число, а не строка');
+  ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0,
+    'АКБ: после перечитки store тег из копии не вернулся в разметку');
+  ok(!(await page.evaluate(() => window.__xss4)), 'обработчик в циклах не исполнился и после put()');
   await page.evaluate(() => { location.hash = '#/weather'; });
   await page.waitForTimeout(250);
   const wxHtml = await page.evaluate(() => document.getElementById('views').innerHTML);
@@ -215,6 +228,51 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
     delete S.settings.weatherCache;
     UI.wx.data = null;
     await saveSettings();
+    await window.loadAll();
+  });
+
+  // Проба шестая: result полёта — ключ прототипа Object. `RESULTS[...]`
+  // отдавал функцию, `.toLowerCase()` ронял «Сегодня» на старте (ревью
+  // 2.0, раунд 2). Сегодняшняя дата — чтобы экран был в состоянии «разбор».
+  await page.evaluate(async () => {
+    const t = Date.now() - 3600000;
+    await window.RCDB.put('sessions', { id: 'res-probe', aircraftId: 'attr-probe', date: todayISO(),
+      start: t, end: t + 300000, durationMin: 5, flightNo: 2, result: 'constructor' });
+    await window.loadAll();
+    location.hash = '#/today';
+  });
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => !!document.querySelector('#views .stat-line')), '«Сегодня»: разбор отрисован при result «constructor»');
+  ok(await page.evaluate(() => S.sessions.find((s) => s.id === 'res-probe').result === null), 'незнакомый result приведён к null');
+  ok(await page.evaluate(() => resultLabel({ result: 'toString' }) === '—' && resultLabel({ result: 'crash' }) === 'Краш'),
+    'resultLabel: ключ прототипа — «—», свой ключ — подпись');
+  ok(errors.length === 0, 'после пробы result ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+
+  // Проба седьмая: дата-тег в полёте и в работе. fmtDate возвращал
+  // неразобранную строку как есть — без esc() в журнал и карточку борта.
+  const dateTag = '<img src=x onerror="window.__xss7=1">';
+  await page.evaluate(async (tag) => {
+    await window.RCDB.put('sessions', { id: 'date-probe', aircraftId: 'attr-probe', date: tag,
+      start: 10, end: 20, durationMin: 1, flightNo: 3, result: 'normal' });
+    await window.RCDB.put('maintenance', { id: 'date-maint', aircraftId: 'attr-probe', title: 'Проба даты',
+      kind: 'repair', date: tag, done: false, createdAt: 10 });
+    await window.loadAll();
+    location.hash = '#/log';
+  }, dateTag);
+  await page.waitForTimeout(250);
+  ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0, 'журнал: дата из копии не стала тегом');
+  ok(await page.evaluate(() => S.sessions.find((s) => s.id === 'date-probe').date === null), 'дата не по маске приведена к null');
+  ok(await page.evaluate((tag) => !fmtDate(tag).includes('<'), dateTag), 'fmtDate: неразобранная строка экранирована');
+  await page.evaluate(() => { location.hash = '#/model/attr-probe'; });
+  await page.waitForTimeout(200);
+  await page.click('[data-act="model-tab"][data-tab="maint"]');
+  await page.waitForTimeout(200);
+  ok((await page.evaluate(() => document.querySelectorAll('#views img[src="x"]').length)) === 0, 'обслуживание: дата из копии не стала тегом');
+  ok(!(await page.evaluate(() => window.__xss7)), 'обработчик в дате не исполнился');
+  await page.evaluate(async () => {
+    await window.RCDB.del('sessions', 'res-probe');
+    await window.RCDB.del('sessions', 'date-probe');
+    await window.RCDB.del('maintenance', 'date-maint');
     await window.loadAll();
   });
 

@@ -131,8 +131,10 @@ async function checkScreen(page, tag, name, viewport, gloves) {
     const hscroll = document.scrollingElement.scrollWidth - window.innerWidth;
     // Только то, что нарисовано: скрытые (hidden/display:none) и
     // нулевые по размеру элементы пользователь не нажимает. a.btn —
-    // ссылки-кнопки каталога инструментов («Открыть»).
-    const els = [...document.querySelectorAll('button, a.btn, .row, select')];
+    // ссылки-кнопки каталога инструментов («Открыть»); label.check-row —
+    // строка чекбокса в формах («Выполнено», «Основная локация»): сам
+    // input 22 px, цель касания — подпись (ревью 2.0, раунд 2).
+    const els = [...document.querySelectorAll('button, a.btn, .row, select, label.check-row')];
     const short = [];
     els.forEach((el) => {
       const b = el.getBoundingClientRect();
@@ -318,6 +320,19 @@ async function run(browser, tag, opts) {
     });
     ok(dur === '0s | 0s', `${tag}: при reduced-motion окно и ::backdrop без переходов (${dur})`);
   }
+  await page.keyboard.press('Escape');
+  // Формы с чекбоксами: «Основная локация» и «Выполнено» — их строки
+  // тоже обязаны быть не ниже порога касания (label.check-row в выборке).
+  await shot('form-site', '#/sites', async (p) => { await p.click('[data-act="edit-site"][data-id="site-1"]'); await p.waitForSelector('dialog[open] label.check-row'); }, { viewportOnly: true });
+  ok(await has('dialog[open] input[name="isDefault"]:checked'), `${tag}: форма локации — «Основная локация» отмечена`);
+  await page.keyboard.press('Escape');
+  await shot('form-maint', '#/model/a3', async (p) => {
+    await p.click('[data-act="model-tab"][data-tab="maint"]');
+    await p.waitForSelector('[data-act="edit-maint"][data-id="m1"]');
+    await p.click('[data-act="edit-maint"][data-id="m1"]');
+    await p.waitForSelector('dialog[open] label.check-row');
+  }, { viewportOnly: true });
+  ok(await has('dialog[open] input[name="done"]'), `${tag}: форма обслуживания — чекбокс «Выполнено» на месте`);
   await page.keyboard.press('Escape');
 
   ok(errors.length === 0, `${tag}: ошибок консоли нет` + (errors.length ? ': ' + errors.slice(0, 3).join('; ') : ''));
