@@ -39,6 +39,26 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     const tab = await page.locator('#tabbar .tab').first().boundingBox();
     ok(tab && tab.height >= 48, `${name}: вкладки не меньше 48px (${tab && Math.round(tab.height)}px)`);
 
+    // Панель вкладок: на телефоне и планшете — полоса снизу, от 900 px —
+    // рельса слева (88 px во всю высоту), «Сегодня» — две колонки.
+    const bar = await page.locator('#tabbar').boundingBox();
+    await page.evaluate(() => { location.hash = '#/today'; });
+    await page.waitForTimeout(60);
+    const grid = await page.evaluate(() => {
+      const v = document.getElementById('views');
+      return { twoCol: v.classList.contains('two-col'), display: getComputedStyle(v).display,
+        left: Math.round(v.getBoundingClientRect().left) };
+    });
+    if (viewport.width >= 900) {
+      ok(bar && Math.round(bar.width) === 88 && bar.height >= viewport.height - 1,
+        `${name}: вкладки — рельса 88px во всю высоту (${bar && Math.round(bar.width)}×${bar && Math.round(bar.height)})`);
+      ok(grid.twoCol && grid.display === 'grid' && grid.left >= 88, `${name}: «Сегодня» — две колонки правее рельсы`);
+    } else {
+      ok(bar && Math.round(bar.width) === viewport.width && bar.y + bar.height >= viewport.height - 1,
+        `${name}: вкладки — полоса снизу во всю ширину`);
+      ok(grid.twoCol && grid.display !== 'grid', `${name}: «Сегодня» — одна колонка`);
+    }
+
     await page.evaluate(() => { location.hash = '#/today'; });
     await page.waitForTimeout(60);
     await page.screenshot({ path: path.join(SHOTS, name + '-dark.png') });

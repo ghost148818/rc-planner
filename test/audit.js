@@ -143,6 +143,39 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   await page.waitForTimeout(250);
   const wxHtml = await page.evaluate(() => document.getElementById('views').innerHTML);
   ok(wxHtml.includes('ветер у земли —'), '«Окна»: пропуск в кэше показан как «—», экран не упал');
+  // «Окна» 2.0: чипы дней, полоска с выбором часа, карточка часа, fold «Все часы».
+  ok((await page.locator('.day-chip').count()) === 7, '«Окна»: семь чипов дней');
+  ok((await page.locator('.day-chip[aria-pressed="true"][data-day="0"]').count()) === 1, '«Окна»: активный чип — «Сегодня»');
+  ok((await page.locator('.strip.tap button[data-act="weather-hour"]').count()) === 24, '«Окна»: полоска из 24 сегментов-кнопок');
+  ok((await page.locator('.strip.tap button.now').count()) === 1, '«Окна»: ровно один выбранный час на полоске');
+  ok((await page.locator('details.wx-fold:not([open])').count()) === 1, '«Окна»: полный список часов свёрнут в «Все часы»');
+  await page.click('.strip.tap button[data-h="5"]');
+  await page.waitForTimeout(120);
+  ok((await page.locator('.strip.tap button.now[data-h="5"]').count()) === 1, '«Окна»: тап по сегменту выбирает час');
+  ok((await page.evaluate(() => document.querySelector('.card.wx-hour').previousElementSibling.textContent)).includes('05:00'),
+    '«Окна»: карточка выбранного часа перерисована на 05:00');
+  ok((await page.textContent('.wxr.sel .mono')).trim() === '05:00', '«Окна»: час выделен и в полном списке');
+  // Клавиатура: после Enter на сегменте/чипе разметка пересобирается,
+  // paint() обязан вернуть фокус тому же элементу (ключи data-h/data-day,
+  // ревью пакета 5) — иначе стрелками следующий час не выбрать.
+  await page.focus('.strip.tap button[data-h="7"]');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  ok((await page.evaluate(() => document.activeElement && document.activeElement.dataset.h)) === '7',
+    '«Окна»: после Enter на сегменте фокус остался на том же часе');
+  await page.focus('.day-chip[data-day="0"]');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  ok((await page.evaluate(() => document.activeElement && document.activeElement.dataset.day)) === '0',
+    '«Окна»: после Enter на чипе дня фокус остался на чипе');
+  await page.click('.day-chip[data-day="1"]');
+  await page.waitForTimeout(120);
+  ok((await page.locator('.day-chip[aria-pressed="true"][data-day="1"]').count()) === 1, '«Окна»: чип дня переключает день');
+  ok((await page.textContent('#views')).includes('не покрывает эту дату'), '«Окна»: день вне кэша — честный баннер, а не пустой экран');
+  await page.click('.day-chip[data-day="0"]');
+  await page.waitForTimeout(120);
+  ok((await page.locator('.strip.tap button.now').count()) === 1 && (await page.locator('.strip.tap button.now[data-h="5"]').count()) === 0,
+    '«Окна»: смена дня сбрасывает выбранный час на умолчание');
   await page.evaluate(async () => {
     await window.RCDB.del('sites', 'wx-site');
     await window.RCDB.del('aircraft', 'xss-wind');

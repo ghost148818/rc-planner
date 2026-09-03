@@ -32,6 +32,7 @@ const UI = {
   updateReady: false, // service worker ждёт активации
   wx: {               // экран «Окна для полётов»
     siteId: '', aircraftId: '', batteryId: '', day: 0,
+    hour: null,       // выбранный час полоски (null — по умолчанию: сейчас / первое окно)
     loading: false, error: '', data: null, // data: {fetched, place, json}
   },
   navCount: 0,        // сколько маршрутов прошли — для кнопки «Назад»
@@ -960,11 +961,13 @@ function todayOpenMaintRow(m) {
 }
 
 // «Обслуживание»: подошедший регламент + открытые работы (до пяти).
-function todayMaintBlock(withDue, skipIds) {
+// late — блок идёт после «Полётов сегодня» из правой колонки (телефон).
+function todayMaintBlock(withDue, skipIds, late) {
   const open = S.maintenance.filter((m) => !m.done && !(skipIds && skipIds.has(m.id)));
   const due = withDue ? S.aircraft.map((a) => [a, svcState(a)]).filter(([, sv]) => sv && sv.due) : [];
   if (!open.length && !due.length) return '';
-  return `<div class="h2">Обслуживание <span class="cnt">${open.length + due.length}</span></div><div class="card flat">` +
+  const l = late ? ' late' : '';
+  return `<div class="h2${l}">Обслуживание <span class="cnt">${open.length + due.length}</span></div><div class="card flat${l}">` +
     due.map(([a, sv]) => todayDueRow(a, sv)).join('') +
     open.slice(0, 5).map(todayOpenMaintRow).join('') + '</div>';
 }
@@ -1029,18 +1032,54 @@ function viewToday() {
     h += steps.map(([t, d, ok2, attrs, icon]) => (!tour && ok2)
       ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
          <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
-      : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d">${d}</span></span>`, icon)).join('');
-    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d">Скрыть этот блок</span></span>`);
+      : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
+    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`);
     h += '</div>';
   }
 
-  if (!S.aircraft.length && state !== 'flying') return h;
+  // Две колонки (2.0): .today-main — шапка, баннеры и блоки состояния,
+  // aside.today-side — условия, полёты за день, баннер копии. От 900 px
+  // колонки стоят рядом; на телефоне их складывает CSS (display: contents
+  // + order): условия — сразу под шапкой, остальное — следом за основной.
+  if (!S.aircraft.length && state !== 'flying') {
+    return `<div class="today-main"><div class="today-top">${h}</div></div>`;
+  }
+  const part = state === 'flying' ? todayFlying(live)
+    : state === 'field' ? todayField()
+    : state === 'debrief' ? todayDebrief()
+    : todayHome(onboarding);
+  return `<div class="today-main"><div class="today-top">${h}</div>${part.main}</div>
+    <aside class="today-side">${part.side}</aside>`;
+}
 
-  if (state === 'flying') h += todayFlying(live);
-  else if (state === 'field') h += todayField();
-  else if (state === 'debrief') h += todayDebrief();
-  else h += todayHome(onboarding);
+// Правая колонка «Сегодня»: условия (герой или строка), полёты за день,
+// баннер копии. Заголовок «Условия» показывается только на десктопе —
+// на телефоне карточка погоды и так стоит под шапкой.
+// Дома полётов за день нет — вместо них «Последние» (три последних),
+// но только на десктопе (.side-only): на телефоне этот блок с «Сегодня»
+// убран осознанно (пакет 3), а правую колонку иначе нечем занять.
+function todaySide(wx, flights, backup) {
+  let h = '';
+  if (wx) h += `<div class="wx-slot"><div class="h2 side-only">Условия</div>${wx}</div>`;
+  if (flights && flights.length) {
+    const mins = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
+    h += `<div class="h2">Полёты сегодня <span class="cnt">${flights.length} ${plural(flights.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span></div>`;
+    h += logGroupedHtml(flights, null, true);
+  } else if (!flights) {
+    const recent = S.sessions.filter((s) => s.end).sort((x, y) => y.start - x.start).slice(0, 3);
+    if (recent.length) {
+      h += `<div class="side-only recent-slot"><div class="h2">Последние <span class="cnt">${S.sessions.filter((s) => s.end).length}</span></div>
+        ${logGroupedHtml(recent, S.sessions)}
+        <div class="card flat">${rowBtn('data-nav="#/journal"', '<span class="grow"><span class="t">Весь журнал</span></span>', 'journal')}</div></div>`;
+    }
+  }
+  if (backup) h += backup;
   return h;
+}
+
+// Завершённые полёты за сегодня — для правой колонки.
+function todayFlights() {
+  return S.sessions.filter((s) => s.end && s.date === todayISO()).sort((x, y) => y.start - x.start);
 }
 
 // Дома: погода из кэша, «Перед выездом», главная кнопка, «К вылету»,
@@ -1048,7 +1087,6 @@ function viewToday() {
 function todayHome(onboarding) {
   let h = '';
   const armed = armedFleet();
-  h += wxHeroOrRow(armed[0]);
 
   // Перед выездом: сборы, разряженные АКБ, подошедший регламент
   const packs = S.packing.slice().sort((x, y) => {
@@ -1092,12 +1130,11 @@ function todayHome(onboarding) {
   } else if (!onboarding) {
     h += '<div class="h2">К вылету</div><div class="card flat">' +
       rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
-      <span class="d">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries') + '</div>';
+      <span class="d wrap">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries') + '</div>';
   }
 
   h += todayMaintBlock(false);
-  h += backupBannerHtml();
-  return h;
+  return { main: h, side: todaySide(wxHeroOrRow(armed[0]), null, backupBannerHtml()) };
 }
 
 // На поле: герой — подготовленный борт с кнопкой «Взлёт», ниже
@@ -1119,12 +1156,10 @@ function todayField() {
     </div>
     <button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>
   </div>`;
-  h += wxHeroOrRow(hero, true);
   const rest = armedFleet().filter((a) => a.id !== hero.id);
   h += todayFleetBlock('Остальные борта', rest, String(rest.length));
   h += todayMaintBlock(true);
-  h += backupBannerHtml();
-  return h;
+  return { main: h, side: todaySide(wxHeroOrRow(hero, true), todayFlights(), backupBannerHtml()) };
 }
 
 // В полёте: карточка полёта с живым таймером, «Открыть полёт» и
@@ -1148,16 +1183,15 @@ function todayFlying(s) {
       : `<button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">${ICONS.landing}Посадка</button>
          <button class="btn" data-nav="#/session/${s.id}">Открыть полёт</button>`}
   </div>`;
-  h += wxHeroOrRow(a, true);
   const rest = armedFleet().filter((x) => !activeSessionOf(x.id));
   h += todayFleetBlock('Остальные борта', rest, String(rest.length));
   h += todayMaintBlock(true);
-  return h;
+  return { main: h, side: todaySide(wxHeroOrRow(a, true), todayFlights(), '') };
 }
 
 // Разбор: итоги дня, «Разобраться», полёты за сегодня, «Ещё один полёт».
 function todayDebrief() {
-  const today = S.sessions.filter((s) => s.end && s.date === todayISO()).sort((x, y) => y.start - x.start);
+  const today = todayFlights();
   const mins = today.reduce((n, s) => n + (s.durationMin || 0), 0);
   const trouble = today.filter((s) => s.result && s.result !== 'normal');
   let h = `<div class="stat-line">
@@ -1165,8 +1199,6 @@ function todayDebrief() {
     <div class="stat"><div class="v">${fmtDur(mins)}</div><div class="k">налёт</div></div>
     <div class="stat"><div class="v${trouble.length ? ' warn' : ''}">${trouble.length}</div><div class="k">с проблемой</div></div>
   </div>`;
-
-  h += wxHeroOrRow(armedFleet()[0]);
 
   // Разобраться: проблемные полёты без закрытой работы новее них,
   // разряженные АКБ, резервная копия, сборы.
@@ -1208,23 +1240,24 @@ function todayDebrief() {
     rows += `<div class="row"><span class="row-ic">${ICONS.backup}</span>
       <button class="grow row-main" data-nav="#/backup"><span class="grow">
         <span class="t">Сохранить резервную копию</span>
-        <span class="d">${since ? `${since} ${plural(since, 'полёт', 'полёта', 'полётов')} с последней копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
+        <span class="d wrap">${since ? `${since} ${plural(since, 'полёт', 'полёта', 'полётов')} с последней копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
       <button class="btn btn-sm" data-act="export-all">Сохранить</button>
     </div>`;
   }
   if (S.packing.length) {
     rows += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Проверить, что всё собрано</span>
-      <span class="d">Сборы: ничего не забыть на поле</span></span>`, 'packing');
+      <span class="d wrap">Сборы: ничего не забыть на поле</span></span>`, 'packing');
   }
   if (rows) h += `<div class="h2">Разобраться</div><div class="card flat">${rows}</div>`;
 
-  h += `<div class="h2">Полёты сегодня <span class="cnt">${today.length}</span></div>` + logGroupedHtml(today, null, true);
-  h += `<button class="btn" data-act="start-prep">${ICONS.flight}Ещё один полёт</button>`;
+  // «Полёты сегодня» живут в правой колонке; на телефоне они встают между
+  // «Разобраться» и кнопкой — блоки после них помечены .late (CSS order).
+  h += `<button class="btn late" data-act="start-prep">${ICONS.flight}Ещё один полёт</button>`;
   // Открытые работы, не связанные с сегодняшними полётами (старый ремонт
   // другого борта), иначе пропали бы с «Сегодня» до конца дня; те, что
   // уже в «Разобраться», не повторяем.
-  h += todayMaintBlock(false, shown);
-  return h;
+  h += todayMaintBlock(false, shown, true);
+  return { main: h, side: todaySide(wxHeroOrRow(armedFleet()[0]), today, '') };
 }
 
 function sessionRow(s) {
@@ -1697,7 +1730,7 @@ function viewFlight() {
   }
   h += '<div class="card flat" style="margin-top:10px">' +
     rowBtn('data-nav="#/journal"', `<span class="grow"><span class="t">Журнал полётов</span>
-      <span class="d">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать, CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
+      <span class="d wrap">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать, CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
     '</div>';
   return h;
 }
@@ -1918,6 +1951,14 @@ function sessionDetailHtml(s) {
 function logGroupedHtml(list, totalsFrom, noDayHead) {
   // totalsFrom: полный журнал для честных итогов дня, когда list обрезан
   const full = totalsFrom || list;
+  // Длинный журнал (> 20 строк): карточки дней раскладываются лениво
+  // (content-visibility: auto) — прокрутка старой истории не тормозит.
+  // Заглушке нужна честная высота: число строк карточки уходит в --n,
+  // CSS умножает на --row (иначе scrollHeight врёт и render(true)
+  // с сохранением прокрутки прыгает — ревью пакета 5).
+  const lazy = list.length > 20 ? ' cv' : '';
+  const rowsOf = new Map();
+  if (lazy) list.forEach((x) => rowsOf.set(x.date, (rowsOf.get(x.date) || 0) + 1));
   let h = '';
   let cur = null;
   let open = false;
@@ -1930,7 +1971,7 @@ function logGroupedHtml(list, totalsFrom, noDayHead) {
         h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>
         <span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span></div>`;
       }
-      h += '<div class="card flat">';
+      h += `<div class="card flat${lazy}"${lazy ? ` style="--n:${rowsOf.get(cur)}"` : ''}>`;
       open = true;
     }
     h += sessionRow(sess);
@@ -2513,24 +2554,16 @@ async function wxLoad() {
   render();
 }
 
-function wxDayOptions() {
-  // 7 дней от «сегодня» ПО МСК; индекс совпадает с daily-массивами прогноза.
-  const names = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-  const out = [];
-  for (let i = 0; i < WX_DAYS; i++) {
-    const d = new Date(wxTodayISO() + 'T12:00:00');
-    d.setDate(d.getDate() + i);
-    const label = i === 0 ? 'Сегодня' : i === 1 ? 'Завтра'
-      : names[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS_RU[d.getMonth()];
-    out.push([String(i), label]);
-  }
-  return out;
-}
-
 // Число из часа прогноза в подпись: «12», а без данных — «—»
 // (Open-Meteo отдаёт null, выдумывать «0 м/с» нельзя).
 function wxNum(v) {
   return Number.isFinite(v) ? v.toFixed(0) : '—';
+}
+
+// Осадки в мм: один знак после запятой, десятичная ЗАПЯТАЯ — как
+// fmtDurShort и остальная русская типографика приложения.
+function wxMm(v) {
+  return Number.isFinite(v) ? String(Math.round(v * 10) / 10).replace('.', ',') : '—';
 }
 
 // «получен 20 мин назад» — одна формулировка на экран окон и герой «Сегодня».
@@ -2548,14 +2581,177 @@ function wxNowHour() {
 
 // Полоска 24 часов: сегмент на час, цвет — вердикт (g/y/r), ночь
 // приглушена (.n), выбранный час обведён (.now). Под полоской — деления.
-function wxStripHtml(day, hour) {
+// tap — сегменты становятся кнопками (data-act="weather-hour"): так
+// только на экране «Окна»; в герое «Сегодня» полоска лежит внутри
+// кнопки-карточки, и вложенные кнопки там недопустимы.
+const WX_WORDS = { ok: 'можно', warn: 'на пределе', bad: 'не стоит' };
+function wxStripHtml(day, hour, tap) {
   const cls = (hr) => (hr.verdict === 'ok' ? 'g' : hr.verdict === 'warn' ? 'y' : 'r') +
     (hr.light ? '' : ' n') + (hr.hh === hour ? ' now' : '');
-  const words = { ok: 'можно', warn: 'на пределе', bad: 'не стоит' };
-  return `<span class="strip" role="img" aria-label="Час за часом: ${day.hours.map((hr) =>
-    String(hr.hh).padStart(2, '0') + ' ' + words[hr.verdict]).join(', ')}">${
-    day.hours.map((hr) => `<i class="${cls(hr)}"></i>`).join('')}</span>
-    <span class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></span>`;
+  const label = (hr) => String(hr.hh).padStart(2, '0') + ':00 — ' + WX_WORDS[hr.verdict];
+  const segs = tap
+    ? day.hours.map((hr) => `<button type="button" class="${cls(hr)}" data-act="weather-hour" data-h="${hr.hh}"
+        aria-label="${label(hr)}" aria-pressed="${hr.hh === hour}"></button>`).join('')
+    : day.hours.map((hr) => `<i class="${cls(hr)}"></i>`).join('');
+  const strip = tap
+    ? `<span class="strip tap" role="group" aria-label="Выбор часа">${segs}</span>`
+    : `<span class="strip" role="img" aria-label="Час за часом: ${day.hours.map(label).join(', ')}">${segs}</span>`;
+  return strip + `<span class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></span>`;
+}
+
+// Погода словами по коду WMO — подпись карточки выбранного часа.
+// Коды те же, что в wxIcon/wxHardStop (сверены с Open-Meteo).
+function wxDesc(hr) {
+  const c = hr.code;
+  if (c == null) return '';
+  if (c === 0) return hr.light ? 'ясно' : 'ясно, ночь';
+  if (c === 1) return 'малооблачно';
+  if (c === 2) return 'переменная облачность';
+  if (c === 3) return 'пасмурно';
+  if (c === 45 || c === 48) return 'туман';
+  if (c >= 51 && c <= 57) return 'морось';
+  if (c === 61 || c === 80) return 'слабый дождь';
+  if (c >= 62 && c <= 67) return 'дождь';
+  if (c === 81 || c === 82) return 'ливень';
+  if (c === 71 || c === 85) return 'слабый снег';
+  if (c >= 72 && c <= 77) return 'снег';
+  if (c === 86) return 'снегопад';
+  if (c >= 95) return 'гроза';
+  return '';
+}
+
+// Доля от порога для часа: худшее из ветра у земли, ветра на высоте и
+// порывов (порывы — в долях от их порога) относительно эффективного
+// порога С УЧЁТОМ сложности условий. Одна формула для полоски в
+// списке часов, карточки выбранного часа и «Обратить внимание».
+function wxHourLoad(hr, maxW) {
+  const wEff = maxW * hr.diff.k;
+  const worst = Math.max(hr.w10 || 0, hr.alt || 0, (hr.gust || 0) / WX_K.gustBad);
+  return Math.min(1.15, worst / wEff);
+}
+
+// Час полоски по умолчанию: сегодня — текущий час МСК, в другие дни —
+// первый час первого окна (нет окон — первый час дня). Выбранный
+// пользователем час берётся, если он есть в этом дне.
+function wxSelectedHour(day) {
+  const wx = UI.wx;
+  if (wx.hour != null && day.hours.some((h) => h.hh === wx.hour)) return wx.hour;
+  if (wx.day === 0) return wxNowHour();
+  return day.windows.length ? day.windows[0].from : day.hours[0].hh;
+}
+
+// Чипы дней: семь кнопок с точкой цвета лучшего вердикта дня из кэша
+// (день без данных — без точки). Активный день — рамка --text.
+function wxDayChipsHtml(lim) {
+  const wx = UI.wx;
+  const json = wx.data && wx.data.json;
+  const baseIdx = json ? (json.daily.time || []).indexOf(wxTodayISO()) : -1;
+  const names = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']; // с заглавной — как «Сегодня», «Завтра»
+  let h = '<div class="day-chips" role="group" aria-label="День прогноза">';
+  for (let i = 0; i < WX_DAYS; i++) {
+    const d = new Date(wxTodayISO() + 'T12:00:00');
+    d.setDate(d.getDate() + i);
+    const label = i === 0 ? 'Сегодня' : i === 1 ? 'Завтра' : names[d.getDay()] + ' ' + d.getDate();
+    let dot = '';
+    if (baseIdx >= 0) {
+      let day = null;
+      try { day = wxDay(json, baseIdx + i, lim.maxW, lim.alt); } catch (e) { day = null; }
+      if (day && day.hours.length) {
+        const best = day.hours.some((x) => x.verdict === 'ok') ? 'g'
+          : day.hours.some((x) => x.verdict === 'warn') ? 'y' : 'r';
+        dot = `<i class="${best}" aria-hidden="true"></i>`;
+      }
+    }
+    h += `<button type="button" class="pill day-chip${wx.day === i ? ' sel' : ''}" data-act="weather-day" data-day="${i}"
+      aria-pressed="${wx.day === i}">${dot}${label}</button>`;
+  }
+  return h + '</div>';
+}
+
+// Карточка выбранного часа: иконка, чип вердикта, погода словами и
+// температура, сетка «у земли / на высоте / порывы / осадки», полоска
+// «от порога». Причины (запрет или сложность) — строкой под сеткой.
+function wxHourCardHtml(day, hr, lim) {
+  const load = wxHourLoad(hr, lim.maxW);
+  const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
+  const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
+  const desc = [wxDesc(hr), hr.temp != null ? wxNum(hr.temp) + '°' : ''].filter(Boolean).join(' · ');
+  const marks = (hr.stop ? [hr.stop] : hr.diff.why).join(' · ');
+  return `<div class="h2">${String(hr.hh).padStart(2, '0')}:00 <span class="cnt">выбранный час</span></div>
+    <div class="card wx-hour">
+      <div class="wx-hour-top">
+        <span class="wx-ic">${ICONS[wxIcon(hr)]}</span>
+        <span class="chip ${chipCls}">${WX_WORDS[hr.verdict]}</span>
+        <span class="grow small muted">${desc || '—'}</span>
+        <span class="small mono nowrap">${wxNum(hr.w10)} м/с</span>
+      </div>
+      <div class="kv">
+        <div><span class="k">У земли</span><span class="v">${wxNum(hr.w10)} м/с</span></div>
+        <div><span class="k">${day.topLevel ? `На ${day.topLevel} м` : 'На высоте'}</span><span class="v">${day.topLevel ? wxNum(hr.alt) + ' м/с' : 'как у земли'}</span></div>
+        <div><span class="k">Порывы</span><span class="v">до ${wxNum(hr.gust)} м/с</span></div>
+        <div><span class="k">Осадки</span><span class="v">${hr.pp} %${hr.prec > 0 ? ` · ${wxMm(hr.prec)} мм` : ''}</span></div>
+      </div>
+      <div class="load-line">
+        <span class="xs muted nowrap">от порога</span>
+        <span class="gauge"><i style="width:${Math.round(load * 100 / 1.15)}%;background:${col}"></i></span>
+        <span class="xs mono">${Math.round(load * 100)} %</span>
+      </div>
+      ${marks ? `<div class="xs muted" style="margin-top:6px">${hr.stop ? 'запрет: ' : 'сложнее: '}${marks}${hr.stop ? '' : ` · порог ${Math.round(lim.maxW * hr.diff.k * 10) / 10} м/с`}</div>` : ''}
+    </div>`;
+}
+
+// «Обратить внимание»: часы «не стоит» и «на пределе», слитые в отрезки
+// по одной причине. Причина «не стоит» — запрет (hr.stop) или ветер/порывы
+// выше порога; «на пределе» — что именно на пределе. Не больше пяти строк;
+// тап по строке выбирает первый час отрезка.
+function wxAttentionHtml(day, lim) {
+  const reason = (hr) => {
+    const wEff = lim.maxW * hr.diff.k;
+    if (hr.verdict === 'bad') {
+      if (hr.stop) return { key: 'bad:' + hr.stop, text: hr.stop, icon: hr.stop === 'гроза' || hr.stop === 'дождь' || hr.stop === 'осадки' ? 'wxRain' : hr.stop.startsWith('снег') || hr.stop === 'метель' ? 'wxSnow' : hr.stop.startsWith('туман') ? 'wxFog' : 'weather' };
+      const wind = hr.w10 > wEff || hr.alt > wEff;
+      return { key: wind ? 'bad:wind' : 'bad:gust', text: wind ? 'ветер выше порога' : 'порывы выше порога', icon: 'weather' };
+    }
+    if (hr.verdict === 'warn') {
+      const wind = hr.w10 > wEff * WX_K.warn || hr.alt > wEff * WX_K.warn;
+      const gust = hr.gust > wEff * WX_K.gustWarn;
+      const t = wind ? 'ветер на пределе' : gust ? 'порывы на пределе' : 'возможны осадки';
+      return { key: 'warn:' + t, text: t, icon: wind || gust ? 'weather' : 'wxRain' };
+    }
+    return null;
+  };
+  const spans = [];
+  let cur = null;
+  day.hours.forEach((hr) => {
+    const r = reason(hr);
+    if (!r) { cur = null; return; }
+    if (cur && cur.key === r.key && cur.to === hr.hh - 1) {
+      cur.to = hr.hh;
+      cur.w = Math.max(cur.w, hr.w10 || 0, hr.alt || 0);
+      cur.g = Math.max(cur.g, hr.gust || 0);
+      cur.pp = Math.max(cur.pp, hr.pp || 0);
+      cur.prec = Math.max(cur.prec, hr.prec || 0);
+    } else {
+      cur = { key: r.key, text: r.text, icon: r.icon, verdict: hr.verdict, from: hr.hh, to: hr.hh,
+        w: Math.max(hr.w10 || 0, hr.alt || 0), g: hr.gust || 0, pp: hr.pp || 0, prec: hr.prec || 0 };
+      spans.push(cur);
+    }
+  });
+  if (!spans.length) return '';
+  const rows = spans.slice(0, 5).map((s) => {
+    const time = `${String(s.from).padStart(2, '0')}:00–${String(s.to + 1).padStart(2, '0')}:00`;
+    const sub = s.key.startsWith('warn:возможны') || s.key === 'bad:осадки' || s.key === 'bad:дождь'
+      ? `вероятность ${s.pp} %${s.prec > 0 ? ` · до ${wxMm(s.prec)} мм` : ''}`
+      : `ветер до ${wxNum(s.w)} м/с · порывы до ${wxNum(s.g)}`;
+    const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
+    return `<button class="row" data-act="weather-hour" data-h="${s.from}">
+      <span class="row-ic">${ICONS[s.icon]}</span>
+      <span class="grow"><span class="t"><span class="mono">${time}</span> · ${s.text}</span><span class="d wrap">${sub}</span></span>
+      <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>
+    </button>`;
+  }).join('');
+  return `<div class="h2">Обратить внимание${spans.length > 5 ? ` <span class="cnt">первые 5 из ${spans.length}</span>` : ''}</div>
+    <div class="card flat">${rows}</div>`;
 }
 
 // Порог ветра и высота борта для окон — как wxLimits, но для любого
@@ -2671,7 +2867,7 @@ function wxRowHtml() {
   return `<div class="card flat">` +
     rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов
       <span class="badge online">online</span></span>
-      <span class="d">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
+      <span class="d wrap">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
 }
 
 function viewWeather() {
@@ -2722,7 +2918,9 @@ function viewWeather() {
       emptyLabel: '— выберите —', pre: [['gps', 'Моё местоположение (GPS)']],
     }), wx.siteId, 'data-change="weather-site"'),
     sitesWithCoords.length ? '' : 'У локаций пока нет координат — выберите «+ Добавить локацию…»');
-  h += field('Дата', selectHtml('wxday', wxDayOptions(), String(wx.day), 'data-change="weather-day"'));
+  // День — чипами (2.0): точка на чипе — лучший вердикт дня из кэша,
+  // без данных чипы просто выбирают дату для запроса.
+  h += field('Дата', wxDayChipsHtml(lim));
   h += `<button class="btn btn-primary" data-act="weather-load" ${wx.loading ? 'disabled' : ''}>
     ${wx.loading ? 'Запрашиваю прогноз…' : 'Показать прогноз'}</button>`;
   h += '</div>';
@@ -2736,7 +2934,7 @@ function viewWeather() {
     const age = Date.now() - wx.data.fetched;
     h += `<p class="small muted">${esc(wx.data.place)} · прогноз получен ${wxAgoText(wx.data.fetched)}
       ${age > WX_STALE_MS ? ' — <span style="color:var(--warn)">устарел, обновите</span>' : ''}</p>`;
-    if (!day) {
+    if (!day || !day.hours.length) {
       h += `<div class="banner warn">Сохранённый прогноз устарел или не покрывает эту дату — нажмите «Показать прогноз».</div>`;
     } else {
       if (day.windows.length) {
@@ -2744,39 +2942,48 @@ function viewWeather() {
           <strong>${day.windows.map((w) =>
             `${String(w.from).padStart(2, '0')}:00–${String(w.to + 1).padStart(2, '0')}:00`).join('</strong> и <strong>')}</strong></span></div>`;
       } else {
-        h += `<div class="banner warn" style="font-size:16px">Сегодня лучше не лететь${lim.name ? ' на «' + esc(lim.name) + '»' : ''}:
+        h += `<div class="banner warn" style="font-size:16px">${wx.day === 0 ? 'Сегодня' : 'В этот день'} лучше не лететь${lim.name ? ' на «' + esc(lim.name) + '»' : ''}:
           весь день ветер выше ${lim.maxW} м/с или осадки.</div>`;
       }
-      h += `<div class="small muted" style="margin-bottom:8px">
-        ${lim.name ? '«' + esc(lim.name) + '» держит' : 'Порог'} ${lim.est && lim.name ? 'примерно ' : ''}до ${lim.maxW} м/с ·
-        летает до ${lim.alt} м · восход ${day.sunrise} · закат ${day.sunset}</div>`;
 
-      h += `<div class="h2">Час за часом</div>
-        <p class="small muted" style="margin-bottom:8px">Полоска — сколько «съедено» от допустимого ветра
+      // Полоска дня с выбором часа; под ней — восход/закат и порог.
+      const hour = wxSelectedHour(day);
+      h += `<div class="card wx-strip-card">
+        ${wxStripHtml(day, hour, true)}
+        <div class="xs dim wx-strip-sub">восход ${day.sunrise} · закат ${day.sunset} ·
+          ${lim.name ? '«' + esc(lim.name) + '» держит' : 'порог'} ${lim.est && lim.name ? '≈' : 'до '}${lim.maxW} м/с ·
+          до ${lim.alt} м · ночь не запрещает, но снижает порог</div>
+      </div>`;
+
+      const hr = day.hours.find((x) => x.hh === hour) || day.hours[0];
+      h += wxHourCardHtml(day, hr, lim);
+      h += wxAttentionHtml(day, lim);
+
+      // Полный список часов — свёрнут: полоска и карточка часа отвечают
+      // на главный вопрос, список нужен для сверки.
+      h += `<details class="fold wx-fold"><summary>Все часы <span class="cnt muted small">24</span></summary><div class="fold-body">
+        <p class="small muted" style="margin:0 0 8px">Полоска — сколько «съедено» от допустимого ветра
         борта: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
       h += day.hours.map((hr) => {
-        const wEff = lim.maxW * hr.diff.k;
-        const worst = Math.max(hr.w10, hr.alt, hr.gust / WX_K.gustBad);
-        const load = Math.min(1.15, worst / wEff);
+        const load = wxHourLoad(hr, lim.maxW);
         const col = hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)';
-        const word = hr.verdict === 'ok' ? 'можно' : hr.verdict === 'warn' ? 'на пределе' : 'не стоит';
         const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
         const rain = !hr.stop && (hr.pp >= 15 || hr.prec > 0.1) ? ` · дождь ${hr.pp}%` : '';
         const marks = (hr.stop ? [hr.stop] : hr.diff.why).map((t) => ' · ' + t).join('');
-        return `<div class="wxr${hr.light ? '' : ' night'}">
+        return `<div class="wxr${hr.light ? '' : ' night'}${hr.hh === hour ? ' sel' : ''}">
           <div class="wxr-top">
             <span class="mono nowrap">${String(hr.hh).padStart(2, '0')}:00</span>
             <span class="wx-ic">${ICONS[wxIcon(hr)]}</span>
             <div class="gauge"><i style="width:${Math.round(load * 100 / 1.15)}%;background:${col}"></i></div>
-            <span class="chip ${chipCls}">${word}</span>
+            <span class="chip ${chipCls}">${WX_WORDS[hr.verdict]}</span>
           </div>
           <div class="wxr-sub">ветер у земли ${wxNum(hr.w10)} м/с${day.topLevel
             ? ` · на высоте ${wxNum(hr.alt)}` : ''} · порывы до ${wxNum(hr.gust)} · ${wxNum(hr.temp)}°${rain}${marks}</div>
         </div>`;
       }).join('');
-      h += '</div>';
+      h += '</div></div></details>';
       const wlat = wx.data.json.latitude, wlon = wx.data.json.longitude;
       h += `<button class="btn" style="margin-top:8px" data-act="wx-windy" data-lat="${wlat}" data-lon="${wlon}">
         Windy: карта ветра <span class="badge online">online</span></button>
@@ -2795,11 +3002,11 @@ function viewMore() {
   let h = pageHead('Ещё');
   // «Окна для полётов» здесь нет (2.0): они всегда на «Сегодня» — героем или строкой.
   h += '<div class="card flat">';
-  h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d">Что взять с собой: наборы и галочки</span></span>`, 'packing');
-  h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
-  h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d">Запомненные места полётов</span></span>`, 'sites');
-  h += rowBtn('data-nav="#/templates"', `<span class="grow"><span class="t">Шаблоны чек-листов</span><span class="d">Свои предполётные проверки</span></span>`, 'templates');
-  h += rowBtn('data-nav="#/backup"', `<span class="grow"><span class="t">Данные и резервная копия</span><span class="d">Экспорт, импорт, восстановление</span></span>`, 'backup');
+  h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d wrap">Что взять с собой: наборы и галочки</span></span>`, 'packing');
+  h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d wrap">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
+  h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d wrap">Запомненные места полётов</span></span>`, 'sites');
+  h += rowBtn('data-nav="#/templates"', `<span class="grow"><span class="t">Шаблоны чек-листов</span><span class="d wrap">Свои предполётные проверки</span></span>`, 'templates');
+  h += rowBtn('data-nav="#/backup"', `<span class="grow"><span class="t">Данные и резервная копия</span><span class="d wrap">Экспорт, импорт, восстановление</span></span>`, 'backup');
   h += '</div>';
 
   h += '<div class="h2">Настройки</div><div class="card">';
@@ -2820,13 +3027,13 @@ function viewMore() {
 
   h += '<div class="card flat">';
   if (UI.updateReady) {
-    h += rowBtn('data-act="update-app"', `<span class="grow"><span class="t" style="color:var(--ok)">Обновить приложение</span><span class="d">Новая версия готова</span></span>`, 'update');
+    h += rowBtn('data-act="update-app"', `<span class="grow"><span class="t" style="color:var(--ok)">Обновить приложение</span><span class="d wrap">Новая версия готова</span></span>`, 'update');
   } else {
-    h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления <span class="badge online">online</span></span><span class="d">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')}</span></span>`, 'update');
+    h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления <span class="badge online">online</span></span><span class="d wrap">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')}</span></span>`, 'update');
   }
-  h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d">История изменений</span></span>`, 'whatsnew');
-  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'templates');
-  h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d">Где живут ваши данные</span></span>`, 'privacy');
+  h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d wrap">История изменений</span></span>`, 'whatsnew');
+  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'templates');
+  h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d wrap">Где живут ваши данные</span></span>`, 'privacy');
   h += '</div>';
 
   h += `<p class="small muted center" style="margin-top:16px">RC Planner · версия ${esc((RC.CHANGELOG[0] || {}).v || '—')} · сборка <span class="mono">${esc(ver)}</span><br>
@@ -2850,8 +3057,8 @@ function firmwareHtml() {
   // версии иначе ломается на три строки, зажатое кнопками справа.
   h += '<div class="card flat">' + fw.items.map((f) => `<div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
       <span><span class="t">${esc(f.name)} · ${esc(f.version)}</span> <span class="badge online">online</span></span>
-      ${f.note ? `<span class="d">${esc(f.note)}</span>` : ''}
-      <span class="d muted">Последняя известная версия, проверено ${esc(fmtDate(fw.checked))}. Файлы на Google Диске.</span>
+      ${f.note ? `<span class="d wrap">${esc(f.note)}</span>` : ''}
+      <span class="d wrap muted">Последняя известная версия, проверено ${esc(fmtDate(fw.checked))}. Файлы на Google Диске.</span>
       <span class="btn-line">${link(f.url, 'Скачать', true)}${f.all ? link(f.all, 'Все версии') : ''}</span>
     </div>`).join('') + '</div>';
   // Источник — через гард: инварианты в test/checks.js его требуют, но
@@ -2873,8 +3080,8 @@ function viewTools() {
   const favTools = RC.TOOLS.filter((t) => fav.includes(t.id));
   const toolRow = (t) => `<div class="row">
       <span class="grow"><span class="t">${esc(t.name)} <span class="badge online">online</span></span>
-      <span class="d">${esc(t.desc)}</span>
-      <span class="d muted">Источник: ${esc(t.src)}</span></span>
+      <span class="d wrap">${esc(t.desc)}</span>
+      <span class="d wrap muted">Источник: ${esc(t.src)}</span></span>
       <button class="ic-btn${fav.includes(t.id) ? ' on' : ''}" data-act="tool-fav" data-id="${t.id}"
         aria-label="${fav.includes(t.id) ? 'Убрать из избранного' : 'В избранное'}" aria-pressed="${fav.includes(t.id)}">${fav.includes(t.id) ? ICONS.star : ICONS.starOff}</button>
       <a class="btn btn-sm" href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">Открыть</a>
@@ -3594,6 +3801,21 @@ const ACTIONS = {
     UI.wx.error = '';
     render(true);
     wxLoad();
+  },
+  // Чип дня: другой день — выбранный час сбрасывается на умолчание.
+  'weather-day': (el) => {
+    const d = +el.dataset.day;
+    if (!(d >= 0 && d < WX_DAYS)) return;
+    if (UI.wx.day !== d) UI.wx.hour = null;
+    UI.wx.day = d;
+    render(true);
+  },
+  // Сегмент полоски или строка «Обратить внимание»: выбрать час.
+  'weather-hour': (el) => {
+    const hh = +el.dataset.h;
+    if (!(hh >= 0 && hh < 24)) return;
+    UI.wx.hour = hh;
+    render(true);
   },
 
   'add-site': () => openSiteForm(null),
@@ -4595,13 +4817,21 @@ function paint(keepScroll, toTop) {
   const focused = document.activeElement;
   // Кнопка меню клетки (ck-set) исчезает вместе с меню — фокус возвращаем
   // на клетку той же строки (ck-menu), иначе с клавиатуры он уйдёт на body.
+  // Ключ элемента — data-i (клетки, строки), data-h (сегменты полоски
+  // «Окон»), data-day (чипы дней): без него активный элемент после
+  // Enter уходил на body (ревью пакета 5).
   const fAct = focused && focused.dataset && focused.dataset.act;
   const focusAct = fAct === 'ck-set' ? 'ck-menu' : fAct;
-  const focusSel = focusAct && focused.dataset.i != null
-    ? `[data-act="${focusAct}"][data-i="${focused.dataset.i}"]` : null;
+  const focusKey = focusAct && ['i', 'h', 'day'].find((k) => focused.dataset[k] != null);
+  const focusSel = focusKey
+    ? `[data-act="${focusAct}"][data-${focusKey}="${focused.dataset[focusKey]}"]` : null;
 
   if (TIMER) { clearInterval(TIMER); TIMER = null; }
-  $('#views').innerHTML = (RENDERERS[UI.view] || viewToday)();
+  const views = $('#views');
+  views.innerHTML = (RENDERERS[UI.view] || viewToday)();
+  // «Сегодня» — две колонки от 900 px (основная + aside); на телефоне
+  // класс тот же, колонки складывает CSS.
+  views.classList.toggle('two-col', UI.view === 'today');
   renderTabbar();
 
   if (keepScroll) {
@@ -4779,9 +5009,6 @@ document.addEventListener('change', (e) => {
     render(true);
   } else if (kind === 'weather-batt') {
     UI.wx.batteryId = el.value;
-    render(true);
-  } else if (kind === 'weather-day') {
-    UI.wx.day = +el.value || 0;
     render(true);
   } else if (kind === 'journal-aircraft') {
     UI.journalAircraft = el.value;
