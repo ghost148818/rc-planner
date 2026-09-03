@@ -15,7 +15,7 @@ const sandbox = {};
 sandbox.window = sandbox; // как в браузере: window — глобальный объект
 vm.createContext(sandbox);
 for (const f of ['data/checklists.js', 'data/presets.js', 'data/tools.js', 'data/firmware.js',
-  'data/packing.js', 'data/changelog.js']) {
+  'data/packing.js', 'data/changelog.js', 'data/help.js']) {
   vm.runInContext(read(f), sandbox, { filename: f });
 }
 const RC = sandbox.RC;
@@ -139,5 +139,46 @@ for (const m of app.matchAll(/data-nav="#\/([\w-]+)/g)) {
 }
 ok(app.includes('function esc('), 'esc() определён');
 ok(!/skipWaiting\(\)/.test(read('pwa/sw.js').split('message')[0]), 'в install нет skipWaiting');
+
+// Инструкция и приветствие (data/help.js): id разделов латиницей и
+// уникальны, у каждого — заголовок и блоки известного вида; всё, на что
+// app.js ссылается через help: '<id>' и #/help/<id>, существует; иконки
+// шагов приветствия есть в ICONS; docs/user-guide.md не отстал от данных.
+console.log('Инструкция:');
+const H = RC.HELP;
+ok(H && Array.isArray(H.welcome) && H.welcome.length === 3, 'приветствие — три шага');
+// Ключ ищем внутри блока ICONS: по всему app.js регулярка `^\s+key:`
+// совпадала и с записями TAB_OF/RENDERERS, и маршрут без иконки проходил.
+const iconsBlock = (app.match(/const ICONS = \{([\s\S]*?)\n\};/) || [])[1] || '';
+ok(iconsBlock.length > 0, 'блок ICONS найден');
+for (const w of H.welcome) {
+  ok(w.title && w.text && w.text.length <= 320, `шаг «${w.title || '?'}»: заголовок и короткий текст`);
+  if (w.key) ok(new RegExp('^  ' + w.key + ': ic\\(', 'm').test(iconsBlock), `шаг «${w.title}»: иконка ${w.key} есть в ICONS`);
+}
+const helpIds = new Set();
+const blockOk = (b) => typeof b === 'string' ? !!b.trim()
+  : !!(b && (b.h || b.tip || (Array.isArray(b.list) && b.list.length) || (b.go && b.text)));
+for (const s of H.sections) {
+  ok(/^[a-z][a-z0-9-]*$/.test(s.id || ''), `раздел «${s.title || s.id}»: id латиницей`);
+  ok(!helpIds.has(s.id), `раздел ${s.id}: id уникален`);
+  helpIds.add(s.id);
+  ok(s.title && Array.isArray(s.blocks) && s.blocks.length >= 1, `раздел ${s.id}: заголовок и хотя бы один блок`);
+  ok(s.blocks.every(blockOk), `раздел ${s.id}: блоки известного вида и непустые`);
+  for (const b of s.blocks) {
+    if (b && b.go) ok(rKeys.has(b.go.replace(/^#\//, '').split('/')[0]), `раздел ${s.id}: ссылка ${b.go} ведёт на существующий экран`);
+  }
+  const text = JSON.stringify(s.blocks);
+  ok(!/[\u{1F300}-\u{1FAFF}]/u.test(text), `раздел ${s.id}: без эмодзи`);
+}
+for (const id of ['start', 'today', 'fleet', 'flight', 'journal', 'packing', 'weather', 'maintenance',
+  'configs', 'sites', 'tools', 'data', 'privacy', 'faq']) ok(helpIds.has(id), 'раздел ' + id + ' на месте');
+// TAB_OF содержит `help: 'more'` — это вкладка экрана, не раздел; вырезаем блок.
+const appNoTabs = app.replace(/const TAB_OF = \{[\s\S]*?\};/, '');
+const helpRefs = new Set([...appNoTabs.matchAll(/help:\s*'([\w-]+)'/g)].map((m) => m[1])
+  .concat([...appNoTabs.matchAll(/#\/help\/([\w-]+)/g)].map((m) => m[1])));
+for (const id of helpRefs) ok(helpIds.has(id), 'app.js ссылается на существующий раздел ' + id);
+ok(helpRefs.size >= 8, 'кнопки «?» ведут не меньше чем в восемь разделов (' + helpRefs.size + ')');
+const { generate } = require('../docs/gen-guide');
+ok(read('docs/user-guide.md') === generate(H), 'docs/user-guide.md совпадает с генератором (иначе: npm run guide)');
 
 finish('test:data');

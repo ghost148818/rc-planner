@@ -765,6 +765,8 @@ const ICONS = {
   landing: ic('<path d="M4 20h16"/><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/>', 2),
   // глаз — индикатор «экран не гаснет» на экране полёта
   eye: ic('<path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>'),
+  // круг с вопросом — «Инструкция» и кнопка «?» в шапке экрана
+  help: ic('<circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.7 2.7 0 1 1 3.9 2.4c-.8.4-1.2 1-1.2 1.8v.3"/><path d="M12 17.2h.01" stroke-width="2.4"/>'),
 };
 // Знак клетки чек-листа по состоянию пункта (ok/fail/skip/пусто).
 const CK_MARK = { ok: 'check', fail: 'x', skip: 'minus' };
@@ -789,22 +791,27 @@ const TAB_OF = {
   flight: 'flight', prep: 'flight', session: 'flight',
   journal: 'journal', log: 'journal', stats: 'journal',
   more: 'more', tools: 'more', sites: 'more',
-  backup: 'more', privacy: 'more', templates: 'more',
+  backup: 'more', privacy: 'more', templates: 'more', help: 'more',
 };
 
 // actIcon — КЛЮЧ из ICONS: кнопка справа становится квадратной с иконкой,
 // actLabel уходит в aria-label (меню «⋯» журнала). right — готовая
 // разметка справа вместо кнопки (индикатор «экран не гаснет»).
+// help — id раздела инструкции (RC.HELP.sections): круглая кнопка «?»
+// в шапке ведёт на #/help/<id>; стоит правее действия, чтобы действие
+// («Добавить», «⋯») оставалось на привычном месте у края.
 function pageHead(title, opts) {
   opts = opts || {};
   const act = !opts.act ? (opts.right || '')
     : opts.actIcon && ICONS[opts.actIcon]
       ? `<button class="head-act head-ic" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}" aria-haspopup="menu">${ICONS[opts.actIcon]}</button>`
       : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
-  return `<div class="head">
+  const help = opts.help
+    ? `<button class="head-ic head-help" data-nav="#/help/${esc(opts.help)}" aria-label="Инструкция">${ICONS.help}</button>` : '';
+  return `<div class="head${opts.tight ? ' tight' : ''}">
     ${opts.back ? `<button class="back" data-act="nav-back" data-fallback="${opts.back}" aria-label="Назад">${ICONS.back}</button>` : ''}
     <div class="grow"><h1>${title}</h1>${opts.sub ? `<div class="sub">${opts.sub}</div>` : ''}</div>
-    ${act}
+    ${act}${help}
   </div>`;
 }
 
@@ -925,6 +932,9 @@ function dismissModal() {
     r.reopen();
     return;
   }
+  // Приветствие закрыли, не дойдя до «Начать», — всё равно засчитано:
+  // второй раз при запуске оно не нужно (повтор есть в «Ещё»).
+  if ($('#modal-root dialog.welcome')) lsSet('rcp.hi', '1');
   closeModal();
 }
 
@@ -1055,29 +1065,27 @@ const TODAY_HINT = {
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  let h = pageHead('Сегодня', { sub: date + (TODAY_HINT[state] ? ' · ' + TODAY_HINT[state] : '') });
+  let h = pageHead('Сегодня', { sub: date + (TODAY_HINT[state] ? ' · ' + TODAY_HINT[state] : ''), help: 'today' });
 
   if (UI.updateReady) {
     h += `<div class="banner ok">Доступно обновление приложения.
       <button class="btn-sm btn right" data-act="update-app">Обновить</button></div>`;
   }
 
-  if (!lsGet('rcp.hi')) {
-    h += `<div class="banner">Ваши данные хранятся на этом устройстве. Приложение не отправляет
-      их в интернет и работает без сети. <button class="btn-sm btn" data-act="dismiss-hi">Понятно</button></div>`;
-  }
-
-  // «Начало работы»: четыре шага с галочками, ведут прямо к действию.
+  // «Начало работы»: пять шагов с галочками, ведут прямо к действию.
   // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
+  // Приветствие первого запуска — отдельное окно (openWelcome в старте).
   const steps = [
     ['Добавьте борт', 'во «Флоте»: готовая платформа или свой', S.aircraft.length > 0,
       'data-act="add-model"', 'fleet'],
     ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету', armedFleet().length > 0,
       'data-nav="#/batteries"', 'batteries'],
-    ['Запомните локацию', 'координаты — для прогноза и окон полётов', S.sites.length > 0,
+    ['Запомните локацию с координатами', 'GPS или карта — для прогноза и окон полётов', S.sites.some((s) => s.lat != null),
       'data-act="add-site"', 'sites'],
     ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам', S.sessions.some((s) => s.end),
       'data-act="start-prep"', 'flight'],
+    ['Сохраните резервную копию', 'один файл со всем — единственная страховка данных', !!(+S.settings.lastBackupAt),
+      'data-act="export-all"', 'backup'],
   ];
   const todo = steps.filter((s) => !s[2]).length;
   const tour = !!lsGet('rcp.tour');
@@ -1091,7 +1099,7 @@ function viewToday() {
   if (onboarding) {
     // «Обучение заново» — полноценная экскурсия: все шаги активны и
     // ведут к действию, галочек нет — маршрут проходится с нуля.
-    h += `<div class="h2">${tour ? 'Обучение · пройдитесь по шагам' : `Начало работы · осталось ${todo} из 4`}</div><div class="card flat">`;
+    h += `<div class="h2">${tour ? 'Обучение · пройдитесь по шагам' : `Начало работы · осталось ${todo} из ${steps.length}`}</div><div class="card flat">`;
     h += steps.map(([t, d, ok2, attrs, icon]) => (!tour && ok2)
       ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
          <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
@@ -1151,25 +1159,37 @@ function todayHome(onboarding) {
   let h = '';
   const armed = armedFleet();
 
-  // Перед выездом: сборы, разряженные АКБ, подошедший регламент
-  const packs = S.packing.slice().sort((x, y) => {
-    const dx = x.items.every((i) => i.done) ? 1 : 0, dy = y.items.every((i) => i.done) ? 1 : 0;
-    return dx - dy;
-  });
+  // Перед выездом: сборы, разряженные АКБ, подошедший регламент.
+  // Сборы без шума: строкой с «Продолжить» — только начатые наборы;
+  // нетронутые («0 из N») схлопываются в одну строку «Собраться на
+  // выезд», и она показывается лишь когда начатых нет; полностью
+  // собранные — строкой с подписью «собран», без кнопки.
+  const packDone = (p) => p.items.filter((i) => i.done).length;
+  const packFull = (p) => p.items.length > 0 && packDone(p) === p.items.length;
+  const started = S.packing.filter((p) => !packFull(p) && packDone(p) > 0);
+  const untouched = S.packing.filter((p) => !packFull(p) && packDone(p) === 0);
+  const fullPacks = S.packing.filter(packFull);
   const flown = S.batteries.filter((b) => b.charge === 'flown' && b.status !== 'retired');
   const due = S.aircraft.map((a) => [a, svcState(a)]).filter(([, sv]) => sv && sv.due);
-  if (packs.length || flown.length || due.length) {
+  if (S.packing.length || flown.length || due.length) {
     h += '<div class="h2">Перед выездом</div><div class="card flat">';
-    h += packs.map((p) => {
-      const done = p.items.filter((i) => i.done).length;
-      const full = p.items.length > 0 && done === p.items.length;
-      return `<div class="row"><span class="row-ic">${ICONS.packing}</span>
+    h += started.map((p) => `<div class="row"><span class="row-ic">${ICONS.packing}</span>
         <button class="grow row-main" data-nav="#/pack/${p.id}"><span class="grow">
           <span class="t">${esc(p.name)}</span>
-          <span class="d">${p.items.length ? (full ? 'собран' : `${done} из ${p.items.length} собрано`) : 'пустой набор'}</span></span></button>
-        ${full ? `<span class="chip st-ready">собран</span>` : `<button class="btn btn-sm" data-nav="#/pack/${p.id}">Продолжить</button>`}
-      </div>`;
-    }).join('');
+          <span class="d">${packDone(p)} из ${p.items.length} собрано</span></span></button>
+        <button class="btn btn-sm" data-nav="#/pack/${p.id}">Продолжить</button>
+      </div>`).join('');
+    if (!started.length && untouched.length) {
+      const n = untouched.length;
+      h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Собраться на выезд</span>
+        <span class="d">${n} ${plural(n, 'набор', 'набора', 'наборов')}</span></span>`, 'packing');
+    }
+    h += fullPacks.map((p) => `<div class="row"><span class="row-ic">${ICONS.packing}</span>
+        <button class="grow row-main" data-nav="#/pack/${p.id}"><span class="grow">
+          <span class="t">${esc(p.name)}</span>
+          <span class="d">собран</span></span></button>
+        <span class="chip st-ready">собран</span>
+      </div>`).join('');
     h += flown.map((b) => {
       const cyc = Math.round(+b.cycles) || 0; // из копии — не обязательно число
       return `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
@@ -1377,7 +1397,7 @@ function fleetRow(a) {
 }
 
 function viewFleet() {
-  let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить' }) + fleetSeg('fleet');
+  let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить', help: 'fleet' }) + fleetSeg('fleet');
   if (!S.aircraft.length) {
     return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт');
   }
@@ -1541,7 +1561,7 @@ function viewModel() {
   const flights = sessionsOf(a.id).filter((s) => s.end);
 
   let h = pageHead(esc(a.name), {
-    back: '#/fleet', act: 'edit-model', actLabel: 'Изменить',
+    back: '#/fleet', act: 'edit-model', actLabel: 'Изменить', help: 'fleet',
     sub: [TYPES[a.type], a.manufacturer ? esc(a.manufacturer) : ''].filter(Boolean).join(' · '),
   });
 
@@ -1756,7 +1776,7 @@ function modelHistoryHtml(a, flights) {
 /* ---------- Полёт ---------- */
 
 function viewFlight() {
-  let h = pageHead('Полёт');
+  let h = pageHead('Полёт', { help: 'flight' });
   h += activeFlightBanners();
   if (UI.prep && !activeSessionOf(UI.prep.aircraftId)) {
     const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
@@ -1807,7 +1827,7 @@ function templatesFor(type) {
 function viewPrep() {
   // Шаг 1 — выбрать модель.
   if (!UI.prep) {
-    let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите борт' });
+    let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите борт', help: 'flight' });
     if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт');
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
@@ -1826,7 +1846,7 @@ function viewPrep() {
   const failed = items.filter((i) => i.state === 'fail');
   const curBatt = (armedBattery(a) || {}).id || '';
 
-  let h = pageHead('Чек-лист', { back: '#/flight', sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') });
+  let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight', sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -1938,7 +1958,7 @@ function viewSession() {
   const wake = inAir
     ? `<span class="wake-ind" id="wake-ind"${UI.wakeLock ? '' : ' hidden'}><span class="ico14">${ICONS.eye}</span>экран не гаснет</span>` : '';
   let h = pageHead(s.end ? 'Полёт' : s.landedAt ? 'Сел' : 'В полёте', {
-    back: '#/flight', right: wake,
+    back: '#/flight', right: wake, help: 'flight',
     sub: esc(a ? a.name : 'Борт удалён') + ` · <span class="mono">${flightNoText(s)}</span>`,
   });
   if (s.end) {
@@ -2072,8 +2092,8 @@ function viewJournal() {
   // (disabled-кнопка события click не даёт).
   let h = pageHead('Журнал', total.length ? {
     sub: `${total.length} ${plural(total.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}`,
-    act: 'journal-menu', actLabel: 'Меню журнала', actIcon: 'more',
-  } : { sub: 'Полётов пока не было' });
+    act: 'journal-menu', actLabel: 'Меню журнала', actIcon: 'more', help: 'journal',
+  } : { sub: 'Полётов пока не было', help: 'journal' });
   // Меню «⋯»: печать и выгрузки — существующие действия. Атрибут hidden —
   // запасной режим для браузеров без popover (см. toggleMenu).
   if (total.length) {
@@ -2314,7 +2334,7 @@ function exportStatsCsv() {
 
 function viewPacking() {
   // Своей вкладки у сборов нет (2.0): «Назад» ведёт на «Сегодня» — и из «Ещё» тоже.
-  let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор' });
+  let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор', help: 'packing' });
   if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор');
   h += '<div class="card flat">';
   h += S.packing.map((p) => {
@@ -2945,9 +2965,11 @@ function viewWeather() {
   const lim = wxLimits();
   const sitesWithCoords = S.sites.filter((s) => s.lat != null);
 
+  // «Пояснение» — про расчёт (таблицы порогов для выбранного борта),
+  // «?» — раздел инструкции про экран целиком; смыслы не дублируются.
   let h = pageHead('Окна для полётов', {
     back: '#/today', sub: 'Борт · место · дата · <span class="badge online">online</span>',
-    act: 'wx-help', actLabel: 'Пояснение',
+    act: 'wx-help', actLabel: 'Пояснение', help: 'weather', tight: true,
   });
 
   if (!navigator.onLine && !wx.data) {
@@ -3103,6 +3125,7 @@ function viewMore() {
     h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления <span class="badge online">online</span></span><span class="d wrap">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')}</span></span>`, 'update');
   }
   h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d wrap">История изменений</span></span>`, 'whatsnew');
+  h += rowBtn('data-nav="#/help"', `<span class="grow"><span class="t">Инструкция</span><span class="d wrap">Как пользоваться: экраны, чек-лист, полёт, копия</span></span>`, 'help');
   h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'templates');
   h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d wrap">Где живут ваши данные</span></span>`, 'privacy');
   h += '</div>';
@@ -3144,7 +3167,7 @@ function firmwareHtml() {
 }
 
 function viewTools() {
-  let h = pageHead('Инструменты', { back: '#/more' });
+  let h = pageHead('Инструменты', { back: '#/more', help: 'tools' });
   h += `<div class="banner">Инструменты открываются в браузере и требуют интернет.
     Само приложение работает офлайн.</div>`;
   const fav = S.settings.favTools || [];
@@ -3193,7 +3216,7 @@ function mapLinks(s) {
 }
 
 function viewSites() {
-  let h = pageHead('Локации', { back: '#/more', act: 'add-site', actLabel: 'Добавить' });
+  let h = pageHead('Локации', { back: '#/more', act: 'add-site', actLabel: 'Добавить', help: 'sites' });
   if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию');
   h += '<div class="card flat">';
   h += S.sites.map((s) => `<div class="row">
@@ -3300,7 +3323,7 @@ function viewBackup() {
   const counts = `${S.aircraft.length} ${plural(S.aircraft.length, 'борт', 'борта', 'бортов')}, ` +
     `${S.sessions.filter((s) => s.end).length} ${plural(S.sessions.length, 'полёт', 'полёта', 'полётов')}, ` +
     `${S.configs.length} ${plural(S.configs.length, 'конфигурация', 'конфигурации', 'конфигураций')}`;
-  let h = pageHead('Данные', { back: '#/more', sub: counts });
+  let h = pageHead('Данные', { back: '#/more', sub: counts, help: 'data' });
   h += `<div class="banner">Все данные RC Planner живут в этом браузере на этом устройстве.
     Резервная копия — обычный файл, вы сами решаете, где его хранить.</div>`;
   h += `<button class="btn btn-primary" data-act="export-all">Сохранить резервную копию</button>`;
@@ -3349,6 +3372,67 @@ function viewPrivacy() {
   return h;
 }
 
+/* ---------- Инструкция и приветствие ----------
+   Контент — data/help.js (RC.HELP): разделы инструкции и три шага
+   приветствия. Тот же файл собирает docs/user-guide.md (npm run guide). */
+
+// Блок раздела → разметка. Тексты справочные, но идут через esc():
+// разметки внутри них нет, а дисциплина одна на всё приложение.
+function helpBlockHtml(b) {
+  if (typeof b === 'string') return `<p>${esc(b)}</p>`;
+  if (b.h) return `<div class="h3">${esc(b.h)}</div>`;
+  if (b.list) return `<ul>${b.list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
+  if (b.tip) return `<div class="banner">${ICONS.help}<span class="grow">${esc(b.tip)}</span></div>`;
+  if (b.go) return `<div class="card flat">${rowBtn(`data-nav="${esc(b.go)}"`, `<span class="grow"><span class="t">${esc(b.text)}</span></span>`)}</div>`;
+  return '';
+}
+
+// #/help — все разделы свёрнуты, открыт первый; #/help/<id> — открыт
+// раздел id, страница прокручена к нему (scrollIntoView в paint).
+function helpSectionId(id) {
+  return RC.HELP.sections.some((s) => s.id === id) ? id : '';
+}
+function viewHelp() {
+  const secs = RC.HELP.sections;
+  const openId = helpSectionId(UI.arg) || secs[0].id;
+  let h = pageHead('Инструкция', { back: '#/more', sub: 'Как пользоваться RC Planner' });
+  h += `<p class="small muted help-intro">Приложение живёт на вашем устройстве и подсказывает следующий шаг
+    на «Сегодня». Ниже — по разделу на каждый экран; кнопка «?» в шапке экрана открывает его раздел.</p>`;
+  h += '<div class="card flat">' + rowBtn('data-act="welcome-open"',
+    `<span class="grow"><span class="t">Приветствие заново</span><span class="d wrap">Три шага первого запуска</span></span>`, 'whatsnew') + '</div>';
+  h += '<div class="help">' + secs.map((s) => `<details class="fold" id="help-${esc(s.id)}"${s.id === openId ? ' open' : ''}>
+    <summary>${esc(s.title)}</summary><div class="fold-body">${s.blocks.map(helpBlockHtml).join('')}</div></details>`).join('') + '</div>';
+  return h;
+}
+
+// Приветствие первого запуска: три шага RC.HELP.welcome одним окном,
+// точки-индикатор, «Дальше»/«Начать». Шаги меняются внутри окна (тело
+// перерисовывается, лист не въезжает заново). Закрытие крестиком, Esc
+// или тапом мимо тоже засчитывается — dismissModal видит dialog.welcome
+// и ставит rcp.hi. Повтор — «Пройти обучение заново» в «Ещё» и строка
+// «Приветствие заново» на экране «Инструкция».
+function welcomeBodyHtml(i) {
+  const steps = RC.HELP.welcome;
+  const s = steps[i];
+  const last = i === steps.length - 1;
+  return `<div class="welcome">
+    <span class="welcome-ic">${ICONS[s.key] || ICONS.help}</span>
+    <h3>${esc(s.title)}</h3>
+    <p>${esc(s.text)}</p>
+    <div class="dots" role="img" aria-label="Шаг ${i + 1} из ${steps.length}">${steps.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+    <button class="btn btn-primary" data-act="${last ? 'welcome-done' : 'welcome-next'}" data-step="${i + 1}">${last ? 'Начать' : 'Дальше'}</button>
+  </div>`;
+}
+function openWelcome(step) {
+  const steps = RC.HELP.welcome;
+  if (!steps || !steps.length) return;
+  const i = Math.max(0, Math.min(steps.length - 1, +step || 0));
+  const body = $('#modal-root dialog.welcome .dlg-body');
+  if (body) { body.innerHTML = welcomeBodyHtml(i); return; }
+  openModal('Добро пожаловать', welcomeBodyHtml(i));
+  $('#modal-root dialog').classList.add('welcome');
+}
+
 /* ============================================================
    7. ДЕЙСТВИЯ
 ============================================================ */
@@ -3393,7 +3477,15 @@ async function takeoff(aircraftId, runId, siteId) {
 
 const ACTIONS = {
   'close-modal': () => dismissModal(),
-  'dismiss-hi': () => { lsSet('rcp.hi', '1'); render(); },
+  /* --- Приветствие --- */
+  'welcome-next': (el) => openWelcome(+el.dataset.step),
+  'welcome-done': () => {
+    lsSet('rcp.hi', '1');
+    closeModal();
+    // после «Обучения заново» из «Ещё» — к шагам на «Сегодня»
+    if (UI.view !== 'today') go('#/today');
+  },
+  'welcome-open': () => openWelcome(0),
   // Проверка обновлений по кнопке: SW сходит за свежим sw.js; если есть
   // новая версия — появится привычная кнопка «Обновить приложение».
   'check-updates': async () => {
@@ -3428,12 +3520,13 @@ const ACTIONS = {
     UI.checkingUpdate = false;
     render(true);
   },
-  // Обучение заново: приветствие + блок «Начало работы» показываются
-  // снова, даже если все шаги давно пройдены (галочки будут зелёными).
+  // Обучение заново: приветствие открывается сразу (окно поверх «Ещё»),
+  // блок «Начало работы» на «Сегодня» показывается снова без галочек;
+  // «Начать» ведёт на «Сегодня». Переход здесь не делаем: hashchange
+  // приходит позже и закрыл бы только что открытое окно (onRoute).
   'restart-tour': () => {
-    lsSet('rcp.hi', '');
     lsSet('rcp.tour', '1');
-    go('#/today');
+    openWelcome(0);
   },
   'dismiss-tour': () => { lsSet('rcp.tour', ''); render(); },
   // «Назад» ведёт туда, откуда пришли; на глубокой ссылке — по запасному маршруту.
@@ -4794,7 +4887,7 @@ const RENDERERS = {
   packing: viewPacking, pack: viewPack, weather: viewWeather,
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,
-  backup: viewBackup, privacy: viewPrivacy,
+  backup: viewBackup, privacy: viewPrivacy, help: viewHelp,
 };
 
 // Старые адреса (закладки, ссылки в changelog): #/log и #/stats
@@ -4920,6 +5013,12 @@ function paint(keepScroll, toTop) {
     if (focusSel) { const el = $(focusSel); if (el) el.focus(); }
   } else if (toTop) {
     window.scrollTo(0, 0);
+    // «Инструкция» по адресу #/help/<id> (кнопка «?» экрана): открытый
+    // раздел — в начало окна. id проверяется по списку разделов.
+    if (UI.view === 'help' && helpSectionId(UI.arg)) {
+      const sec = $('#help-' + UI.arg);
+      if (sec) sec.scrollIntoView({ block: 'start' });
+    }
   }
 
   // Живой таймер: #timer с data-sid есть на экране полёта и в карточке
@@ -5201,5 +5300,8 @@ function maybeWhatsNew() {
   }
   onRoute();
   setupSW();
-  maybeWhatsNew();
+  // Первый запуск (нет rcp.hi) — приветствие в три шага; «Что нового»
+  // в этот запуск не лезет: rcp.seen не трогаем, окно придёт в следующий
+  // (на самом первом запуске maybeWhatsNew и так ничего не показывает).
+  if (!lsGet('rcp.hi')) openWelcome(0); else maybeWhatsNew();
 })();

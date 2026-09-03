@@ -1230,3 +1230,41 @@ select.sel-sm {
   /* Липкая панель чек-листа: нижней панели нет — держится у края окна */
   .act-bar { bottom: 0; margin-left: -28px; margin-right: -28px; padding-left: 28px; padding-right: 28px; }
 }
+
+/* ---------- Приветствие и инструкция ---------- */
+/* Кнопка «?» в шапке — правее действия, приглушённее его */
+.head .head-help { color: var(--dim); }
+.head .head-act + .head-help { margin-left: -2px; }
+.welcome { text-align: center; padding: 6px 4px 4px; }
+.welcome-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: var(--card-2);
+  color: var(--ok);
+  margin-bottom: 14px;
+}
+.welcome-ic svg { width: 32px; height: 32px; }
+.welcome h3 { font-size: 20px; margin-bottom: 8px; }
+.welcome p { color: var(--mut); font-size: 15px; line-height: 1.45; margin-bottom: 16px; min-height: 4.4em; }
+.dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: background 0.15s; }
+.dots i.on { background: var(--ok); }
+.help-intro { margin: -4px 0 12px; }
+.help details.fold { scroll-margin-top: 8px; }
+.help details.fold:last-child { border-bottom: 1px solid var(--line); }
+.help .fold-body p, .help .fold-body ul { font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
+.help .fold-body ul { padding-left: 20px; }
+.help .fold-body li { margin-bottom: 6px; }
+.help .fold-body .h3 { font-weight: 600; margin: 14px 0 6px; }
+.help .fold-body .banner { margin-top: 4px; }
+.help .fold-body .card.flat { margin-bottom: 10px; }
+/* Тесная шапка (pageHead {tight}): длинный заголовок + текстовое действие
+   + «?» — «Окна для полётов» с «Пояснением». Только на узком экране
+   заголовок чуть меньше и отступы кнопки уже — иначе он ломался на две
+   строки. Модификатор, а не :has(): у остальных шапок с действием и «?»
+   кегль h1 должен оставаться 21 px, как у соседних вкладок */
+@media (max-width: 420px) {
+  .head.tight h1 { font-size: 19px; }
+  .head.tight .head-act:not(.head-ic) { padding: 0 2px; }
+}

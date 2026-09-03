@@ -12,7 +12,7 @@ const DIST = path.join(__dirname, '..', 'dist', 'rc-planner.html');
 // Экраны без обязательного аргумента. Должен совпадать со списком в app.js —
 // новый экран добавлять и туда, и сюда, иначе его никто не проверит.
 const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'packing', 'weather',
-  'more', 'tools', 'sites', 'batteries', 'templates', 'backup', 'privacy'];
+  'more', 'tools', 'sites', 'batteries', 'templates', 'backup', 'privacy', 'help'];
 
 (async () => {
   const browser = await chromium.launch();

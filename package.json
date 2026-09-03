@@ -7,6 +7,7 @@
   "scripts": {
     "icons": "node make-icons.js",
     "build": "node build.js",
+    "guide": "node docs/gen-guide.js",
     "test:data": "node test/checks.js",
     "test:audit": "node test/audit.js",
     "test:single": "node test/single.js",

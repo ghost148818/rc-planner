@@ -67,9 +67,17 @@ function serve(dir) {
 const MOTION = process.env.RCP_MOTION ? 'no-preference' : 'reduce';
 
 async function newPage(browser, opts) {
+  opts = Object.assign({}, opts || {});
+  // welcome: true — контекст «первого запуска»: приветствие не гасится.
+  const welcome = opts.welcome;
+  delete opts.welcome;
   // colorScheme: 'dark' — тема теперь «как в системе», а система Playwright
   // по умолчанию светлая; «тёмные» скриншоты должны остаться тёмными.
-  const context = await browser.newContext(Object.assign({ reducedMotion: MOTION, colorScheme: 'dark' }, opts || {}));
+  const context = await browser.newContext(Object.assign({ reducedMotion: MOTION, colorScheme: 'dark' }, opts));
+  // Приветствие первого запуска — модальное окно: оно перекрыло бы первый
+  // же клик в наборах. Считаем его просмотренным до загрузки страницы;
+  // само приветствие проверяет test/seeded.js в контексте с welcome: true.
+  if (!welcome) await context.addInitScript(() => { try { localStorage.setItem('rcp.hi', '1'); } catch (e) {} });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));

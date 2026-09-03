@@ -44,6 +44,7 @@ const js = [
   'data/firmware.js',
   'data/packing.js',
   'data/changelog.js',
+  'data/help.js',
   'app.js',
 ].map((f) => '/* == ' + f + ' == */\n' + read(f)).join('\n');
 let html = read('index.html');

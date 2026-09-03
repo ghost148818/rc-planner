@@ -197,6 +197,8 @@ async function run(browser, tag, opts) {
   // --- Флот, карточка борта (четыре сегмента) ---
   await shot('fleet', '#/fleet');
   ok((await count('#views .row')) >= 3, `${tag}: во флоте три борта`);
+  ok(await has('.head .head-help[data-nav="#/help/fleet"]') && await has('.head .head-act'),
+    `${tag}: в шапке «Флота» кнопка «?» рядом с «Добавить»`);
   await shot('model-overview', '#/model/a1');
   ok(await has('.model-tabs [data-tab="overview"][aria-pressed="true"]'), `${tag}: карточка борта открывается на «Обзоре»`);
   for (const t of ['components', 'maint', 'history']) {
@@ -309,6 +311,15 @@ async function run(browser, tag, opts) {
   await shot('backup', '#/backup');
   ok(await page.evaluate(() => document.body.textContent.includes('Последняя копия')), `${tag}: «Данные» показывают дату последней копии`);
   await shot('privacy', '#/privacy');
+  // Инструкция: без id открыт первый раздел; #/help/<id> — только он,
+  // и страница прокручена к нему (кнопка «?» экрана).
+  await shot('help', '#/help');
+  ok((await count('.help details.fold')) >= 14 && (await count('.help details.fold[open]')) === 1
+    && await has('#help-start[open]'), `${tag}: «Инструкция» — разделы свёрнуты, открыт первый`);
+  await shot('help-section', '#/help/flight', null, { viewportOnly: true });
+  ok((await count('.help details.fold[open]')) === 1 && await has('#help-flight[open]'), `${tag}: #/help/flight открывает раздел «Чек-лист и полёт»`);
+  ok(await page.evaluate(() => Math.abs(document.getElementById('help-flight').getBoundingClientRect().top) < 60),
+    `${tag}: страница прокручена к открытому разделу`);
   await shot('form-model', '#/model/a1', async (p) => { await p.click('[data-act="edit-model"]'); await p.waitForSelector('dialog[open]'); }, { viewportOnly: true });
   // prefers-reduced-motion обязан гасить и затемнение под окном: ::backdrop —
   // псевдоэлемент, универсальный * его не выбирает (финальное ревью 2.0).
@@ -351,6 +362,48 @@ async function run(browser, tag, opts) {
   await run(browser, 'light', { url: srv.url, viewport: phone, theme: 'light', scale: 2 });
   await run(browser, 'gloves', { url: srv.url, viewport: phone, theme: 'dark', gloves: true, scale: 2 });
   await run(browser, 'desktop', { url: srv.url, viewport: { width: 1280, height: 800 }, theme: 'dark' });
+
+  // Приветствие первого запуска: контекст без rcp.hi (welcome: true —
+  // helpers не гасят окно). Три шага, «Дальше» → «Начать» засчитывает
+  // просмотр, крестик — тоже; «Начало работы» на пустой базе — пять шагов.
+  {
+    const { context, page, errors } = await newPage(browser, { viewport: phone, colorScheme: 'dark', deviceScaleFactor: 2, welcome: true });
+    await page.goto(srv.url);
+    await page.waitForSelector('dialog.welcome[open]');
+    ok((await page.locator('dialog.welcome .dots i').count()) === 3, 'приветствие: три шага');
+    ok((await page.locator('dialog.welcome .dots i.on').count()) === 1, 'приветствие: отмечен первый шаг');
+    ok(!(await page.locator('#views .banner').count()), 'приветствие: старого баннера «Понятно» на «Сегодня» нет');
+    await page.screenshot({ path: path.join(OUT, 'dark-welcome.png') });
+    await page.click('dialog.welcome [data-act="welcome-next"]');
+    await page.waitForSelector('dialog.welcome [data-act="welcome-next"][data-step="2"]');
+    await page.click('dialog.welcome [data-act="welcome-next"]');
+    await page.waitForSelector('dialog.welcome [data-act="welcome-done"]');
+    ok((await page.locator('dialog.welcome .dots i.on').count()) === 1, 'приветствие: на третьем шаге кнопка «Начать»');
+    await page.click('dialog.welcome [data-act="welcome-done"]');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    ok(await page.evaluate(() => localStorage.getItem('rcp.hi') === '1'), 'после «Начать» приветствие засчитано');
+    ok(await page.evaluate(() => document.body.textContent.includes('Начало работы · осталось 5 из 5')),
+      '«Начало работы» на «Сегодня» — пять шагов');
+    ok((await page.locator('[data-act="export-all"]').count()) === 1, 'пятый шаг — резервная копия — ведёт к действию');
+    await page.evaluate(() => { localStorage.removeItem('rcp.hi'); });
+    await page.reload();
+    await page.waitForSelector('dialog.welcome[open]');
+    await page.click('dialog.welcome .dlg-close');
+    await page.waitForSelector('dialog', { state: 'detached' });
+    ok(await page.evaluate(() => localStorage.getItem('rcp.hi') === '1'), 'закрытие крестиком тоже засчитывается');
+    await page.reload();
+    await page.waitForSelector('#tabbar .tab');
+    await page.waitForTimeout(150);
+    ok(!(await page.locator('dialog.welcome').count()), 'после закрытия приветствие при запуске не возвращается');
+    // «Пройти обучение заново» открывает приветствие поверх «Ещё»
+    await page.evaluate(() => { location.hash = '#/more'; });
+    await page.waitForSelector('[data-act="restart-tour"]');
+    await page.click('[data-act="restart-tour"]');
+    await page.waitForSelector('dialog.welcome[open]');
+    ok(true, '«Пройти обучение заново» открывает приветствие');
+    ok(errors.length === 0, 'приветствие: ошибок консоли нет' + (errors.length ? ': ' + errors.slice(0, 3).join('; ') : ''));
+    await context.close();
+  }
   await browser.close();
   await srv.close();
   const shots = fs.readdirSync(OUT).filter((f) => f.endsWith('.png'));
