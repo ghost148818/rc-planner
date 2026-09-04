@@ -6,6 +6,7 @@
 //
 // Версия сборки — sha1 от собранного HTML и манифеста; подставляется
 // в sw.js вместо __VERSION__ и в <meta name="build">.
+// В CSP дописываются sha256-хэши inline-скриптов (см. withScriptHashes).
 // Сборка падает, если: остались внешние ссылки на ресурсы, не разбирается
 // manifest, иконки старше своего SVG-исходника.
 'use strict';
@@ -99,13 +100,41 @@ for (const [re, what] of badPatterns) {
   if (re.test(htmlPWA)) fail('в сборке ' + what + ' — приложение обязано работать офлайн');
 }
 
+// --- CSP: хэши inline-скриптов ---
+// В index.html script-src держит 'unsafe-inline' (сырой index.html с
+// внешними <script src> так работает в разработке). Сборка дописывает
+// sha256 каждого inline-скрипта: браузер с поддержкой CSP2+ (все
+// современные, iOS Safari с 10) при наличии хэшей ИГНОРИРУЕТ
+// 'unsafe-inline' — исполняются только скрипты с совпавшим хэшем, а
+// inline-обработчики (onerror=, onfocus=) и javascript: блокируются.
+// Это вторая линия обороны от XSS через непроверенную резервную копию
+// (аудит 2026-09-05); 'unsafe-inline' остаётся лишь для древних браузеров.
+// Хэш считается от текста ровно между <script> и </script>, с переводами
+// строк, поэтому шаблон вклейки менять вместе с этим блоком.
+function withScriptHashes(src) {
+  const hashes = [];
+  const re = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(src))) {
+    if (m[1] && /\bsrc=/i.test(m[1])) continue;
+    hashes.push("'sha256-" + crypto.createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
+  }
+  if (hashes.length < 2) fail('в сборке меньше двух inline-скриптов — CSP-хэши считать не от чего');
+  const marker = "script-src 'self' 'unsafe-inline'";
+  if (!src.includes(marker)) fail('в CSP нет «' + marker + '» — хэшам некуда встать');
+  return src.replace(marker, marker + ' ' + hashes.join(' '));
+}
+const htmlPWAHashed = withScriptHashes(htmlPWA);
+const htmlSingleHashed = withScriptHashes(htmlSingle);
+
 // --- Версия ---
 const version = crypto.createHash('sha1')
-  .update(htmlPWA).update(manifestOut)
+  .update(htmlPWAHashed).update(manifestOut)
   .digest('hex').slice(0, 10);
 
-const outPWA = htmlPWA.replace(/__VERSION__/g, version);
-const outSingle = htmlSingle.replace(/__VERSION__/g, version + '-single');
+// __VERSION__ живёт в <meta>, не в скриптах — хэши после подстановки верны.
+const outPWA = htmlPWAHashed.replace(/__VERSION__/g, version);
+const outSingle = htmlSingleHashed.replace(/__VERSION__/g, version + '-single');
 const sw = read('pwa/sw.js').replace(/__VERSION__/g, version);
 
 // --- Запись public/ ---

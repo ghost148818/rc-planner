@@ -117,6 +117,24 @@ const html = read('index.html');
 for (const m of ['build:css', 'build:js', 'build:pwa']) ok(html.includes('<!-- ' + m + ' -->'), 'маркер ' + m);
 ok(html.includes('Content-Security-Policy'), 'CSP задан');
 ok(html.includes('name="build"'), 'meta build есть');
+// Хэши inline-скриптов в CSP собранных файлов совпадают с их содержимым:
+// разошлись — приложение не стартует ни в одном браузере с CSP2.
+const crypto = require('crypto');
+for (const out of ['public/index.html', 'dist/rc-planner.html']) {
+  const p = path.join(ROOT, out);
+  if (!fs.existsSync(p)) { ok(false, out + ' не собран (npm run build)'); continue; }
+  const built = fs.readFileSync(p, 'utf8');
+  const csp = (built.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/) || [])[1] || '';
+  const inCsp = new Set((csp.match(/'sha256-[^']+'/g) || []));
+  const want = [];
+  const re = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(built))) {
+    if (m[1] && /\bsrc=/i.test(m[1])) continue;
+    want.push("'sha256-" + crypto.createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
+  }
+  ok(want.length >= 2 && want.every((h) => inCsp.has(h)), out + ': CSP содержит хэши всех ' + want.length + ' inline-скриптов');
+}
 
 const app = read('app.js');
 // Каждый экран из TAB_OF обязан иметь отрисовщик в RENDERERS.

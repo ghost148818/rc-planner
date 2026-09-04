@@ -346,6 +346,19 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(closed, 'окно закрылось');
 
   ok(errors.length === 0, 'ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+
+  // CSP с хэшами (2.0.1): inline-обработчик, попавший в разметку мимо
+  // esc(), браузер обязан не исполнить. Проба — последняя: отказ CSP
+  // пишется в консоль как ошибка, и это здесь ожидаемо.
+  const before = errors.length;
+  await page.evaluate(() => {
+    const d = document.createElement('div');
+    d.innerHTML = '<img src=x onerror="window.__cspProbe=1">';
+    document.body.appendChild(d);
+  });
+  await page.waitForTimeout(300);
+  ok(!(await page.evaluate(() => window.__cspProbe)), 'CSP: inline-обработчик onerror не исполнился');
+  ok(errors.slice(before).some((e) => /Content Security Policy/i.test(e)), 'CSP: отказ зафиксирован в консоли');
   await browser.close();
   finish('test:audit');
 })().catch((e) => { console.error(e); process.exit(1); });
