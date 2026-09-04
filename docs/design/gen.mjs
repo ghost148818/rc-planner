@@ -1,6 +1,6 @@
 // Генератор артбордов дизайн-канваса RC Planner 2.0.
 // Запуск: node docs/design/gen.mjs → docs/design/artboards/*.dc.html + canvas.json.
-// Артборды — статичный HTML в формате Design Components (Claude Design);
+// Артборды — статичный HTML в формате Design Components (дизайн-канвас);
 // токены взяты из styles.css (направление А их наследует), направления
 // Б и В намеренно уходят от них по одной оси каждое.
 import { writeFileSync, mkdirSync } from 'node:fs';
