@@ -546,6 +546,12 @@ function activeFlightBanners(exceptId) {
 const numOrNull = (v) => (v == null || v === '' || !isFinite(+v) ? null : +v);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const dateOrNull = (v) => (typeof v === 'string' && DATE_RE.test(v) ? v : null);
+// Значение-ключ словаря (тип борта, заряд АКБ, вид работы, состояние
+// пункта): только собственный ключ словаря, иначе null. Ключ прототипа
+// ('constructor') отдавал бы функцию: её исходник попадал в разметку
+// как текст «function Object() { [native code] }» (аудит 2026-09-05).
+const keyOrNull = (dict, v) =>
+  (typeof v === 'string' && Object.prototype.hasOwnProperty.call(dict, v) ? v : null);
 const NORM = {
   sites(s) {
     s.lat = numOrNull(s.lat);
@@ -554,19 +560,29 @@ const NORM = {
   },
   aircraft(a) {
     for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = numOrNull(a[k]);
+    a.type = keyOrNull(TYPES, a.type);
+    a.statusManual = keyOrNull(STATUS, a.statusManual) || '';
   },
   batteries(b) {
     for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = numOrNull(b[k]);
     b.cycles = Math.max(0, Math.round(numOrNull(b.cycles) || 0));
+    b.charge = keyOrNull(CHARGE_LABEL, b.charge);
   },
   sessions(s) {
     s.date = dateOrNull(s.date);
     // Незнакомый результат — «—», а не выдуманный «Нормальный»
     if (s.result != null && s.result !== '' && !Object.prototype.hasOwnProperty.call(RESULTS, s.result)) s.result = null;
   },
-  maintenance(m) { m.date = dateOrNull(m.date); },
+  maintenance(m) { m.date = dateOrNull(m.date); m.kind = keyOrNull(MAINT_KINDS, m.kind); },
   configs(c) { c.date = dateOrNull(c.date); },
-  runs(r) { r.date = dateOrNull(r.date); },
+  // Состояние пункта прогона идёт в data-state без esc(): строка
+  // `"><img onerror=…>` из копии исполнялась в деталях полёта
+  // (аудит 2026-09-05, живая проба). Только ok/fail/skip, иначе null.
+  runs(r) {
+    r.date = dateOrNull(r.date);
+    r.items = (Array.isArray(r.items) ? r.items : []).filter((it) => it && typeof it === 'object');
+    for (const it of r.items) it.state = keyOrNull(CK_MARK, it.state);
+  },
 };
 
 function normalizeStore(store, list) {
@@ -596,7 +612,12 @@ async function loadAll() {
   if (wc) {
     const j = wc.json;
     const lat = j && numOrNull(j.latitude), lon = j && numOrNull(j.longitude);
-    if (lat == null || lon == null) delete S.settings.weatherCache;
+    // Восход/закат и часы — строки вида 2026-09-05T06:12: wxDay режет их
+    // slice(), нестрока роняла отрисовку «Окон» и «Сегодня» целиком.
+    const isoList = (l) => Array.isArray(l) && l.every((v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(v));
+    const shapeOk = j && j.hourly && j.daily && isoList(j.hourly.time) &&
+      isoList(j.daily.time) && isoList(j.daily.sunrise) && isoList(j.daily.sunset);
+    if (lat == null || lon == null || !shapeOk) delete S.settings.weatherCache;
     else { j.latitude = lat; j.longitude = lon; }
   }
   // Группы флота из импортированной копии: только валидные записи

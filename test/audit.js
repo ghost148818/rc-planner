@@ -276,6 +276,66 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
     await window.loadAll();
   });
 
+  // Проба восьмая (аудит 2026-09-05): состояние пункта прогона чек-листа
+  // идёт в data-state без esc() — строка `"><img onerror=…>` из копии
+  // исполнялась в окне деталей полёта. NORM.runs оставляет только ok/fail/skip.
+  const statePayload = '"><img src=x onerror="window.__xss8=1">';
+  await page.evaluate(async (tag) => {
+    await window.RCDB.put('runs', { id: 'state-run', aircraftId: 'attr-probe', date: todayISO(),
+      items: [{ t: 'пункт', state: tag }, null, 'мусор'] });
+    await window.RCDB.put('sessions', { id: 'state-sess', aircraftId: 'attr-probe', checklistRunId: 'state-run',
+      date: todayISO(), start: 10, end: 20, durationMin: 1, flightNo: 4, result: 'normal' });
+    await window.loadAll();
+    location.hash = '#/journal';
+  }, statePayload);
+  await page.waitForSelector('[data-act="session-info"][data-id="state-sess"]');
+  await page.click('[data-act="session-info"][data-id="state-sess"]');
+  await page.waitForSelector('dialog .ck', { state: 'attached' });
+  ok((await page.evaluate(() => document.querySelectorAll('dialog [onerror], dialog img[src="x"]').length)) === 0 && !(await page.evaluate(() => window.__xss8)),
+    'детали полёта: состояние пункта из копии не стало тегом');
+  ok(await page.evaluate(() => { const r = S.runs.find((x) => x.id === 'state-run'); return r.items.length === 1 && r.items[0].state === null; }),
+    'NORM.runs: чужое состояние → null, не-объекты выброшены');
+  await page.click('.dlg-close');
+  await page.waitForSelector('dialog', { state: 'detached' });
+
+  // Проба девятая: ключи прототипа в type/charge/kind/statusManual —
+  // TYPES['constructor'] отдавал исходник функции в разметку как текст.
+  await page.evaluate(async () => {
+    await window.RCDB.put('aircraft', { id: 'proto-air', name: 'Проба ключа', type: 'constructor', statusManual: 'toString', components: {} });
+    await window.RCDB.put('batteries', { id: 'proto-batt', label: 'Проба заряда', chem: 'lipo', charge: 'constructor', cycles: 0 });
+    await window.RCDB.put('maintenance', { id: 'proto-maint', aircraftId: 'proto-air', title: 'Проба вида', kind: 'valueOf', done: false, createdAt: 10 });
+    await window.loadAll();
+  });
+  for (const v of ['fleet', 'batteries', 'model/proto-air']) {
+    await page.evaluate((h) => { location.hash = '#/' + h; }, v);
+    await page.waitForTimeout(200);
+    ok(!(await page.evaluate(() => document.getElementById('views').innerText.includes('native code'))), 'экран ' + v + ': ключ прототипа не показан как функция');
+  }
+  ok(await page.evaluate(() => { const a = S.aircraft.find((x) => x.id === 'proto-air'); const b = S.batteries.find((x) => x.id === 'proto-batt');
+    const m = S.maintenance.find((x) => x.id === 'proto-maint'); return a.type === null && a.statusManual === '' && b.charge === null && m.kind === null; }),
+    'NORM: ключи прототипа приведены к null');
+
+  // Проба десятая: кэш прогноза с нестроковым восходом — wxDay резал его
+  // slice() и ронял «Окна» (pageerror, экран не менялся). Кэш выбрасывается.
+  await page.evaluate(async () => {
+    const hours = Array.from({ length: 24 }, (_, i) => '2026-09-05T' + String(i).padStart(2, '0') + ':00');
+    const z = hours.map(() => 0);
+    S.settings.weatherCache = { fetched: Date.now(), place: 'Проба', json: { latitude: 55.7, longitude: 37.6,
+      hourly: { time: hours, temperature_2m: z, wind_speed_10m: z, wind_gusts_10m: z, weather_code: z },
+      daily: { time: ['2026-09-05'], sunrise: [12345], sunset: [{}] } } };
+    await saveSettings();
+    await window.loadAll();
+    location.hash = '#/weather';
+  });
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => !S.settings.weatherCache), '«Окна»: кэш с нестроковым восходом выброшен в loadAll');
+  ok(await page.evaluate(() => UI.view === 'weather' && document.getElementById('views').innerHTML.length > 100), '«Окна» отрисованы после порчи кэша');
+  ok(errors.length === 0, 'после проб 8–10 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+  await page.evaluate(async () => {
+    for (const [st, id] of [['runs', 'state-run'], ['sessions', 'state-sess'], ['aircraft', 'proto-air'], ['batteries', 'proto-batt'], ['maintenance', 'proto-maint']]) await window.RCDB.del(st, id);
+    await window.loadAll();
+  });
+
   // Модальное окно закрывается.
   await page.evaluate(() => { location.hash = '#/more'; });
   await page.click('[data-act="whatsnew"]');
