@@ -301,7 +301,7 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   // Проба девятая: ключи прототипа в type/charge/kind/statusManual —
   // TYPES['constructor'] отдавал исходник функции в разметку как текст.
   await page.evaluate(async () => {
-    await window.RCDB.put('aircraft', { id: 'proto-air', name: 'Проба ключа', type: 'constructor', statusManual: 'toString', components: {} });
+    await window.RCDB.put('aircraft', { id: 'proto-air', name: 'Проба ключа', type: 'constructor', statusManual: 'toString', components: {}, prepared: { runId: 42, at: 'вчера', siteId: {} } });
     await window.RCDB.put('batteries', { id: 'proto-batt', label: 'Проба заряда', chem: 'lipo', charge: 'constructor', cycles: 0 });
     await window.RCDB.put('maintenance', { id: 'proto-maint', aircraftId: 'proto-air', title: 'Проба вида', kind: 'valueOf', done: false, createdAt: 10 });
     await window.loadAll();
@@ -312,8 +312,8 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
     ok(!(await page.evaluate(() => document.getElementById('views').innerText.includes('native code'))), 'экран ' + v + ': ключ прототипа не показан как функция');
   }
   ok(await page.evaluate(() => { const a = S.aircraft.find((x) => x.id === 'proto-air'); const b = S.batteries.find((x) => x.id === 'proto-batt');
-    const m = S.maintenance.find((x) => x.id === 'proto-maint'); return a.type === null && a.statusManual === '' && b.charge === null && m.kind === null; }),
-    'NORM: ключи прототипа приведены к null');
+    const m = S.maintenance.find((x) => x.id === 'proto-maint'); return a.type === null && a.statusManual === '' && a.prepared === null && b.charge === null && m.kind === null; }),
+    'NORM: ключи прототипа и битая пометка «подготовлен» приведены к null');
 
   // Проба десятая: кэш прогноза с нестроковым восходом — wxDay резал его
   // slice() и ронял «Окна» (pageerror, экран не менялся). Кэш выбрасывается.

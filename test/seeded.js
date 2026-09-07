@@ -235,6 +235,52 @@ async function run(browser, tag, opts) {
   await painted(page);
   ok(await has('[data-act="start-prep"]'), `${tag}: отмена подготовки возвращает на «Полёт»`);
 
+  // --- Подготовка не сбрасывается: отметки живут до взлёта или сброса ---
+  // Сценарий владельца: прошли чек-лист, отметили готовым, ушли, вернулись.
+  await nav(page, '#/prep');
+  await page.click('[data-act="prep-model"][data-id="a2"]');
+  await page.waitForSelector('.ck-main[data-i="0"]');
+  await page.click('.ck-main[data-i="0"]');
+  await page.waitForSelector('.ck[data-state="ok"] > .ck-main[data-i="0"]');
+  await page.click('.ck-main[data-i="1"]');
+  await page.waitForSelector('.ck[data-state="ok"] > .ck-main[data-i="1"]');
+  await stamp(page);
+  await page.click('[data-act="prep-done"]');
+  await painted(page);
+  await page.waitForSelector('[data-act="prep-model"][data-id="a2"]');
+  ok((await page.textContent('[data-act="prep-model"][data-id="a2"]')).includes('подготовлен в'),
+    `${tag}: после «Отметить готовым» борт помечен подготовленным`);
+  await shot('checklist-kept', '#/prep', async (p) => {
+    await p.click('[data-act="prep-model"][data-id="a2"]');
+    await p.waitForSelector('[data-act="cancel-prep"]');
+  });
+  ok((await count('.ck[data-state="ok"]')) === 2, `${tag}: чек-лист открыт снова — обе отметки на месте`);
+  ok((await page.textContent('[data-act="cancel-prep"]')).includes('Сбросить'),
+    `${tag}: у подготовленного борта кнопка «Сбросить подготовку»`);
+  await page.reload();
+  await page.waitForSelector('#tabbar .tab');
+  await nav(page, '#/prep');
+  await page.click('[data-act="prep-model"][data-id="a2"]');
+  await page.waitForSelector('.ck-main[data-i="0"]');
+  ok((await count('.ck[data-state="ok"]')) === 2, `${tag}: отметки пережили перезапуск приложения`);
+  // Сброс — с подтверждением: снимает пометку, удаляет прогон, открывает чистый
+  await page.click('[data-act="cancel-prep"]');
+  await page.waitForSelector('dialog[open] [data-act="cancel-prep-reset"]');
+  await page.click('[data-act="cancel-prep-reset"]');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  await page.waitForFunction(() => document.querySelector('.ck-main[data-i="0"]') && !document.querySelector('.ck[data-state="ok"]'));
+  ok(await page.evaluate(async () => !(await window.RCDB.get('aircraft', 'a2')).prepared),
+    `${tag}: сброс снял пометку «подготовлен» в базе`);
+  ok(await page.evaluate(() => !S.runs.some((r) => r.aircraftId === 'a2') && S.runs.some((r) => r.id === 'r1')),
+    `${tag}: сброс удалил прогон борта, чужие прогоны целы`);
+  ok(!(await page.textContent('[data-act="cancel-prep"]')).includes('Сбросить'),
+    `${tag}: после сброса кнопка снова «Отменить подготовку»`);
+  await stamp(page);
+  await page.click('[data-act="cancel-prep"]');
+  await painted(page);
+  ok(await has('[data-act="start-prep"]') && !(await page.textContent('#views')).includes('Подготовка не закончена'),
+    `${tag}: отмена возвращает на «Полёт» без баннера незаконченной подготовки`);
+
   // --- Сегодня: на поле ---
   await STATE_STEPS.field(page);
   await shot('today-field', '#/today');
@@ -402,6 +448,70 @@ async function run(browser, tag, opts) {
     await page.waitForSelector('dialog.welcome[open]');
     ok(true, '«Пройти обучение заново» открывает приветствие');
     ok(errors.length === 0, 'приветствие: ошибок консоли нет' + (errors.length ? ': ' + errors.slice(0, 3).join('; ') : ''));
+    await context.close();
+  }
+
+  // «Пройти обучение заново» на ПОЛНОЙ базе: у опытного пилота все пять
+  // шагов давно сделаны, поэтому обучение считает только сделанное после
+  // перезапуска — иначе блок был бы бессмысленным. Проверяем весь путь:
+  // пять из пяти → шаг пройден и зачёркнут → блок исчез, метка снята.
+  {
+    const { context, page, errors } = await newPage(browser, { viewport: phone, colorScheme: 'dark', deviceScaleFactor: 2 });
+    await page.goto(srv.url);
+    await page.waitForSelector('#tabbar .tab');
+    await seed(page);
+    const text = () => page.evaluate(() => document.body.textContent);
+    const cnt = (sel) => page.evaluate((s) => document.querySelectorAll(s).length, sel);
+    await nav(page, '#/more');
+    await page.click('[data-act="restart-tour"]');
+    await page.waitForSelector('dialog.welcome[open]');
+    await page.click('dialog.welcome [data-act="welcome-next"]');
+    await page.waitForSelector('dialog.welcome [data-act="welcome-next"][data-step="2"]');
+    await page.click('dialog.welcome [data-act="welcome-next"]');
+    await page.waitForSelector('dialog.welcome [data-act="welcome-done"]');
+    await page.click('dialog.welcome [data-act="welcome-done"]');
+    await page.waitForSelector('[data-act="dismiss-tour"]');
+    ok(await page.evaluate(() => +localStorage.getItem('rcp.tour') > 1e12), 'обучение: в rcp.tour метка времени перезапуска');
+    ok((await text()).includes('Обучение · осталось 5 из 5'), 'обучение: на полной базе пять шагов заново');
+    ok((await cnt('#views .t[style*="line-through"]')) === 0, 'обучение: старые записи не засчитываются');
+    await page.screenshot({ path: path.join(OUT, 'dark-tour.png'), fullPage: true });
+    // Шаг «Добавьте борт» проходим руками — по пути проверяем баннер карточки
+    await page.click('#views [data-act="add-model"]');
+    await page.waitForSelector('dialog [data-act="model-preset"][data-i="0"]');
+    await page.click('dialog [data-act="model-preset"][data-i="0"]');
+    await page.waitForSelector('dialog form[data-form="model"]');
+    await page.click('dialog form[data-form="model"] button[type="submit"]');
+    await page.waitForSelector('.banner.ok [data-nav="#/today"]');
+    const tops = await page.evaluate(() => [...document.querySelectorAll('.banner.ok .btn')].map((b) => Math.round(b.getBoundingClientRect().top)));
+    ok(tops.length === 2 && tops[0] === tops[1], 'обучение: «Во «Флот»» и «К обучению» на одной высоте (' + tops.join(', ') + ')');
+    await page.screenshot({ path: path.join(OUT, 'dark-model-created.png'), fullPage: true });
+    await stamp(page);
+    await page.click('.banner.ok [data-nav="#/today"]');
+    await painted(page);
+    ok((await text()).includes('Обучение · осталось 4 из 5'), 'обучение: шаг с бортом засчитан');
+    ok((await cnt('#views .t[style*="line-through"]')) === 1, 'обучение: пройденный шаг зачёркнут');
+    // Остальные шаги — записью в базу (как это сделали бы действия приложения)
+    await page.evaluate(async () => {
+      const now = Date.now();
+      const a = S.aircraft.slice().sort((x, y) => (+y.createdAt || 0) - (+x.createdAt || 0))[0];
+      await window.RCDB.put('batteries', { id: 'tour-b', label: 'LiPo 4S 1800', chem: 'LiPo', cells: 4, p: 1, capacity: 1800, weight: 210, cycles: 0, charge: 'ready', status: 'ok', createdAt: now });
+      a.batteryId = 'tour-b';
+      await window.RCDB.put('aircraft', a);
+      await window.RCDB.put('sites', { id: 'tour-s', name: 'Новое поле', place: 'Рядом', lat: 55.5, lon: 37.5, createdAt: now });
+      // дата вчерашняя: состояние дня должно остаться «дома», считается end
+      const day = new Date(now - 86400000).toLocaleDateString('en-CA');
+      await window.RCDB.put('sessions', { id: 'tour-f', aircraftId: a.id, date: day, start: now - 300000, end: now, landedAt: now, durationMin: 5, flightNo: 1, batteryId: 'tour-b', siteId: 'tour-s', weather: '', result: 'normal', notes: '', problems: '' });
+      const st = await window.RCDB.get('settings', 'main');
+      st.lastBackupAt = now;
+      await window.RCDB.put('settings', st);
+      await window.loadAll();
+    });
+    await nav(page, '#/today');
+    const done = await text();
+    ok(!done.includes('Обучение · осталось') && !(await cnt('[data-act="dismiss-tour"]')),
+      'обучение: после всех пяти шагов блок исчез');
+    ok(await page.evaluate(() => !localStorage.getItem('rcp.tour')), 'обучение: метка снята сама');
+    ok(errors.length === 0, 'обучение: ошибок консоли нет' + (errors.length ? ': ' + errors.slice(0, 3).join('; ') : ''));
     await context.close();
   }
   await browser.close();

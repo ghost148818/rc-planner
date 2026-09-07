@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-+vlsZoRcd415Jkw4N7yiVme7qVAANnBcAzRqOam6OvQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-odakluZ3iWqZdz4Obn2VjUFdGbMr5hLXHXkOcq5bYhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="75aa27ca0a-single">
+  <meta name="build" content="8d0c15a161-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -342,8 +342,11 @@ button.row:active, a.row:active { background: var(--card-2); }
 .ic-btn svg { width: 20px; height: 20px; }
 .ic-btn.on { color: var(--warn); }
 .btn + .btn { margin-top: 8px; }
-/* Кнопки в строке списка (Я.Карты/OSM у локации) стоят в ряд, не столбиком */
-.row .btn + .btn { margin-top: 0; }
+/* Кнопки в строке списка (Я.Карты/OSM у локации) и в баннере («Во «Флот»»
+   и «К обучению» после добавления борта, «Завершить»/«Удалить» у забытого
+   полёта) стоят в ряд, не столбиком: иначе вторая ниже первой на 8 px */
+.row .btn + .btn,
+.banner .btn + .btn { margin-top: 0; }
 .btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
 /* Текстовая кнопка-ссылка под главной («Как считается окно» в «Окнах»):
    без рамки и заливки, но полной высоты касания — порог 44/52 общий для всех кнопок */
@@ -1452,7 +1455,7 @@ RC.CHECKLISTS = [
       { t: 'Моторы', hint: 'Крутятся свободно, без люфта и посторонних звуков' },
       { t: 'Рама и крепёж', hint: 'Нет трещин, винты затянуты, стойки целы' },
       { t: 'Аккумулятор', hint: 'Заряжен, не вздут, ремешок и разъём в порядке' },
-      { t: 'VTX', hint: 'Канал и мощность верные, антенна накручена' },
+      { t: 'VTX / VRX', hint: 'Канал и мощность верные, антенны накручены, приём в очках есть' },
       { t: 'Камера', hint: 'Картинка чистая, угол наклона выставлен' },
       { t: 'RX / ELRS', hint: 'Бинд есть, LQ/RSSI в норме на земле' },
       { t: 'Failsafe', hint: 'Проверен: при выключении передатчика моторы останавливаются' },
@@ -1472,7 +1475,8 @@ RC.CHECKLISTS = [
       { t: 'Пропеллер', hint: 'Целый, затянут, без биения' },
       { t: 'Мотор и тяга', hint: 'Короткий тест тяги, звук ровный' },
       { t: 'Аккумулятор', hint: 'Заряжен, закреплён, не смещается в полёте' },
-      { t: 'RX и дальность', hint: 'Бинд есть, тест дальности по инструкции передатчика' },
+      { t: 'RX / TX', hint: 'Бинд есть, мощность передатчика выставлена, тест дальности пройден' },
+      { t: 'Видеосвязь (VTX / VRX)', hint: 'Канал и мощность выставлены, антенны накручены, картинка в очках чистая' },
       { t: 'Failsafe', hint: 'Настроен: газ в ноль / RTH при потере связи' },
       { t: 'Механика планера', hint: 'Крыло и хвост закреплены, ничего не болтается' },
       { t: 'Триммеры и расходы', hint: 'Триммеры по нулям, расходы и экспо как настроено' },
@@ -1489,7 +1493,8 @@ RC.CHECKLISTS = [
       { t: 'Сервоприводы', hint: 'Без люфта, тяги закреплены' },
       { t: 'Пропеллер и мотор', hint: 'Затянут, тест тяги, звук ровный' },
       { t: 'Аккумулятор', hint: 'Заряжен, закреплён липучкой и ремешком' },
-      { t: 'RX / телеметрия', hint: 'Бинд есть, телеметрия идёт' },
+      { t: 'RX / TX и телеметрия', hint: 'Бинд есть, мощность передатчика выставлена, телеметрия идёт' },
+      { t: 'Видеосвязь (VTX / VRX)', hint: 'Канал и мощность выставлены, антенны накручены, картинка в очках чистая' },
       { t: 'Failsafe', hint: 'Проверен на земле' },
       { t: 'GPS / стабилизация', hint: 'Спутники, режимы стабилизации, home point' },
       { t: 'Обшивка и стыки', hint: 'Скотч/клей держит, лонжерон цел' },
@@ -2286,6 +2291,20 @@ window.RC = window.RC || {};
 
 RC.CHANGELOG = [
   {
+    v: '2.0.2',
+    date: '2026-09-07',
+    title: 'Чек-лист остаётся заполненным',
+    items: [
+      'Отметки чек-листа не пропадают: открыли чек-лист борта, отмеченного готовым, — всё на месте. Они живут до взлёта, сброса или конца дня.',
+      'У подготовленного борта кнопка внизу — «Сбросить подготовку»: с подтверждением снимает пометку и удаляет отметки, чек-лист открывается пустым.',
+      'В чек-листах самолёта и крыла появилась видеосвязь (VTX / VRX), пункт про приёмник стал «RX / TX»: бинд, мощность передатчика, дальность.',
+      'Новый аккумулятор заводится как борт: сначала выбор — пустой или готовая сборка. Шаг обучения «Заведите аккумулятор» ведёт прямо туда.',
+      '«Пройти обучение заново» работает как первый запуск: шаги зачёркиваются по мере выполнения и блок исчезает, когда пройдены все пять.',
+      'После добавления борта кнопки «Во «Флот»» и «К обучению» стоят в один ряд, а не лесенкой.',
+      'Резервная копия из чужих рук: испорченная пометка «подготовлен» отбрасывается при загрузке.',
+    ],
+  },
+  {
     v: '2.0.1',
     date: '2026-09-05',
     title: 'Аудит безопасности: копия из чужих рук',
@@ -2423,20 +2442,6 @@ RC.CHANGELOG = [
       'В сборах: «Аппаратура управления (заряжена)» и новый пункт «VRX-нашлёпка» (для новых наборов; свои правятся руками).',
     ],
   },
-  {
-    v: '1.0',
-    date: '2026-08-25',
-    title: 'RC Planner 1.0',
-    items: [
-      'Полёт без аккумулятора невозможен: кнопки взлёта появляются только у собранного борта.',
-      'Несколько полётов одновременно: два пилота — два борта; у каждого борта не больше одного открытого полёта.',
-      'Забытый полёт (дольше 6 часов) подсвечивается на «Сегодня» и в «Полёте»; длительность в итоге не выдумывается — впишете сами.',
-      'Заряд АКБ: зелёная подпись — заряжен, синяя — после полёта. Отметка «заряжен» — одним тапом по чипу в списке или карточке.',
-      'Аккумулятор борта виден с его состоянием во всех списках: «Сегодня», «Флот», карточка.',
-      '«Модель» везде переименована в «Борт».',
-      'Вставка координат: любой текст из буфера разбирается и при нативной вставке в поле (долгое нажатие → «Вставить»).',
-    ],
-  }
 ];
 
 /* == data/help.js == */
@@ -2495,7 +2500,8 @@ RC.HELP = {
           '«Ещё» — сборы, инструменты, локации, шаблоны чек-листов, данные и резервная копия, настройки, обновления, эта инструкция и «Приватность».',
         ] },
         { h: 'Первые шаги' },
-        'На «Сегодня» есть блок «Начало работы» из пяти шагов: борт → аккумулятор в борт → локация с координатами → чек-лист и полёт → резервная копия. Каждый шаг ведёт прямо к действию; блок исчезает, когда всё пройдено. Вернуть его и приветствие можно через «Ещё → Пройти обучение заново».',
+        'На «Сегодня» есть блок «Начало работы» из пяти шагов: борт → аккумулятор в борт → локация с координатами → чек-лист и полёт → резервная копия. Каждый шаг ведёт прямо к действию, пройденные зачёркиваются, блок исчезает, когда не осталось ни одного.',
+        'Вернуть его и приветствие — «Ещё → Пройти обучение заново». Шаги считаются заново: засчитывается только сделанное после перезапуска — новый борт, аккумулятор в борт, локация, полёт, свежая копия. Скрыть блок раньше времени — строкой «Завершить обучение».',
         { h: 'Обновления' },
         'Установленное приложение проверяет обновления само; вручную — «Ещё → Проверить обновления». Когда новая версия скачана, появляется кнопка «Обновить приложение» — до неё ничего не меняется. Список изменений — «Ещё → Что нового».',
         { tip: 'Кнопка «?» в шапке экрана открывает раздел этой инструкции про него.' },
@@ -2525,7 +2531,7 @@ RC.HELP = {
       id: 'fleet',
       title: 'Флот: борта и аккумуляторы',
       blocks: [
-        'Вкладка «Флот» — два списка: «Борта» и «Аккумуляторы». Новый борт — кнопка «Добавить»: пустой или готовая платформа с заводскими характеристиками, которые можно поправить в форме.',
+        'Вкладка «Флот» — два списка: «Борта» и «Аккумуляторы». Новый борт — кнопка «Добавить»: пустой или готовая платформа с заводскими характеристиками, которые можно поправить в форме. Новый аккумулятор заводится так же: пустой или готовая сборка.',
         { h: 'Карточка борта' },
         'Наверху — статус, аккумулятор с чипом заряда, три плитки (полётов, налёт, последний полёт), полоска регламента и кнопка «Чек-лист и полёт». Ниже сегменты: «Обзор» (паспорт, компоненты, открытые работы, конфигурации, заметки, экспорт и удаление), «Компоненты» (мотор, ESC, полётный контроллер, приёмник, GPS, сервоприводы, пропеллер, VTX, камера, передатчик; у каждого — название, версия прошивки и заметки), «Обслуживание», «История» (все полёты борта).',
         { h: 'Статусы' },
@@ -2546,7 +2552,7 @@ RC.HELP = {
           'Заряд — чип «заряжен» (зелёный) / «после полёта» (синий). Тап по чипу переключает. После записи итога полёта аккумулятор сам становится «после полёта».',
           'Циклы растут сами: +1 за первый полёт после отметки «заряжен». Второй вылет на той же банке цикл не добавляет. Правка уже записанного итога циклы не трогает.',
           'Состояние «Списан» снимает аккумулятор с борта и убирает его из выбора; «Следить» — просто пометка в списке.',
-          'Готовые сборки в форме нового аккумулятора заполняют химию, банки, ёмкость и вес; вес без значения оценивается по химии и ёмкости.',
+          'Новый аккумулятор — кнопка «Добавить»: пустой или готовая сборка (она заполняет химию, банки, ёмкость и вес). Вес без значения оценивается по химии и ёмкости.',
         ] },
         { h: 'Регламент осмотра' },
         'В форме борта — «Осмотр каждые N полётов» и «Осмотр каждые N минут налёта». Можно задать один счётчик или оба — сработает тот, что подойдёт раньше. Счёт идёт от последней выполненной работы: отметили «Выполнено» — счётчик пошёл заново. Когда срок подошёл, появляется «Пора осмотреть» на «Сегодня», полоска в карточке становится оранжевой, а в чек-листе — предупреждение. Регламент — напоминание, статус борта он не меняет и полёты не запрещает.',
@@ -2569,11 +2575,12 @@ RC.HELP = {
         { list: [
           '«Начать полёт» — сохраняет чек-лист и открывает экран полёта с таймером.',
           '«Отметить готовым — взлёт позже» — сохраняет чек-лист и помечает борт подготовленным до конца дня (по московскому времени). Такой борт получает кнопку «Взлёт» на «Сегодня» и на вкладке «Полёт» — взлёт без повторного чек-листа. Можно подготовить несколько бортов подряд.',
-          '«Отменить подготовку» — ничего не сохраняет.',
+          'Отметки не пропадают: откроете чек-лист подготовленного борта снова — всё на месте, можно дополнить. Они живут до взлёта, сброса или конца дня.',
+          '«Отменить подготовку» — ничего не сохраняет. У подготовленного борта эта кнопка называется «Сбросить подготовку»: с подтверждением снимает пометку «подготовлен» и удаляет сохранённые отметки, чек-лист открывается пустым.',
         ] },
         'Без установленного аккумулятора кнопок полёта нет: полёт без него не считается ни по весу, ни по циклам.',
         { h: 'Когда есть кнопка «Взлёт»' },
-        'Только когда лететь реально можно: чек-лист пройден сегодня, аккумулятор стоит, у борта нет запрета и открытого обслуживания, и он не в воздухе. Взлёт снимает пометку «подготовлен»; полёт с проблемой снимает её тоже.',
+        'Только когда лететь реально можно: чек-лист пройден сегодня, аккумулятор стоит, у борта нет запрета и открытого обслуживания, и он не в воздухе. Взлёт снимает пометку «подготовлен»; полёт с проблемой и «Сбросить подготовку» снимают её тоже.',
         { h: 'Экран полёта' },
         { list: [
           'Кольцо вокруг таймера заполняется относительно средней длительности прошлых полётов этого борта; у первого полёта кольцо пустое.',
@@ -2758,7 +2765,7 @@ RC.HELP = {
       title: 'Частые вопросы',
       blocks: [
         { h: 'Почему нет кнопки «Взлёт»?' },
-        'Она появляется только у борта, который реально может лететь: чек-лист пройден сегодня кнопкой «Отметить готовым — взлёт позже», аккумулятор установлен, нет запрета и открытого обслуживания, и борт не в воздухе. Пометка «подготовлен» одноразовая: её снимает взлёт, полёт с проблемой и наступление следующего дня. Иначе — обычный путь через «Начать полёт» и чек-лист.',
+        'Она появляется только у борта, который реально может лететь: чек-лист пройден сегодня кнопкой «Отметить готовым — взлёт позже», аккумулятор установлен, нет запрета и открытого обслуживания, и борт не в воздухе. Пометка «подготовлен» одноразовая: её снимает взлёт, полёт с проблемой, кнопка «Сбросить подготовку» и наступление следующего дня. Иначе — обычный путь через «Начать полёт» и чек-лист.',
         { h: 'Почему борт в статусе «Проверить»?' },
         'Последний полёт закончился не «Нормальный», а выполненной работы после него нет. Откройте карточку борта, сегмент «Обслуживание»: отметьте осмотр «Выполнено» или добавьте запись и сразу отметьте её выполненной — статус вернётся в «Готов».',
         { h: 'Почему борта нет в «К вылету» и в окнах погоды?' },
@@ -2808,7 +2815,7 @@ const S = {
 const UI = {
   view: 'today',
   arg: null,          // id из маршрута (#/model/<id> и т.п.)
-  prep: null,         // { aircraftId, tplId, items:[{t,hint,state}] }
+  prep: null,         // { aircraftId, tplId, runId, siteId, items:[{t,hint,state}] }
   importData: null,   // разобранный файл импорта до подтверждения
   updateReady: false, // service worker ждёт активации
   wx: {               // экран «Окна для полётов»
@@ -3343,6 +3350,13 @@ const NORM = {
     for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = numOrNull(a[k]);
     a.type = keyOrNull(TYPES, a.type);
     a.statusManual = keyOrNull(STATUS, a.statusManual) || '';
+    // Пометка «подготовлен» из копии: объект со строковым runId и числовым
+    // at, иначе null. Испорченная пометка давала «Invalid Date» в герое
+    // «Сегодня» и NaN в сортировке подготовленных бортов.
+    const p = a.prepared;
+    a.prepared = p && typeof p === 'object' && typeof p.runId === 'string' && isFinite(+p.at)
+      ? { runId: p.runId, at: +p.at, siteId: typeof p.siteId === 'string' ? p.siteId : '' }
+      : null;
   },
   batteries(b) {
     for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = numOrNull(b[k]);
@@ -3864,6 +3878,35 @@ const TODAY_HINT = {
   debrief: '<span class="muted">разбор дня</span>',
 };
 
+// «Начало работы»: пять шагов, каждый ведёт прямо к действию.
+// Первый запуск — засчитано всё, что уже есть (since = 0, предикаты те же,
+// что были до 2.0.2). «Пройти обучение заново» кладёт в rcp.tour метку
+// времени перезапуска, и тогда засчитывается только сделанное ПОСЛЕ неё:
+// createdAt борта, АКБ и локации, end полёта, lastBackupAt. Записи без
+// createdAt (заведённые до 2.0.2 или пришедшие из копии) в обучении не
+// считаются — это и есть «заново». Старое значение '1' — как первый запуск.
+function onboardingSteps() {
+  const raw = +lsGet('rcp.tour') || 0;
+  const since = raw > 1e12 ? raw : 0;
+  const fresh = (t) => (+t || 0) >= since;
+  const steps = [
+    ['Добавьте борт', 'во «Флоте»: готовая платформа или свой',
+      S.aircraft.some((a) => fresh(a.createdAt)), 'data-act="add-model"', 'fleet'],
+    // Засчитывается собранный борт, у которого нов сам борт ИЛИ его АКБ:
+    // на обучении заново можно поставить в новый борт старую батарею —
+    // «поставьте в борт» выполнено. При since = 0 это armedFleet().length > 0.
+    ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету',
+      armedFleet().some((a) => fresh(a.createdAt) || fresh(armedBattery(a).createdAt)), 'data-act="add-batt"', 'batteries'],
+    ['Запомните локацию с координатами', 'GPS или карта — для прогноза и окон полётов',
+      S.sites.some((s) => s.lat != null && fresh(s.createdAt)), 'data-act="add-site"', 'sites'],
+    ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам',
+      S.sessions.some((s) => s.end && fresh(s.end)), 'data-act="start-prep"', 'flight'],
+    ['Сохраните резервную копию', 'один файл со всем — единственная страховка данных',
+      +S.settings.lastBackupAt > 0 && fresh(S.settings.lastBackupAt), 'data-act="export-all"', 'backup'],
+  ];
+  return { steps, todo: steps.filter((s) => !s[2]).length, tour: raw > 0 };
+}
+
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -3874,24 +3917,13 @@ function viewToday() {
       <button class="btn-sm btn right" data-act="update-app">Обновить</button></div>`;
   }
 
-  // «Начало работы»: пять шагов с галочками, ведут прямо к действию.
   // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
   // Приветствие первого запуска — отдельное окно (openWelcome в старте).
-  const steps = [
-    ['Добавьте борт', 'во «Флоте»: готовая платформа или свой', S.aircraft.length > 0,
-      'data-act="add-model"', 'fleet'],
-    ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету', armedFleet().length > 0,
-      'data-nav="#/batteries"', 'batteries'],
-    ['Запомните локацию с координатами', 'GPS или карта — для прогноза и окон полётов', S.sites.some((s) => s.lat != null),
-      'data-act="add-site"', 'sites'],
-    ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам', S.sessions.some((s) => s.end),
-      'data-act="start-prep"', 'flight'],
-    ['Сохраните резервную копию', 'один файл со всем — единственная страховка данных', !!(+S.settings.lastBackupAt),
-      'data-act="export-all"', 'backup'],
-  ];
-  const todo = steps.filter((s) => !s[2]).length;
-  const tour = !!lsGet('rcp.tour');
-  const onboarding = todo || tour;
+  const { steps, todo, tour } = onboardingSteps();
+  // Экскурсия пройдена до конца — метка снимается сама, как гаснет блок
+  // при первом запуске; «Завершить обучение» делает то же раньше времени.
+  if (tour && !todo) lsSet('rcp.tour', '');
+  const onboarding = todo > 0;
 
   // В полёте герой — сам полёт; в остальных состояниях баннеры идущих
   // полётов невозможны (иначе состояние было бы flying).
@@ -3899,10 +3931,10 @@ function viewToday() {
   h += activeFlightBanners(live && live.id);
 
   if (onboarding) {
-    // «Обучение заново» — полноценная экскурсия: все шаги активны и
-    // ведут к действию, галочек нет — маршрут проходится с нуля.
-    h += `<div class="h2">${tour ? 'Обучение · пройдитесь по шагам' : `Начало работы · осталось ${todo} из ${steps.length}`}</div><div class="card flat">`;
-    h += steps.map(([t, d, ok2, attrs, icon]) => (!tour && ok2)
+    // «Обучение заново» — тот же путь, что при первом запуске: пройденные
+    // шаги зачёркиваются, блок исчезает, когда не осталось ни одного.
+    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat">`;
+    h += steps.map(([t, d, ok2, attrs, icon]) => ok2
       ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
          <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
       : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
@@ -4368,7 +4400,7 @@ function viewModel() {
   });
 
   if (UI.justCreated === a.id) {
-    const learning = !!lsGet('rcp.tour') || !(S.sites.length && S.sessions.some((x) => x.end));
+    const learning = onboardingSteps().todo > 0;
     h += `<div class="banner ok">${ICONS.check}<span class="grow">Борт добавлен. Это его карточка: статус, АКБ, компоненты, обслуживание.</span>
       <button class="btn-sm btn right" data-nav="#/fleet">Во «Флот»</button>
       ${learning ? '<button class="btn-sm btn right" data-nav="#/today">К обучению</button>' : ''}</div>`;
@@ -4580,9 +4612,11 @@ function modelHistoryHtml(a, flights) {
 function viewFlight() {
   let h = pageHead('Полёт', { help: 'flight' });
   h += activeFlightBanners();
-  if (UI.prep && !activeSessionOf(UI.prep.aircraftId)) {
-    const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
-    h += `<div class="banner">Подготовка не закончена: ${esc(a ? a.name : '')}.
+  // Подготовленный борт ниже показан как «Готов к вылету» — баннер
+  // «Подготовка не закончена» о том же борте противоречил бы ему.
+  const pa = UI.prep && S.aircraft.find((x) => x.id === UI.prep.aircraftId);
+  if (UI.prep && !activeSessionOf(UI.prep.aircraftId) && !preparedFresh(pa)) {
+    h += `<div class="banner">Подготовка не закончена: ${esc(pa ? pa.name : '')}.
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
   if (!S.aircraft.length && !activeSessions().length) {
@@ -4648,7 +4682,9 @@ function viewPrep() {
   const failed = items.filter((i) => i.state === 'fail');
   const curBatt = (armedBattery(a) || {}).id || '';
 
-  let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight', sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') });
+  const kept = UI.prep.runId && preparedFresh(a);
+  let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
+    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · подготовлен в ' + fmtTime(a.prepared.at) : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -4698,7 +4734,9 @@ function viewPrep() {
   h += '</div>';
   // Липкая панель действий: держится над нижней панелью, пока список
   // прокручивается. Гард «без АКБ не летаем» остаётся.
-  const lower = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  // «RX / TX» и «VTX / VRX» в перечислении проблем остаются заглавными:
+  // понижать первую букву у аббревиатуры («rX / TX») — неграмотно.
+  const lower = (t) => (/^[A-ZА-ЯЁ]{2}/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
   h += '<div class="act-bar">';
   if (failed.length) {
     const n = failed.length;
@@ -4710,7 +4748,7 @@ function viewPrep() {
   } else {
     h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — он встанет в борт, и кнопки появятся.</div>`;
   }
-  h += `<button class="btn" data-act="cancel-prep">Отменить подготовку</button></div>`;
+  h += `<button class="btn" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button></div>`;
   return h;
 }
 
@@ -6249,11 +6287,16 @@ const MAINT_KINDS = {
   inspection: 'Осмотр', task: 'Задача',
 };
 
-// Сохранить прогон чек-листа из UI.prep.
+// Сохранить прогон чек-листа из UI.prep. Прогон подготовленного борта
+// переписывается на месте (UI.prep.runId) — иначе каждое «Отметить готовым»
+// оставляло бы в базе лишний прогон. Прогон, на который уже ссылается
+// полёт, — история: ему выдаётся новый id.
 async function savePrepRun(p) {
+  const tpl = templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {};
+  const reuse = p.runId && !S.sessions.some((s) => s.checklistRunId === p.runId);
   const run = {
-    id: uid(), aircraftId: p.aircraftId, date: todayISO(),
-    templateName: (templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {}).name || '',
+    id: reuse ? p.runId : uid(), aircraftId: p.aircraftId, date: todayISO(),
+    tplId: p.tplId || '', templateName: tpl.name || '',
     items: p.items.map((i) => ({ t: i.t, state: i.state })),
   };
   await put('runs', run);
@@ -6269,6 +6312,10 @@ async function takeoff(aircraftId, runId, siteId) {
   if (!armedBattery(a)) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); return; }
   const dup = activeSessionOf(aircraftId);
   if (dup) { go('#/session/' + dup.id); return; }
+  // Черновик чек-листа этого борта потреблён взлётом: иначе «Отметить
+  // готовым» из оставшегося в памяти UI.prep пометило бы летящий борт
+  // подготовленным и переписало бы прогон уже состоявшегося полёта.
+  if (UI.prep && UI.prep.aircraftId === aircraftId) UI.prep = null;
   if (a && a.prepared) { a.prepared = null; await put('aircraft', a); }
   const s = {
     id: uid(), aircraftId, date: todayISO(),
@@ -6328,11 +6375,12 @@ const ACTIONS = {
     render(true);
   },
   // Обучение заново: приветствие открывается сразу (окно поверх «Ещё»),
-  // блок «Начало работы» на «Сегодня» показывается снова без галочек;
-  // «Начать» ведёт на «Сегодня». Переход здесь не делаем: hashchange
-  // приходит позже и закрыл бы только что открытое окно (onRoute).
+  // блок «Начало работы» на «Сегодня» показывается снова — шаги считаются
+  // от этой метки времени (onboardingSteps), поэтому у опытного пилота они
+  // снова не пройдены. «Начать» ведёт на «Сегодня». Переход здесь не
+  // делаем: hashchange приходит позже и закрыл бы только что открытое окно.
   'restart-tour': () => {
-    lsSet('rcp.tour', '1');
+    lsSet('rcp.tour', String(Date.now()));
     openWelcome(0);
   },
   'dismiss-tour': () => { lsSet('rcp.tour', ''); render(); },
@@ -6461,7 +6509,31 @@ const ACTIONS = {
     UI.prep.menuIdx = null;
     render(true);
   },
-  'cancel-prep': () => { UI.prep = null; go('#/flight'); },
+  // «Отменить подготовку» ничего не сохраняло и не сохраняет. У борта,
+  // отмеченного готовым, та же кнопка — «Сбросить подготовку»: она стирает
+  // сохранённое, поэтому спрашивает подтверждение.
+  'cancel-prep': () => {
+    if (UI.prep && UI.prep.runId) {
+      confirmModal('Сбросить подготовку? Пометка «подготовлен» и отметки чек-листа будут удалены.',
+        'cancel-prep-reset', '', 'Сбросить');
+      return;
+    }
+    UI.prep = null;
+    go('#/flight');
+  },
+  // Единственный ручной сброс подготовки: снимает пометку, удаляет прогон
+  // (кроме привязанного к полёту — это история) и открывает чистый
+  // чек-лист того же борта: сброс в поле почти всегда идёт перед повтором.
+  'cancel-prep-reset': async () => {
+    const p = UI.prep;
+    if (!p) return;
+    UI.prep = null; // сразу, до await: двойной тап не должен сбросить дважды
+    const a = S.aircraft.find((x) => x.id === p.aircraftId);
+    if (a && a.prepared && a.prepared.runId === p.runId) { a.prepared = null; await put('aircraft', a); }
+    if (p.runId && !S.sessions.some((s) => s.checklistRunId === p.runId)) await del('runs', p.runId);
+    beginPrep(p.aircraftId); // пометка снята — чек-лист откроется пустым
+    go('#/prep');            // тот же адрес: onRoute закроет окно и перерисует
+  },
   'start-flight': async () => {
     const p = UI.prep;
     if (!p) return;
@@ -6795,7 +6867,15 @@ const ACTIONS = {
   'del-site': (el) => confirmModal('Удалить локацию?', 'del-site-yes', `data-id="${el.dataset.id}"`),
   'del-site-yes': async (el) => { await del('sites', el.dataset.id); closeModal(); render(); },
 
-  'add-batt': () => openBattForm(null),
+  'add-batt': () => openBattPicker(),
+  'batt-empty': () => { closeModal(); openBattForm(null); },
+  'batt-pick': (el) => {
+    // Форма предзаполняется сборкой — всё можно поправить до создания.
+    const p = RC.BATTERY_PRESETS[+el.dataset.i];
+    if (!p) return;
+    closeModal();
+    openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
+  },
   'edit-batt': (el) => openBattForm(S.batteries.find((b) => b.id === el.dataset.id)),
   'del-batt': (el) => confirmModal('Удалить аккумулятор?', 'del-batt-yes', `data-id="${el.dataset.id}"`),
   'del-batt-yes': async (el) => { await del('batteries', el.dataset.id); closeModal(); render(); },
@@ -6871,15 +6951,29 @@ const ACTIONS = {
   },
 };
 
+// Открыть чек-лист борта. У подготовленного борта (a.prepared, пока
+// подготовка свежая) отметки НЕ начинаются заново: они берутся из
+// сохранённого прогона по ТЕКСТУ пункта — шаблон мог измениться с
+// выпуском, новые пункты просто останутся пустыми. Прогон запоминается
+// в UI.prep.runId: savePrepRun перепишет его, а не создаст второй.
 function beginPrep(aircraftId) {
   const a = S.aircraft.find((x) => x.id === aircraftId);
   if (!a) return;
-  const tpl = templatesFor(a.type)[0];
+  const tpls = templatesFor(a.type);
+  const pr = preparedFresh(a);
+  const run = pr && S.runs.find((r) => r.id === pr.runId && r.aircraftId === aircraftId);
+  const tpl = (run && (tpls.find((t) => t.id === run.tplId)
+    || (run.templateName && tpls.find((t) => t.name === run.templateName)))) || tpls[0];
+  // Одинаковые тексты в своём шаблоне получат одно состояние — своя цена
+  // отказа от id у пунктов; встроенные шаблоны дублей не содержат.
+  const states = new Map(run ? run.items.map((it) => [it.t, it.state]) : []);
   UI.prep = {
     aircraftId,
     tplId: tpl.id,
-    items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null })),
-    siteId: (S.sites.find((x) => x.isDefault) || {}).id || '',
+    runId: run ? run.id : null,
+    items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: states.get(i.t) || null })),
+    siteId: run && S.sites.some((x) => x.id === pr.siteId) ? pr.siteId
+      : (S.sites.find((x) => x.isDefault) || {}).id || '',
     // АКБ здесь не копируется: чек-лист и полёт читают её из модели
     // (armedBattery) — источник истины один.
   };
@@ -7159,13 +7253,31 @@ function battEstimateWeight(chem, cells, capacity) {
   return Math.round(wh / dens * 1000 / 10) * 10;
 }
 
+// Новый аккумулятор — как новый борт: сначала выбор «пустой или готовая
+// сборка», потом форма. Единственный вход: кнопка «Добавить», пустое
+// состояние, шаг обучения и «+ Добавить аккумулятор…» из селектов.
+// UI.modalReturn окно переживает: крестик и Esc идут через dismissModal
+// и возвращают прерванную форму, выбор строки — через closeModal.
+function openBattPicker() {
+  openModal('Новый аккумулятор', `<div class="card flat">` +
+    rowBtn('data-act="batt-empty"',
+      `<span class="grow"><span class="t">Пустой аккумулятор</span><span class="d">Заполню сам</span></span>`, 'batteries') +
+    RC.BATTERY_PRESETS.map((p, i) => rowBtn(`data-act="batt-pick" data-i="${i}"`,
+      `<span class="grow"><span class="t">${esc(p.label)}</span><span class="d">${esc(p.desc)}</span></span>`, 'batteries')).join('') +
+    `</div><p class="small muted" style="margin-top:8px">Готовая сборка заполняет химию, банки,
+    ёмкость и вес — всё можно поменять в форме.</p>`);
+}
+
 function openBattForm(b, presetId) {
-  const isNew = !b || !b.id;
   b = b || { chem: 'LiPo', status: 'ok' };
   const title = b.id ? 'Аккумулятор' : presetId ? 'Новый аккумулятор · проверьте' : 'Новый аккумулятор';
+  // «Стоит в борте»: у заведённой АКБ — её борт; у новой, заведённой
+  // с «Сегодня» (шаг обучения «…и поставьте в борт»), — новейший борт
+  // без АКБ, иначе шаг не засчитать, не уходя с экрана. Выбор меняется.
+  const owner = b.id ? (battOwner(b.id) || {}).id || ''
+    : UI.view === 'today' ? (S.aircraft.filter((a) => !armedBattery(a))
+      .sort((x, y) => (+y.createdAt || 0) - (+x.createdAt || 0))[0] || {}).id || '' : '';
   openModal(title, `<form data-form="batt" ${b.id ? `data-id="${b.id}"` : ''}>
-    ${isNew && !presetId && RC.BATTERY_PRESETS.length ? field('Готовые сборки',
-      selectHtml('battpreset', [['', '— или заполните вручную —']].concat(RC.BATTERY_PRESETS.map((p) => [p.id, p.label + ' · ' + p.desc])), '', 'data-change="batt-preset"')) : ''}
     ${field('Метка', `<input type="text" name="label" required value="${esc(b.label || '')}" placeholder="напр. LiPo 4S #3">`)}
     <div class="grid2">
       ${field('Химия', selectHtml('chem', [['LiPo', 'LiPo'], ['Li-Ion', 'Li-Ion'], ['LiFe', 'LiFe'], ['NiMH', 'NiMH']], b.chem))}
@@ -7185,8 +7297,7 @@ function openBattForm(b, presetId) {
       ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
     </div>
     ${field('Стоит в борте', selectHtml('inModel',
-      [['', '— не в борте —']].concat(S.aircraft.map((a) => [a.id, a.name])),
-      (battOwner(b.id) || {}).id || ''),
+      [['', '— не в борте —']].concat(S.aircraft.map((a) => [a.id, a.name])), owner),
       'Поставить или снять можно и здесь, и в карточке борта')}
     ${field('Заметки', `<textarea name="notes">${esc(b.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -7266,7 +7377,7 @@ function openFromFinish(form, which) {
     field: which === 'site' ? 'siteId' : 'batteryId',
     reopen: (patch) => openFinishForm(sessionId, Object.assign({}, values, patch)),
   };
-  if (which === 'site') openSiteForm(null); else openBattForm(null);
+  if (which === 'site') openSiteForm(null); else openBattPicker();
 }
 
 // После сохранения локации/АКБ, открытой из другого места: подставить
@@ -7375,7 +7486,7 @@ const FORMS = {
   },
   site: async (form) => {
     const fd = new FormData(form);
-    const s = form.dataset.id ? S.sites.find((x) => x.id === form.dataset.id) : { id: uid() };
+    const s = form.dataset.id ? S.sites.find((x) => x.id === form.dataset.id) : { id: uid(), createdAt: Date.now() };
     s.name = fd.get('name').trim();
     s.place = fd.get('place').trim();
     // Одно поле «широта, долгота» — как копируется из карт.
@@ -7417,7 +7528,7 @@ const FORMS = {
   },
   batt: async (form) => {
     const fd = new FormData(form);
-    const b = form.dataset.id ? S.batteries.find((x) => x.id === form.dataset.id) : { id: uid() };
+    const b = form.dataset.id ? S.batteries.find((x) => x.id === form.dataset.id) : { id: uid(), createdAt: Date.now() };
     b.label = fd.get('label').trim();
     b.chem = fd.get('chem');
     b.cells = +fd.get('cells') || null;
@@ -7928,7 +8039,7 @@ document.addEventListener('change', (e) => {
         field: 'batteryId',
         reopen: (patch) => openModelForm(orig, preset, Object.assign({}, values, patch)),
       };
-      openBattForm(null);
+      openBattPicker();
       return;
     }
     if (kind === 'finish-site' || kind === 'finish-batt') {
@@ -7940,7 +8051,7 @@ document.addEventListener('change', (e) => {
       : kind === 'prep-batt' ? (armedBattery(S.aircraft.find((x) => x.id === (UI.prep || {}).aircraftId)) || {}).id || ''
       : kind === 'model-batt' ? ((S.aircraft.find((x) => x.id === el.dataset.id) || {}).batteryId || '')
       : kind === 'weather-site' ? UI.wx.siteId || '' : '';
-    (kind.endsWith('site') ? openSiteForm : openBattForm)(null);
+    (kind.endsWith('site') ? openSiteForm : openBattPicker)(null);
     return;
   }
   if (kind === 'form-model-batt') {
@@ -7976,9 +8087,6 @@ document.addEventListener('change', (e) => {
       // выбор на чек-листе = установка в модель (дублируется везде)
       installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
     }
-  } else if (kind === 'batt-preset') {
-    const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
-    if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
   } else if (kind === 'fleet-sort') {
     S.settings.fleetSort = el.value;
     saveSettings().then(() => render(true));

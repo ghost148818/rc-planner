@@ -27,7 +27,7 @@ const S = {
 const UI = {
   view: 'today',
   arg: null,          // id из маршрута (#/model/<id> и т.п.)
-  prep: null,         // { aircraftId, tplId, items:[{t,hint,state}] }
+  prep: null,         // { aircraftId, tplId, runId, siteId, items:[{t,hint,state}] }
   importData: null,   // разобранный файл импорта до подтверждения
   updateReady: false, // service worker ждёт активации
   wx: {               // экран «Окна для полётов»
@@ -562,6 +562,13 @@ const NORM = {
     for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = numOrNull(a[k]);
     a.type = keyOrNull(TYPES, a.type);
     a.statusManual = keyOrNull(STATUS, a.statusManual) || '';
+    // Пометка «подготовлен» из копии: объект со строковым runId и числовым
+    // at, иначе null. Испорченная пометка давала «Invalid Date» в герое
+    // «Сегодня» и NaN в сортировке подготовленных бортов.
+    const p = a.prepared;
+    a.prepared = p && typeof p === 'object' && typeof p.runId === 'string' && isFinite(+p.at)
+      ? { runId: p.runId, at: +p.at, siteId: typeof p.siteId === 'string' ? p.siteId : '' }
+      : null;
   },
   batteries(b) {
     for (const k of ['cells', 'p', 'capacity', 'weight']) b[k] = numOrNull(b[k]);
@@ -1083,6 +1090,35 @@ const TODAY_HINT = {
   debrief: '<span class="muted">разбор дня</span>',
 };
 
+// «Начало работы»: пять шагов, каждый ведёт прямо к действию.
+// Первый запуск — засчитано всё, что уже есть (since = 0, предикаты те же,
+// что были до 2.0.2). «Пройти обучение заново» кладёт в rcp.tour метку
+// времени перезапуска, и тогда засчитывается только сделанное ПОСЛЕ неё:
+// createdAt борта, АКБ и локации, end полёта, lastBackupAt. Записи без
+// createdAt (заведённые до 2.0.2 или пришедшие из копии) в обучении не
+// считаются — это и есть «заново». Старое значение '1' — как первый запуск.
+function onboardingSteps() {
+  const raw = +lsGet('rcp.tour') || 0;
+  const since = raw > 1e12 ? raw : 0;
+  const fresh = (t) => (+t || 0) >= since;
+  const steps = [
+    ['Добавьте борт', 'во «Флоте»: готовая платформа или свой',
+      S.aircraft.some((a) => fresh(a.createdAt)), 'data-act="add-model"', 'fleet'],
+    // Засчитывается собранный борт, у которого нов сам борт ИЛИ его АКБ:
+    // на обучении заново можно поставить в новый борт старую батарею —
+    // «поставьте в борт» выполнено. При since = 0 это armedFleet().length > 0.
+    ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету',
+      armedFleet().some((a) => fresh(a.createdAt) || fresh(armedBattery(a).createdAt)), 'data-act="add-batt"', 'batteries'],
+    ['Запомните локацию с координатами', 'GPS или карта — для прогноза и окон полётов',
+      S.sites.some((s) => s.lat != null && fresh(s.createdAt)), 'data-act="add-site"', 'sites'],
+    ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам',
+      S.sessions.some((s) => s.end && fresh(s.end)), 'data-act="start-prep"', 'flight'],
+    ['Сохраните резервную копию', 'один файл со всем — единственная страховка данных',
+      +S.settings.lastBackupAt > 0 && fresh(S.settings.lastBackupAt), 'data-act="export-all"', 'backup'],
+  ];
+  return { steps, todo: steps.filter((s) => !s[2]).length, tour: raw > 0 };
+}
+
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -1093,24 +1129,13 @@ function viewToday() {
       <button class="btn-sm btn right" data-act="update-app">Обновить</button></div>`;
   }
 
-  // «Начало работы»: пять шагов с галочками, ведут прямо к действию.
   // Блок сам исчезает, когда весь путь пройден, — ничего не настраивается.
   // Приветствие первого запуска — отдельное окно (openWelcome в старте).
-  const steps = [
-    ['Добавьте борт', 'во «Флоте»: готовая платформа или свой', S.aircraft.length > 0,
-      'data-act="add-model"', 'fleet'],
-    ['Заведите аккумулятор и поставьте в борт', 'борт с АКБ считается собранным к вылету', armedFleet().length > 0,
-      'data-nav="#/batteries"', 'batteries'],
-    ['Запомните локацию с координатами', 'GPS или карта — для прогноза и окон полётов', S.sites.some((s) => s.lat != null),
-      'data-act="add-site"', 'sites'],
-    ['Пройдите чек-лист и слетайте', 'кнопка «Начать полёт» — журнал заполнится сам', S.sessions.some((s) => s.end),
-      'data-act="start-prep"', 'flight'],
-    ['Сохраните резервную копию', 'один файл со всем — единственная страховка данных', !!(+S.settings.lastBackupAt),
-      'data-act="export-all"', 'backup'],
-  ];
-  const todo = steps.filter((s) => !s[2]).length;
-  const tour = !!lsGet('rcp.tour');
-  const onboarding = todo || tour;
+  const { steps, todo, tour } = onboardingSteps();
+  // Экскурсия пройдена до конца — метка снимается сама, как гаснет блок
+  // при первом запуске; «Завершить обучение» делает то же раньше времени.
+  if (tour && !todo) lsSet('rcp.tour', '');
+  const onboarding = todo > 0;
 
   // В полёте герой — сам полёт; в остальных состояниях баннеры идущих
   // полётов невозможны (иначе состояние было бы flying).
@@ -1118,10 +1143,10 @@ function viewToday() {
   h += activeFlightBanners(live && live.id);
 
   if (onboarding) {
-    // «Обучение заново» — полноценная экскурсия: все шаги активны и
-    // ведут к действию, галочек нет — маршрут проходится с нуля.
-    h += `<div class="h2">${tour ? 'Обучение · пройдитесь по шагам' : `Начало работы · осталось ${todo} из ${steps.length}`}</div><div class="card flat">`;
-    h += steps.map(([t, d, ok2, attrs, icon]) => (!tour && ok2)
+    // «Обучение заново» — тот же путь, что при первом запуске: пройденные
+    // шаги зачёркиваются, блок исчезает, когда не осталось ни одного.
+    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat">`;
+    h += steps.map(([t, d, ok2, attrs, icon]) => ok2
       ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
          <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
       : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
@@ -1587,7 +1612,7 @@ function viewModel() {
   });
 
   if (UI.justCreated === a.id) {
-    const learning = !!lsGet('rcp.tour') || !(S.sites.length && S.sessions.some((x) => x.end));
+    const learning = onboardingSteps().todo > 0;
     h += `<div class="banner ok">${ICONS.check}<span class="grow">Борт добавлен. Это его карточка: статус, АКБ, компоненты, обслуживание.</span>
       <button class="btn-sm btn right" data-nav="#/fleet">Во «Флот»</button>
       ${learning ? '<button class="btn-sm btn right" data-nav="#/today">К обучению</button>' : ''}</div>`;
@@ -1799,9 +1824,11 @@ function modelHistoryHtml(a, flights) {
 function viewFlight() {
   let h = pageHead('Полёт', { help: 'flight' });
   h += activeFlightBanners();
-  if (UI.prep && !activeSessionOf(UI.prep.aircraftId)) {
-    const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
-    h += `<div class="banner">Подготовка не закончена: ${esc(a ? a.name : '')}.
+  // Подготовленный борт ниже показан как «Готов к вылету» — баннер
+  // «Подготовка не закончена» о том же борте противоречил бы ему.
+  const pa = UI.prep && S.aircraft.find((x) => x.id === UI.prep.aircraftId);
+  if (UI.prep && !activeSessionOf(UI.prep.aircraftId) && !preparedFresh(pa)) {
+    h += `<div class="banner">Подготовка не закончена: ${esc(pa ? pa.name : '')}.
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
   if (!S.aircraft.length && !activeSessions().length) {
@@ -1867,7 +1894,9 @@ function viewPrep() {
   const failed = items.filter((i) => i.state === 'fail');
   const curBatt = (armedBattery(a) || {}).id || '';
 
-  let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight', sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') });
+  const kept = UI.prep.runId && preparedFresh(a);
+  let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
+    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · подготовлен в ' + fmtTime(a.prepared.at) : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -1917,7 +1946,9 @@ function viewPrep() {
   h += '</div>';
   // Липкая панель действий: держится над нижней панелью, пока список
   // прокручивается. Гард «без АКБ не летаем» остаётся.
-  const lower = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  // «RX / TX» и «VTX / VRX» в перечислении проблем остаются заглавными:
+  // понижать первую букву у аббревиатуры («rX / TX») — неграмотно.
+  const lower = (t) => (/^[A-ZА-ЯЁ]{2}/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
   h += '<div class="act-bar">';
   if (failed.length) {
     const n = failed.length;
@@ -1929,7 +1960,7 @@ function viewPrep() {
   } else {
     h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — он встанет в борт, и кнопки появятся.</div>`;
   }
-  h += `<button class="btn" data-act="cancel-prep">Отменить подготовку</button></div>`;
+  h += `<button class="btn" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button></div>`;
   return h;
 }
 
@@ -3468,11 +3499,16 @@ const MAINT_KINDS = {
   inspection: 'Осмотр', task: 'Задача',
 };
 
-// Сохранить прогон чек-листа из UI.prep.
+// Сохранить прогон чек-листа из UI.prep. Прогон подготовленного борта
+// переписывается на месте (UI.prep.runId) — иначе каждое «Отметить готовым»
+// оставляло бы в базе лишний прогон. Прогон, на который уже ссылается
+// полёт, — история: ему выдаётся новый id.
 async function savePrepRun(p) {
+  const tpl = templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {};
+  const reuse = p.runId && !S.sessions.some((s) => s.checklistRunId === p.runId);
   const run = {
-    id: uid(), aircraftId: p.aircraftId, date: todayISO(),
-    templateName: (templatesFor((S.aircraft.find((a) => a.id === p.aircraftId) || {}).type).find((t) => t.id === p.tplId) || {}).name || '',
+    id: reuse ? p.runId : uid(), aircraftId: p.aircraftId, date: todayISO(),
+    tplId: p.tplId || '', templateName: tpl.name || '',
     items: p.items.map((i) => ({ t: i.t, state: i.state })),
   };
   await put('runs', run);
@@ -3488,6 +3524,10 @@ async function takeoff(aircraftId, runId, siteId) {
   if (!armedBattery(a)) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); return; }
   const dup = activeSessionOf(aircraftId);
   if (dup) { go('#/session/' + dup.id); return; }
+  // Черновик чек-листа этого борта потреблён взлётом: иначе «Отметить
+  // готовым» из оставшегося в памяти UI.prep пометило бы летящий борт
+  // подготовленным и переписало бы прогон уже состоявшегося полёта.
+  if (UI.prep && UI.prep.aircraftId === aircraftId) UI.prep = null;
   if (a && a.prepared) { a.prepared = null; await put('aircraft', a); }
   const s = {
     id: uid(), aircraftId, date: todayISO(),
@@ -3547,11 +3587,12 @@ const ACTIONS = {
     render(true);
   },
   // Обучение заново: приветствие открывается сразу (окно поверх «Ещё»),
-  // блок «Начало работы» на «Сегодня» показывается снова без галочек;
-  // «Начать» ведёт на «Сегодня». Переход здесь не делаем: hashchange
-  // приходит позже и закрыл бы только что открытое окно (onRoute).
+  // блок «Начало работы» на «Сегодня» показывается снова — шаги считаются
+  // от этой метки времени (onboardingSteps), поэтому у опытного пилота они
+  // снова не пройдены. «Начать» ведёт на «Сегодня». Переход здесь не
+  // делаем: hashchange приходит позже и закрыл бы только что открытое окно.
   'restart-tour': () => {
-    lsSet('rcp.tour', '1');
+    lsSet('rcp.tour', String(Date.now()));
     openWelcome(0);
   },
   'dismiss-tour': () => { lsSet('rcp.tour', ''); render(); },
@@ -3680,7 +3721,31 @@ const ACTIONS = {
     UI.prep.menuIdx = null;
     render(true);
   },
-  'cancel-prep': () => { UI.prep = null; go('#/flight'); },
+  // «Отменить подготовку» ничего не сохраняло и не сохраняет. У борта,
+  // отмеченного готовым, та же кнопка — «Сбросить подготовку»: она стирает
+  // сохранённое, поэтому спрашивает подтверждение.
+  'cancel-prep': () => {
+    if (UI.prep && UI.prep.runId) {
+      confirmModal('Сбросить подготовку? Пометка «подготовлен» и отметки чек-листа будут удалены.',
+        'cancel-prep-reset', '', 'Сбросить');
+      return;
+    }
+    UI.prep = null;
+    go('#/flight');
+  },
+  // Единственный ручной сброс подготовки: снимает пометку, удаляет прогон
+  // (кроме привязанного к полёту — это история) и открывает чистый
+  // чек-лист того же борта: сброс в поле почти всегда идёт перед повтором.
+  'cancel-prep-reset': async () => {
+    const p = UI.prep;
+    if (!p) return;
+    UI.prep = null; // сразу, до await: двойной тап не должен сбросить дважды
+    const a = S.aircraft.find((x) => x.id === p.aircraftId);
+    if (a && a.prepared && a.prepared.runId === p.runId) { a.prepared = null; await put('aircraft', a); }
+    if (p.runId && !S.sessions.some((s) => s.checklistRunId === p.runId)) await del('runs', p.runId);
+    beginPrep(p.aircraftId); // пометка снята — чек-лист откроется пустым
+    go('#/prep');            // тот же адрес: onRoute закроет окно и перерисует
+  },
   'start-flight': async () => {
     const p = UI.prep;
     if (!p) return;
@@ -4014,7 +4079,15 @@ const ACTIONS = {
   'del-site': (el) => confirmModal('Удалить локацию?', 'del-site-yes', `data-id="${el.dataset.id}"`),
   'del-site-yes': async (el) => { await del('sites', el.dataset.id); closeModal(); render(); },
 
-  'add-batt': () => openBattForm(null),
+  'add-batt': () => openBattPicker(),
+  'batt-empty': () => { closeModal(); openBattForm(null); },
+  'batt-pick': (el) => {
+    // Форма предзаполняется сборкой — всё можно поправить до создания.
+    const p = RC.BATTERY_PRESETS[+el.dataset.i];
+    if (!p) return;
+    closeModal();
+    openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
+  },
   'edit-batt': (el) => openBattForm(S.batteries.find((b) => b.id === el.dataset.id)),
   'del-batt': (el) => confirmModal('Удалить аккумулятор?', 'del-batt-yes', `data-id="${el.dataset.id}"`),
   'del-batt-yes': async (el) => { await del('batteries', el.dataset.id); closeModal(); render(); },
@@ -4090,15 +4163,29 @@ const ACTIONS = {
   },
 };
 
+// Открыть чек-лист борта. У подготовленного борта (a.prepared, пока
+// подготовка свежая) отметки НЕ начинаются заново: они берутся из
+// сохранённого прогона по ТЕКСТУ пункта — шаблон мог измениться с
+// выпуском, новые пункты просто останутся пустыми. Прогон запоминается
+// в UI.prep.runId: savePrepRun перепишет его, а не создаст второй.
 function beginPrep(aircraftId) {
   const a = S.aircraft.find((x) => x.id === aircraftId);
   if (!a) return;
-  const tpl = templatesFor(a.type)[0];
+  const tpls = templatesFor(a.type);
+  const pr = preparedFresh(a);
+  const run = pr && S.runs.find((r) => r.id === pr.runId && r.aircraftId === aircraftId);
+  const tpl = (run && (tpls.find((t) => t.id === run.tplId)
+    || (run.templateName && tpls.find((t) => t.name === run.templateName)))) || tpls[0];
+  // Одинаковые тексты в своём шаблоне получат одно состояние — своя цена
+  // отказа от id у пунктов; встроенные шаблоны дублей не содержат.
+  const states = new Map(run ? run.items.map((it) => [it.t, it.state]) : []);
   UI.prep = {
     aircraftId,
     tplId: tpl.id,
-    items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: null })),
-    siteId: (S.sites.find((x) => x.isDefault) || {}).id || '',
+    runId: run ? run.id : null,
+    items: tpl.items.map((i) => ({ t: i.t, hint: i.hint || '', state: states.get(i.t) || null })),
+    siteId: run && S.sites.some((x) => x.id === pr.siteId) ? pr.siteId
+      : (S.sites.find((x) => x.isDefault) || {}).id || '',
     // АКБ здесь не копируется: чек-лист и полёт читают её из модели
     // (armedBattery) — источник истины один.
   };
@@ -4378,13 +4465,31 @@ function battEstimateWeight(chem, cells, capacity) {
   return Math.round(wh / dens * 1000 / 10) * 10;
 }
 
+// Новый аккумулятор — как новый борт: сначала выбор «пустой или готовая
+// сборка», потом форма. Единственный вход: кнопка «Добавить», пустое
+// состояние, шаг обучения и «+ Добавить аккумулятор…» из селектов.
+// UI.modalReturn окно переживает: крестик и Esc идут через dismissModal
+// и возвращают прерванную форму, выбор строки — через closeModal.
+function openBattPicker() {
+  openModal('Новый аккумулятор', `<div class="card flat">` +
+    rowBtn('data-act="batt-empty"',
+      `<span class="grow"><span class="t">Пустой аккумулятор</span><span class="d">Заполню сам</span></span>`, 'batteries') +
+    RC.BATTERY_PRESETS.map((p, i) => rowBtn(`data-act="batt-pick" data-i="${i}"`,
+      `<span class="grow"><span class="t">${esc(p.label)}</span><span class="d">${esc(p.desc)}</span></span>`, 'batteries')).join('') +
+    `</div><p class="small muted" style="margin-top:8px">Готовая сборка заполняет химию, банки,
+    ёмкость и вес — всё можно поменять в форме.</p>`);
+}
+
 function openBattForm(b, presetId) {
-  const isNew = !b || !b.id;
   b = b || { chem: 'LiPo', status: 'ok' };
   const title = b.id ? 'Аккумулятор' : presetId ? 'Новый аккумулятор · проверьте' : 'Новый аккумулятор';
+  // «Стоит в борте»: у заведённой АКБ — её борт; у новой, заведённой
+  // с «Сегодня» (шаг обучения «…и поставьте в борт»), — новейший борт
+  // без АКБ, иначе шаг не засчитать, не уходя с экрана. Выбор меняется.
+  const owner = b.id ? (battOwner(b.id) || {}).id || ''
+    : UI.view === 'today' ? (S.aircraft.filter((a) => !armedBattery(a))
+      .sort((x, y) => (+y.createdAt || 0) - (+x.createdAt || 0))[0] || {}).id || '' : '';
   openModal(title, `<form data-form="batt" ${b.id ? `data-id="${b.id}"` : ''}>
-    ${isNew && !presetId && RC.BATTERY_PRESETS.length ? field('Готовые сборки',
-      selectHtml('battpreset', [['', '— или заполните вручную —']].concat(RC.BATTERY_PRESETS.map((p) => [p.id, p.label + ' · ' + p.desc])), '', 'data-change="batt-preset"')) : ''}
     ${field('Метка', `<input type="text" name="label" required value="${esc(b.label || '')}" placeholder="напр. LiPo 4S #3">`)}
     <div class="grid2">
       ${field('Химия', selectHtml('chem', [['LiPo', 'LiPo'], ['Li-Ion', 'Li-Ion'], ['LiFe', 'LiFe'], ['NiMH', 'NiMH']], b.chem))}
@@ -4404,8 +4509,7 @@ function openBattForm(b, presetId) {
       ${field('Состояние', selectHtml('status', [['ok', 'В строю'], ['watch', 'Следить'], ['retired', 'Списан']], b.status))}
     </div>
     ${field('Стоит в борте', selectHtml('inModel',
-      [['', '— не в борте —']].concat(S.aircraft.map((a) => [a.id, a.name])),
-      (battOwner(b.id) || {}).id || ''),
+      [['', '— не в борте —']].concat(S.aircraft.map((a) => [a.id, a.name])), owner),
       'Поставить или снять можно и здесь, и в карточке борта')}
     ${field('Заметки', `<textarea name="notes">${esc(b.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -4485,7 +4589,7 @@ function openFromFinish(form, which) {
     field: which === 'site' ? 'siteId' : 'batteryId',
     reopen: (patch) => openFinishForm(sessionId, Object.assign({}, values, patch)),
   };
-  if (which === 'site') openSiteForm(null); else openBattForm(null);
+  if (which === 'site') openSiteForm(null); else openBattPicker();
 }
 
 // После сохранения локации/АКБ, открытой из другого места: подставить
@@ -4594,7 +4698,7 @@ const FORMS = {
   },
   site: async (form) => {
     const fd = new FormData(form);
-    const s = form.dataset.id ? S.sites.find((x) => x.id === form.dataset.id) : { id: uid() };
+    const s = form.dataset.id ? S.sites.find((x) => x.id === form.dataset.id) : { id: uid(), createdAt: Date.now() };
     s.name = fd.get('name').trim();
     s.place = fd.get('place').trim();
     // Одно поле «широта, долгота» — как копируется из карт.
@@ -4636,7 +4740,7 @@ const FORMS = {
   },
   batt: async (form) => {
     const fd = new FormData(form);
-    const b = form.dataset.id ? S.batteries.find((x) => x.id === form.dataset.id) : { id: uid() };
+    const b = form.dataset.id ? S.batteries.find((x) => x.id === form.dataset.id) : { id: uid(), createdAt: Date.now() };
     b.label = fd.get('label').trim();
     b.chem = fd.get('chem');
     b.cells = +fd.get('cells') || null;
@@ -5147,7 +5251,7 @@ document.addEventListener('change', (e) => {
         field: 'batteryId',
         reopen: (patch) => openModelForm(orig, preset, Object.assign({}, values, patch)),
       };
-      openBattForm(null);
+      openBattPicker();
       return;
     }
     if (kind === 'finish-site' || kind === 'finish-batt') {
@@ -5159,7 +5263,7 @@ document.addEventListener('change', (e) => {
       : kind === 'prep-batt' ? (armedBattery(S.aircraft.find((x) => x.id === (UI.prep || {}).aircraftId)) || {}).id || ''
       : kind === 'model-batt' ? ((S.aircraft.find((x) => x.id === el.dataset.id) || {}).batteryId || '')
       : kind === 'weather-site' ? UI.wx.siteId || '' : '';
-    (kind.endsWith('site') ? openSiteForm : openBattForm)(null);
+    (kind.endsWith('site') ? openSiteForm : openBattPicker)(null);
     return;
   }
   if (kind === 'form-model-batt') {
@@ -5195,9 +5299,6 @@ document.addEventListener('change', (e) => {
       // выбор на чек-листе = установка в модель (дублируется везде)
       installBattery(UI.prep.aircraftId, el.value).then(() => render(true));
     }
-  } else if (kind === 'batt-preset') {
-    const p = RC.BATTERY_PRESETS.find((x) => x.id === el.value);
-    if (p) openBattForm({ label: p.label, chem: p.chem, cells: p.cells, p: p.p, capacity: p.capacity, weight: p.weight, status: 'ok' }, p.id);
   } else if (kind === 'fleet-sort') {
     S.settings.fleetSort = el.value;
     saveSettings().then(() => render(true));

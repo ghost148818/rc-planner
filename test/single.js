@@ -63,12 +63,15 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.click('.ck-menu [data-act="ck-set"][data-state="ok"]');
   await page.waitForTimeout(150);
 
-  // 2б. Ставим АКБ прямо с чек-листа через «+ Добавить аккумулятор…»
+  // 2б. Ставим АКБ прямо с чек-листа через «+ Добавить аккумулятор…»:
+  // сначала окно выбора (пустой или готовая сборка), потом форма.
   await page.selectOption('select[name="prepBatt"]', '__new');
+  await page.waitForSelector('dialog [data-act="batt-pick"][data-i="0"]');
+  await page.click('dialog [data-act="batt-pick"][data-i="0"]');
   await page.waitForSelector('dialog input[name="label"]');
+  const presetCap = await page.evaluate(() => String(RC.BATTERY_PRESETS[0].capacity));
+  ok((await page.inputValue('dialog input[name="capacity"]')) === presetCap, 'готовая сборка заполнила форму');
   await page.fill('dialog input[name="label"]', 'Test 6S');
-  await page.fill('dialog input[name="cells"]', '6');
-  await page.fill('dialog input[name="capacity"]', '1300');
   await page.click('dialog button[type="submit"]');
   await page.waitForSelector('[data-act="start-flight"]');
   ok(true, 'после установки АКБ кнопка «Начать полёт» появилась');
