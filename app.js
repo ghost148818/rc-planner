@@ -1042,7 +1042,12 @@ function todayAircraftRow(a, right) {
 // Правая часть строки борта: подготовлен — «Взлёт» (только через
 // takeoffReady), готов — «Чек-лист», иначе чип статуса.
 function todayAircraftAction(a) {
-  if (takeoffReady(a)) return `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>`;
+  // Заряд не отмечен — вместо «Взлёт» чип: борт остаётся готовым, тап
+  // прямо здесь отмечает состояние и возвращает кнопку.
+  if (takeoffReady(a)) {
+    const b = armedBattery(a);
+    return chargeKnown(b) ? `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>` : chargeChip(b);
+  }
   const st = statusOf(a);
   return st === 'ready' || st === 'unknown'
     ? `<button class="btn btn-sm" data-act="start-prep" data-id="${a.id}">Чек-лист</button>`
@@ -1295,7 +1300,9 @@ function todayField() {
         <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в ${fmtTime(hero.prepared.at)}${site ? ' · ' + esc(site.name) : ''}</span>
       </span>
     </div>
-    <button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>
+    ${chargeKnown(b)
+      ? `<button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>`
+      : `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Взлёт».</span>${chargeChip(b)}</div>`}
   </div>`;
   const rest = armedFleet().filter((a) => a.id !== hero.id);
   h += todayFleetBlock('Остальные борта', rest, String(rest.length));
@@ -1555,6 +1562,33 @@ function battTag(b, text) {
 }
 const CHARGE_LABEL = { ready: 'заряжен', flown: 'после полёта' };
 
+// Состояние заряда отмечено — любое из двух. Без отметки полёт не начать
+// (решение владельца 2026-09-07): «после полёта» тоже годится, второй
+// вылет на той же банке приложение разрешает осознанно (цикл за него
+// не считается). Гард требует посмотреть на банку, а не решает за пилота.
+const chargeKnown = (b) => !!(b && CHARGE_LABEL[b.charge]);
+
+// Тап по чипу перерисовывает экран, и НА МЕСТЕ чипа появляется главная
+// кнопка («Взлёт» в герое и строках борта, «Начать полёт» на чек-листе).
+// В перчатках промашка «два касания подряд» вторым тапом начинала полёт —
+// замер ревью: одинаково при паузах 80, 150 и 300 мс, во всех трёх местах.
+// Полсекунды после отметки касание сюда не считается: и полёт не начнётся,
+// и повторный тап не переведёт свежий «заряжен» в «после полёта» (это
+// стоило бы цикла АКБ). Приём тот же, что «UI.prep = null до await».
+const CHARGE_TAP_MS = 500;
+let chargeTapAt = 0;
+const chargeJustTapped = () => Date.now() - chargeTapAt < CHARGE_TAP_MS;
+
+// Чип заряда — переключатель batt-charge: зелёный «заряжен», синий
+// «после полёта», серый «заряд?» (не отмечено). Одна разметка на карточку
+// борта, список АКБ, чек-лист и «Взлёт» подготовленного борта. Решение
+// «списанной АКБ чипа не даём» остаётся у вызывающего (battRow).
+function chargeChip(b) {
+  if (!b) return '';
+  const cls = b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown';
+  return `<button class="chip ${cls}" data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
+}
+
 // Подготовка действует до конца дня (МСК): недельная пометка «чек-лист
 // пройден» обесценила бы сам чек-лист.
 function preparedFresh(a) {
@@ -1662,8 +1696,7 @@ function modelHeroHtml(a, flights) {
     <div class="hero-line hero-batt">
       ${pillSelect('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), a.batteryId || '',
         `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"`)}
-      ${bat ? `<button class="chip ${bat.charge === 'ready' ? 'st-ready' : bat.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
-        data-act="batt-charge" data-id="${bat.id}">${CHARGE_LABEL[bat.charge] || 'заряд?'}</button>` : ''}
+      ${chargeChip(bat)}
     </div>
     ${bat ? '' : `<div class="hint">Борт с установленным АКБ считается собранным к вылету
       и попадает на «Сегодня»; вес АКБ учитывается в окнах погоды.</div>`}
@@ -1855,7 +1888,9 @@ function viewFlight() {
     h += prepared.map((a) => `<div class="row">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
       <span class="d">чек-лист пройден в ${fmtTime(a.prepared.at)}</span></span>
-      <button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>
+      ${chargeKnown(armedBattery(a))
+        ? `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>`
+        : chargeChip(armedBattery(a))}
     </div>`).join('');
     h += '</div>';
   }
@@ -1904,7 +1939,8 @@ function viewPrep() {
   const items = UI.prep.items;
   const doneCount = items.filter((i) => i.state).length;
   const failed = items.filter((i) => i.state === 'fail');
-  const curBatt = (armedBattery(a) || {}).id || '';
+  const pbat = armedBattery(a);
+  const curBatt = pbat ? pbat.id : '';
 
   const kept = UI.prep.runId && preparedFresh(a);
   let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
@@ -1917,17 +1953,22 @@ function viewPrep() {
     h += `<div class="banner warn">Подошёл регламент: ${svcSinceText(svcPrep)}
       с последнего обслуживания (${svcEveryText(svcPrep)}). Осмотрите борт внимательнее.</div>`;
   }
-  // Локация и АКБ — пилюли в один ряд по ширине выбранного (pillSelect);
-  // при нехватке места ужимаются, а не уезжают за край. Подпись АКБ без
-  // веса (noWeight), как в герое борта: «Li-Ion 6S2P 7000 · 610 г» на
-  // телефоне не помещалась. Выбор АКБ здесь ставит её в борт.
+  // Пилюли по ширине выбранного (pillSelect); подпись АКБ без веса
+  // (noWeight) — «Li-Ion 6S2P 7000 · 610 г» на телефоне не помещалась.
+  // Установленная АКБ уходит во ВТОРОЙ ряд вместе с чипом заряда (как
+  // строка АКБ в герое борта): вчетвером на 390 px пилюли ужимались до
+  // нечитаемости (замер 2026-09-07). Без АКБ второго ряда нет — пустой
+  // ряд ради одинокой пилюли стоил бы 68 px высоты. Выбор АКБ здесь
+  // ставит её в борт, тап по чипу отмечает заряд.
+  const battPill = pillSelect('prepBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), curBatt,
+    `class="sel-pill${curBatt ? ' sel' : ''}" data-change="prep-batt" aria-label="Аккумулятор — выбор ставит его в борт"`);
   h += `<div class="pill-row prep-pills">
     ${pillSelect('prepSite', siteOptions(null, { emptyLabel: 'Локация' }), UI.prep.siteId,
       `class="sel-pill${UI.prep.siteId ? ' sel' : ''}" data-change="prep-site" aria-label="Локация"`)}
     <button type="button" class="map-btn" data-act="prep-site-map" aria-label="Карта">${ICONS.sites}</button>
-    ${pillSelect('prepBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), curBatt,
-      `class="sel-pill${curBatt ? ' sel' : ''}" data-change="prep-batt" aria-label="Аккумулятор — выбор ставит его в борт"`)}
+    ${pbat ? '' : battPill}
   </div>`;
+  if (pbat) h += `<div class="pill-row prep-pills prep-batt">${battPill}${chargeChip(pbat)}</div>`;
   if (tpls.length > 1) {
     h += field('Шаблон', selectHtml('tpl',
       tpls.map((t) => [t.id, t.name + (t.builtin ? '' : ' (свой)')]),
@@ -1966,11 +2007,17 @@ function viewPrep() {
     const n = failed.length;
     h += `<div class="banner warn">${ICONS.x}<span class="grow">${plural(n, 'Отмечена', 'Отмечены', 'Отмечено')} ${n} ${plural(n, 'проблема', 'проблемы', 'проблем')}: ${failed.map((i) => esc(lower(i.t))).join(', ')}</span></div>`;
   }
-  if (armedBattery(a)) {
-    h += `<button class="btn btn-primary" data-act="start-flight">${ICONS.takeoff}Начать полёт</button>
-      <button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
-  } else {
+  if (!pbat) {
     h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — он встанет в борт, и кнопки появятся.</div>`;
+  } else {
+    // Полёт не начать без отметки заряда; «Отметить готовым» это
+    // требование не затрагивает (решение владельца 2026-09-07).
+    if (chargeKnown(pbat)) {
+      h += `<button class="btn btn-primary" data-act="start-flight">${ICONS.takeoff}Начать полёт</button>`;
+    } else {
+      h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
+    }
+    h += `<button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
   }
   h += `<button class="btn" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button></div>`;
   return h;
@@ -3304,14 +3351,12 @@ function viewSites() {
 
 function battRow(b) {
   const o = battOwner(b.id);
-  const chargeChip = b.status === 'retired' ? '' :
-    `<button class="chip ${b.charge === 'ready' ? 'st-ready' : b.charge === 'flown' ? 'st-flown' : 'st-unknown'}"
-      data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL[b.charge] || 'заряд?'}</button>`;
+  const charge = b.status === 'retired' ? '' : chargeChip(b);
   return `<div class="row">
     <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(b.label)}</span>
       <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
-    ${chargeChip}
+    ${charge}
     ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}
   </div>`;
 }
@@ -3534,6 +3579,10 @@ async function takeoff(aircraftId, runId, siteId) {
   // Полёт без аккумулятора невозможен: и вес не учтён, и циклы не
   // посчитаются. Кнопки эту ситуацию не показывают, гард — страховка.
   if (!armedBattery(a)) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); return; }
+  // Заряд обязан быть отмечен: кнопок в этом случае не рисуют, гард —
+  // страховка для пути «Взлёт» подготовленного борта. Путь с чек-листа
+  // проверяется РАНЬШЕ, в start-flight: здесь черновик уже потерян бы.
+  if (!chargeKnown(armedBattery(a))) { alert('Отметьте заряд аккумулятора: «заряжен» или «после полёта».'); return; }
   const dup = activeSessionOf(aircraftId);
   if (dup) { go('#/session/' + dup.id); return; }
   // Черновик чек-листа этого борта потреблён взлётом: иначе «Отметить
@@ -3765,6 +3814,14 @@ const ACTIONS = {
   'start-flight': async () => {
     const p = UI.prep;
     if (!p) return;
+    if (chargeJustTapped()) return; // кнопка встала на место чипа заряда
+    // Гарды — ДО обнуления черновика и сохранения прогона: иначе
+    // застарелая разметка оставила бы прогон записанным, отметки
+    // потерянными, а полёта не случилось бы. render(true) — чтобы не
+    // сбрасывать прокрутку длинного чек-листа.
+    const pb = armedBattery(S.aircraft.find((x) => x.id === p.aircraftId));
+    if (!pb) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); render(true); return; }
+    if (!chargeKnown(pb)) { alert('Отметьте заряд аккумулятора: «заряжен» или «после полёта».'); render(true); return; }
     UI.prep = null; // сразу, до await: двойной тап не должен создать два полёта
     const run = await savePrepRun(p);
     await takeoff(p.aircraftId, run.id, p.siteId);
@@ -3790,6 +3847,8 @@ const ACTIONS = {
   'batt-charge': async (el) => {
     const b = S.batteries.find((x) => x.id === el.dataset.id);
     if (!b) return;
+    if (chargeJustTapped()) return; // промашка двойным касанием
+    chargeTapAt = Date.now();
     b.charge = b.charge === 'ready' ? 'flown' : 'ready';
     await put('batteries', b);
     render(true);
@@ -3834,6 +3893,7 @@ const ACTIONS = {
     render(true);
   },
   'takeoff-prepared': async (el) => {
+    if (chargeJustTapped()) return; // кнопка встала на место чипа заряда
     const act = activeSessionOf(el.dataset.id);
     if (act) { go('#/session/' + act.id); return; } // у борта один полёт за раз
     const a = S.aircraft.find((x) => x.id === el.dataset.id);

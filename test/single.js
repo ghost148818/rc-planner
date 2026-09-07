@@ -73,10 +73,26 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   ok((await page.inputValue('dialog input[name="capacity"]')) === presetCap, 'готовая сборка заполнила форму');
   await page.fill('dialog input[name="label"]', 'Test 6S');
   await page.click('dialog button[type="submit"]');
+  // У новой АКБ состояния заряда нет (форма его не спрашивает): «Начать
+  // полёт» не показывается, пока не отмечен заряд — тап по чипу «заряд?»
+  // рядом с пилюлей АКБ (решение владельца 2026-09-07).
+  await page.waitForSelector('.prep-batt button.chip.st-unknown[data-act="batt-charge"]');
+  ok((await page.locator('[data-act="start-flight"]').count()) === 0,
+    'АКБ без отметки заряда: кнопки «Начать полёт» нет');
+  ok((await page.locator('.act-bar .banner.nocharge').count()) === 1,
+    'липкая панель просит отметить состояние аккумулятора');
+  ok((await page.locator('[data-act="prep-done"]').count()) === 1,
+    '«Отметить готовым» доступна и без отметки заряда');
+  ok((await page.textContent('.prep-batt button.chip')).trim() === 'заряд?', 'чип на чек-листе — «заряд?»');
+  await page.click('.prep-batt button.chip[data-act="batt-charge"]');
   await page.waitForSelector('[data-act="start-flight"]');
-  ok(true, 'после установки АКБ кнопка «Начать полёт» появилась');
+  ok((await page.textContent('.prep-batt button.chip')).trim() === 'заряжен',
+    'тап по чипу — «заряжен», кнопка «Начать полёт» появилась');
 
-  // 3. «Начать полёт»
+  // 3. «Начать полёт». Полсекунды после тапа по чипу касание не считается:
+  // кнопка встаёт на место чипа, и промашка двойным касанием иначе начала
+  // бы полёт мимо гарда (chargeJustTapped, ревью 2.0.3).
+  await page.waitForTimeout(600);
   await page.click('[data-act="start-flight"]');
   await page.waitForSelector('#timer');
   ok(true, 'полёт начался, таймер идёт');

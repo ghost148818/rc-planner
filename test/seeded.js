@@ -151,6 +151,83 @@ async function checkScreen(page, tag, name, viewport, gloves) {
     (r.short.length ? ` — ${r.short.length}: ${r.short.slice(0, 6).join('; ')}` : ''));
 }
 
+// Печать журнала (2.0.3): printLog() вставляет #print-area, @media print
+// прячет остальное. Проверяем под эмуляцией печатного носителя и на
+// настоящем PDF: лист белый (тёмный фон тела иначе уходит на холст листа
+// и печатается чёрным в обеих темах), на листе только таблица, в ней все
+// полёты, длинная заметка без пробелов не уводит таблицу за край листа
+// (текст молча обрезался). Утверждения о ЧИСЛЕ страниц нет: оно одинаково
+// до и после починки (замер 2026-09-07), как регрессия бесполезно.
+async function checkPrint(page, tag, viewport) {
+  await page.setViewportSize({ width: 794, height: 1123 }); // A4 в CSS-пикселях
+  await page.evaluate(async () => {
+    const long = 'Ж'.repeat(90); // длинное слово без пробелов — проба на обрезку
+    const s = await window.RCDB.get('sessions', 'f0');
+    const a = await window.RCDB.get('aircraft', 'a1');
+    const b = await window.RCDB.get('batteries', 'b1');
+    const site = await window.RCDB.get('sites', 'site-1');
+    window.__was = { notes: s.notes, name: a.name, label: b.label, site: site.name };
+    s.notes = long; a.name = long; b.label = long; site.name = long;
+    for (const [store, rec] of [['sessions', s], ['aircraft', a], ['batteries', b], ['sites', site]]) await window.RCDB.put(store, rec);
+    await window.loadAll();
+    window.__print = window.print; // системный диалог в headless не нужен
+    window.print = () => {};
+    window.printLog();
+  });
+  await page.emulateMedia({ media: 'print' });
+  const r = await page.evaluate(() => {
+    const cs = (el) => getComputedStyle(el);
+    const clear = (c) => c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
+    const area = document.getElementById('print-area');
+    const table = area && area.querySelector('table');
+    const html = cs(document.documentElement).backgroundColor;
+    const body = cs(document.body).backgroundColor;
+    return {
+      html, body,
+      // холст листа красится фоном html, а при прозрачном html — фоном body
+      canvas: clear(html) ? body : html,
+      area: area ? cs(area).display : 'нет',
+      views: cs(document.getElementById('views')).display,
+      tabbar: cs(document.getElementById('tabbar')).display,
+      rows: area ? area.querySelectorAll('tbody tr').length : 0,
+      done: S.sessions.filter((x) => x.end).length,
+      tableW: table ? Math.round(table.getBoundingClientRect().width) : 0,
+      sheetW: document.documentElement.clientWidth,
+      // Шапка в одну строку: разреши перенос по буквам всем ячейкам —
+      // колонки сожмутся до минимума и порежут слова («Лока/ция»)
+      headH: table ? Math.round(table.querySelector('thead tr').getBoundingClientRect().height) : 0,
+    };
+  });
+  ok(r.area === 'block' && r.views === 'none' && r.tabbar === 'none',
+    `${tag}: печать — на листе только таблица журнала`);
+  ok(r.rows === r.done && r.rows >= 14, `${tag}: печать — в таблице все полёты (${r.rows} из ${r.done})`);
+  ok(r.canvas === 'rgb(255, 255, 255)', `${tag}: печать — лист белый (html ${r.html}, body ${r.body})`);
+  ok(r.tableW <= r.sheetW, `${tag}: печать — длинные имя борта, АКБ, локации и заметка не уводят таблицу за край листа (${r.tableW} при листе ${r.sheetW})`);
+  ok(r.headH <= 40, `${tag}: печать — заголовки колонок не разрезаны переносом (шапка ${r.headH} px)`);
+  await page.emulateMedia({ media: null });
+  await page.evaluate(() => { window.dispatchEvent(new Event('afterprint')); });
+  ok(await page.evaluate(() => !document.getElementById('print-area')),
+    `${tag}: печать — после печати область убрана со страницы`);
+  // Настоящий PDF: БЕЗ printBackground тёмной заливки в файле нет вовсе,
+  // и проверка была бы зелёной на сломанном коде. Область готовим заново —
+  // page.pdf сам возбуждает события печати и убирает её обработчиком.
+  await page.evaluate(() => { window.printLog(); });
+  await page.pdf({ path: path.join(OUT, `${tag}-print-journal.pdf`), format: 'A4', printBackground: true });
+  await page.evaluate(async () => {
+    window.dispatchEvent(new Event('afterprint'));
+    window.print = window.__print; delete window.__print;
+    const w = window.__was; delete window.__was;
+    const s = await window.RCDB.get('sessions', 'f0');
+    const a = await window.RCDB.get('aircraft', 'a1');
+    const b = await window.RCDB.get('batteries', 'b1');
+    const site = await window.RCDB.get('sites', 'site-1');
+    s.notes = w.notes; a.name = w.name; b.label = w.label; site.name = w.site;
+    for (const [store, rec] of [['sessions', s], ['aircraft', a], ['batteries', b], ['sites', site]]) await window.RCDB.put(store, rec);
+    await window.loadAll();
+  });
+  await page.setViewportSize(viewport);
+}
+
 // Ожидание перерисовки вместо пауз: paint() заменяет содержимое #views
 // целиком, поэтому новый первый потомок — признак, что она случилась.
 // С анимациями (RCP_MOTION=1) разметка меняется в колбэке View
@@ -201,6 +278,8 @@ async function run(browser, tag, opts) {
     `${tag}: в шапке «Флота» кнопка «?» рядом с «Добавить»`);
   await shot('model-overview', '#/model/a1');
   ok(await has('.model-tabs [data-tab="overview"][aria-pressed="true"]'), `${tag}: карточка борта открывается на «Обзоре»`);
+  ok(await has('.hero-batt button.chip[data-act="batt-charge"][data-id="b1"]'),
+    `${tag}: в карточке борта чип заряда рядом с пилюлей АКБ`);
   for (const t of ['components', 'maint', 'history']) {
     await shot('model-' + t, '#/model/a1', async (p) => {
       await p.click(`[data-act="model-tab"][data-tab="${t}"]`);
@@ -230,6 +309,30 @@ async function run(browser, tag, opts) {
   ok((await count('.ck[data-state="ok"]')) === 2 && (await count('.ck[data-state="fail"]')) === 1,
     `${tag}: чек-лист — два «ок» и одна «проблема»`);
   ok(await has('.act-bar'), `${tag}: липкая панель действий чек-листа на месте`);
+  ok(await has('.prep-batt button.chip.st-ready[data-id="b3"]'),
+    `${tag}: на чек-листе виден чип заряда АКБ — «заряжен»`);
+  ok(await has('[data-act="start-flight"]'), `${tag}: с отмеченным зарядом «Начать полёт» есть`);
+  // АКБ без состояния (b4 посеяна с пустым charge): полёт не начать,
+  // «Отметить готовым» остаётся; тап по чипу возвращает кнопку.
+  // Чек-лист уже открыт (UI.prep жив): адрес тот же, борт выбирать не надо
+  await shot('checklist-nocharge', '#/prep', async (p) => {
+    await p.selectOption('select[name="prepBatt"]', 'b4');
+    await p.waitForSelector('.act-bar .banner.nocharge');
+  });
+  ok(!(await has('[data-act="start-flight"]')), `${tag}: АКБ без отметки заряда — «Начать полёт» нет`);
+  ok(await has('[data-act="prep-done"]'), `${tag}: «Отметить готовым» остаётся и без отметки заряда`);
+  ok(await has('.prep-batt button.chip.st-unknown[data-id="b4"]'), `${tag}: чип «заряд?» у АКБ без состояния`);
+  await page.click('.prep-batt button.chip[data-act="batt-charge"]');
+  await page.waitForSelector('[data-act="start-flight"]');
+  ok(await has('.prep-batt button.chip.st-ready[data-id="b4"]'),
+    `${tag}: тап по чипу — «заряжен», «Начать полёт» появилась`);
+  // Вернуть посев: b3 обратно в борт, b4 снова без состояния
+  await page.selectOption('select[name="prepBatt"]', 'b3');
+  await page.waitForSelector('.prep-batt button.chip.st-ready[data-id="b3"]');
+  await page.evaluate(async () => {
+    const b = await window.RCDB.get('batteries', 'b4');
+    b.charge = ''; await window.RCDB.put('batteries', b); await window.loadAll();
+  });
   await stamp(page);
   await page.click('[data-act="cancel-prep"]');
   await painted(page);
@@ -287,6 +390,35 @@ async function run(browser, tag, opts) {
   ok((await count('[data-act="takeoff-prepared"]')) >= 1, `${tag}: на поле есть кнопка «Взлёт»`);
   ok(await has('.card.hero'), `${tag}: на поле герой — подготовленный борт`);
   ok(await has('.banner.backup'), `${tag}: баннер копии виден и на поле`);
+  // Взлёт тоже начинает полёт: без отметки заряда вместо кнопки чип,
+  // но борт остаётся героем «на поле» (решение владельца 2026-09-07).
+  await page.evaluate(async () => {
+    const b = await window.RCDB.get('batteries', 'b1');
+    b.charge = ''; await window.RCDB.put('batteries', b); await window.loadAll();
+  });
+  await nav(page, '#/today');
+  ok(!(await has('[data-act="takeoff-prepared"]')), `${tag}: без отметки заряда кнопки «Взлёт» нет`);
+  ok(await has('.card.hero'), `${tag}: борт без отметки заряда остаётся героем «на поле»`);
+  ok(await has('.card.hero .banner.nocharge button.chip[data-act="batt-charge"]'),
+    `${tag}: в герое — подсказка и чип заряда`);
+  await checkScreen(page, tag, 'today-field-nocharge', opts.viewport, !!opts.gloves);
+  await page.screenshot({ path: path.join(OUT, `${tag}-today-field-nocharge.png`), fullPage: true });
+  await nav(page, '#/flight');
+  ok(await has('.card.flat button.chip[data-act="batt-charge"][data-id="b1"]') && !(await has('[data-act="takeoff-prepared"]')),
+    `${tag}: в «Готовы к вылету» вместо «Взлёт» тот же чип`);
+  await nav(page, '#/today');
+  // Промашка двойным касанием: кнопка «Взлёт» появляется РОВНО на месте
+  // чипа, и второе касание начинало полёт мимо гарда (ревью 2.0.3).
+  const chipBox = await page.locator('.card.hero .banner.nocharge button.chip').boundingBox();
+  await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  await page.waitForTimeout(150);
+  await page.mouse.click(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  await page.waitForTimeout(500);
+  ok(await page.evaluate(() => !S.sessions.some((s) => !s.end) && !location.hash.startsWith('#/session/')),
+    `${tag}: двойное касание по чипу не начинает полёт`);
+  ok(await page.evaluate(() => (S.batteries.find((b) => b.id === 'b1') || {}).charge === 'ready'),
+    `${tag}: двойное касание не переводит свежий «заряжен» в «после полёта»`);
+  ok(await has('[data-act="takeoff-prepared"]'), `${tag}: тап по чипу вернул кнопку «Взлёт»`);
 
   // --- Сегодня: в полёте; экран полёта; посадка ---
   await STATE_STEPS.flying(page);
@@ -329,6 +461,7 @@ async function run(browser, tag, opts) {
   }, { viewportOnly: true });
   ok(await page.evaluate(menuOpen), `${tag}: меню журнала открывается`);
   await page.keyboard.press('Escape');
+  await checkPrint(page, tag, opts.viewport);
 
   // --- Окна для полётов: кэш, чипы дней, полоска часов ---
   await shot('weather', '#/weather', async (p) => {

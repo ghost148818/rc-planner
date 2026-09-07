@@ -421,6 +421,13 @@ select.sel-pill.sel { border-color: var(--text); }
   padding: 6px 30px 6px 12px;
   border: 1px solid transparent;
   min-height: var(--seg);
+  /* Клетка грида по умолчанию не ужимается ниже содержимого, поэтому
+     длинное имя локации или АКБ раздувало ряд и страница ехала вбок
+     (замер 2026-09-07: 60 px прокрутки на чек-листе). Обрезаем НЕВИДИМУЮ
+     копию подписи, а не сам селект: обрезка селекта срезала бы ему
+     кольцо фокуса (:focus-visible рисуется снаружи рамки). */
+  min-width: 0;
+  overflow: hidden;
 }
 .sel-fit.sm::after { font-size: 13px; padding: 4px 26px 4px 10px; }
 .sel-fit > select { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; }
@@ -914,9 +921,24 @@ html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
   *, *::before, *::after, ::backdrop { transition: none !important; animation: none !important; }
 }
 
-/* ---------- Печать журнала ---------- */
+/* ---------- Печать журнала ----------
+   Фон листа задаётся ЯВНО у тела. Тёмная тема базовая, у html фона нет,
+   поэтому фон body уходит на холст листа и красит его целиком: замер
+   2026-09-07 — в PDF заливка 16,19,24 во всю область листа, поверх белая
+   полоса ровно по высоте таблицы; светлая тема давала серый лист. Белый
+   только у html не спасает — коробка тела рисует свой фон поверх холста.
+   min-height снимается ради WebKit: он при печати считает vh от экранного
+   окна и выталкивает пустой лист (в Chromium этого нет).
+   Длинное слово без пробелов растягивало таблицу за край листа, и текст
+   молча обрезался. Перенос в ЛЮБОМ месте разрешён колонкам со свободным
+   текстом — борт, АКБ, локация, заметки: они ужимаются до буквы, и таблица
+   влезает в лист. Дать его ВСЕМ ячейкам нельзя: тогда и служебные колонки
+   сжимаются до минимума и режут слова посреди слога («Лока/ция», замер).
+   Поля страницы и заливку шапки не навязываем: и то и другое — выбор
+   владельца в диалоге печати. */
 #print-area { display: none; }
 @media print {
+  html, body { background: #fff; min-height: 0; }
   body > *:not(#print-area) { display: none !important; }
   #print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
   #print-area h1 { font-size: 16pt; margin-bottom: 4pt; }
@@ -926,9 +948,14 @@ html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
     border: 1pt solid #444;
     padding: 3pt 5pt;
     text-align: left;
+    vertical-align: top;
     font-size: 10pt;
   }
+  /* Борт, АКБ, локация, заметки — пользовательский текст любой длины */
+  #print-area td:nth-child(3), #print-area td:nth-child(5),
+  #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
   #print-area th { background: #eee; }
+  #print-area tr { break-inside: avoid; }
 }
 
 /* ---------- «Сегодня»: состояния дня ----------
@@ -1079,6 +1106,10 @@ select.sel-sm {
 .prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
 /* Кнопка карты — цель касания --tap (48 / 56), как у всех кнопок карты */
 .prep-pills .map-btn { width: var(--tap); min-height: var(--tap); border-radius: 999px; }
+/* Второй ряд — АКБ и чип заряда (как .hero-batt в герое борта). Перенос
+   обязателен: у .pill-row его нет, а нативный select при ужатии режет
+   текст без многоточия — длинная подпись уводит чип вниз, а не портит имя */
+.prep-batt { flex-wrap: wrap; }
 .prog-line { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
 .prog-line .progress { flex: 1; margin: 0; }
 /* Строка — контейнер двух кнопок: тап по строке (ok ↔ пусто) и по клетке
