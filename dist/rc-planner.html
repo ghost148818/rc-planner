@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-mBMZMqpgWGyfNqLiqcpRfVJ354IMVIYELZx6f5eb+g4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-kNpytJ7XutU1ybBaydBtkl69vhaM4O7DtIs22yRnnOc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="6d987e4005-single">
+  <meta name="build" content="90cfd77b5f-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -2301,7 +2301,7 @@ RC.CHANGELOG = [
       'Новый аккумулятор заводится как борт: сначала выбор — пустой или готовая сборка. Шаг обучения «Заведите аккумулятор» ведёт прямо туда.',
       '«Пройти обучение заново» работает как первый запуск: шаги зачёркиваются по мере выполнения и блок исчезает, когда пройдены все пять.',
       'После добавления борта кнопки «Во «Флот»» и «К обучению» стоят в один ряд, а не лесенкой.',
-      'Резервная копия из чужих рук: испорченная пометка «подготовлен» отбрасывается при загрузке.',
+      'Резервная копия из чужих рук: испорченная пометка «подготовлен» и сломанный свой шаблон чек-листа больше не роняют экраны.',
     ],
   },
   {
@@ -3369,6 +3369,18 @@ const NORM = {
     if (s.result != null && s.result !== '' && !Object.prototype.hasOwnProperty.call(RESULTS, s.result)) s.result = null;
   },
   maintenance(m) { m.date = dateOrNull(m.date); m.kind = keyOrNull(MAINT_KINDS, m.kind); },
+  // Свой шаблон чек-листа из копии. Пункты не массивом роняли экран
+  // «Шаблоны», форму шаблона и смену шаблона на чек-листе (t.items.map),
+  // пункт-не-объект — перечисление проблем, а ключ прототипа в типе
+  // отдавал исходник функции через TYPES[t.type] (аудит 2026-09-07).
+  // Неизвестный тип становится «любым»: это значение по умолчанию формы.
+  templates(t) {
+    t.type = keyOrNull(TYPES, t.type) || 'any';
+    t.builtin = false; // встроенные живут в RC.CHECKLISTS, свой им не притворяется
+    t.items = (Array.isArray(t.items) ? t.items : [])
+      .filter((i) => i && typeof i.t === 'string')
+      .map((i) => ({ t: i.t, hint: typeof i.hint === 'string' ? i.hint : '' }));
+  },
   configs(c) { c.date = dateOrNull(c.date); },
   // Состояние пункта прогона идёт в data-state без esc(): строка
   // `"><img onerror=…>` из копии исполнялась в деталях полёта

@@ -331,8 +331,53 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(await page.evaluate(() => !S.settings.weatherCache), '«Окна»: кэш с нестроковым восходом выброшен в loadAll');
   ok(await page.evaluate(() => UI.view === 'weather' && document.getElementById('views').innerHTML.length > 100), '«Окна» отрисованы после порчи кэша');
   ok(errors.length === 0, 'после проб 8–10 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+
+  // Проба одиннадцатая: свой шаблон чек-листа из копии. Пункты не массивом
+  // роняли «Шаблоны» (t.items.length), форму шаблона и смену шаблона на
+  // чек-листе; ключ прототипа в типе показывал исходник функции, как в
+  // пробе 9; нестроковый текст пункта ронял перечисление проблем (lower).
   await page.evaluate(async () => {
-    for (const [st, id] of [['runs', 'state-run'], ['sessions', 'state-sess'], ['aircraft', 'proto-air'], ['batteries', 'proto-batt'], ['maintenance', 'proto-maint']]) await window.RCDB.del(st, id);
+    await window.RCDB.put('templates', { id: 'bad-tpl', name: 'Проба шаблона', type: 'constructor', builtin: true, items: 'не массив' });
+    await window.RCDB.put('templates', { id: 'bad-tpl2', name: 'Проба пунктов', type: 'any', items: [{ t: {} }, null, 'строка', { t: 'Целый пункт' }] });
+    await window.RCDB.put('aircraft', { id: 'tpl-air', name: 'Борт для шаблона', type: 'quad', batteryId: null, components: {} });
+    await window.loadAll();
+    location.hash = '#/templates';
+  });
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => UI.view === 'templates' && document.getElementById('views').innerText.includes('Проба шаблона')),
+    '«Шаблоны» отрисованы со сломанным шаблоном из копии');
+  ok(!(await page.evaluate(() => document.getElementById('views').innerText.includes('native code'))),
+    '«Шаблоны»: ключ прототипа в типе не показан как функция');
+  ok(await page.evaluate(() => {
+    const t = S.templates.find((x) => x.id === 'bad-tpl'); const t2 = S.templates.find((x) => x.id === 'bad-tpl2');
+    return Array.isArray(t.items) && t.items.length === 0 && t.type === 'any' && t.builtin !== true
+      && t2.items.length === 1 && t2.items[0].t === 'Целый пункт';
+  }), 'NORM: пункты шаблона — массив объектов со строковым текстом, тип из словаря');
+  // Форма шаблона и подготовка на сломанном шаблоне
+  await page.click('[data-act="edit-template"][data-id="bad-tpl"]');
+  ok(await page.waitForSelector('dialog[open] textarea[name="items"]', { timeout: 3000 }).then(() => true, () => false),
+    'форма своего шаблона открывается со сломанными пунктами');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  await page.evaluate(() => { location.hash = '#/prep'; });
+  await page.waitForSelector('[data-act="prep-model"][data-id="tpl-air"]');
+  await page.click('[data-act="prep-model"][data-id="tpl-air"]');
+  await page.waitForSelector('select[name="tpl"]');
+  await page.selectOption('select[name="tpl"]', 'bad-tpl2');
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => UI.prep && UI.prep.tplId === 'bad-tpl2' && document.querySelectorAll('.ck').length === 1),
+    'чек-лист на своём шаблоне из копии: остался один целый пункт');
+  await page.click('.st[data-act="ck-menu"][data-i="0"]');
+  await page.waitForSelector('.ck-menu [data-act="ck-set"][data-state="fail"]');
+  await page.click('.ck-menu [data-act="ck-set"][data-state="fail"]');
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => document.querySelector('.act-bar .banner.warn') !== null),
+    'перечисление проблем не падает на пункте из копии');
+  ok(errors.length === 0, 'после пробы 11 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+
+  await page.evaluate(async () => {
+    UI.prep = null;
+    for (const [st, id] of [['runs', 'state-run'], ['sessions', 'state-sess'], ['aircraft', 'proto-air'], ['batteries', 'proto-batt'], ['maintenance', 'proto-maint'], ['templates', 'bad-tpl'], ['templates', 'bad-tpl2'], ['aircraft', 'tpl-air']]) await window.RCDB.del(st, id);
     await window.loadAll();
   });
 

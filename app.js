@@ -581,6 +581,18 @@ const NORM = {
     if (s.result != null && s.result !== '' && !Object.prototype.hasOwnProperty.call(RESULTS, s.result)) s.result = null;
   },
   maintenance(m) { m.date = dateOrNull(m.date); m.kind = keyOrNull(MAINT_KINDS, m.kind); },
+  // Свой шаблон чек-листа из копии. Пункты не массивом роняли экран
+  // «Шаблоны», форму шаблона и смену шаблона на чек-листе (t.items.map),
+  // пункт-не-объект — перечисление проблем, а ключ прототипа в типе
+  // отдавал исходник функции через TYPES[t.type] (аудит 2026-09-07).
+  // Неизвестный тип становится «любым»: это значение по умолчанию формы.
+  templates(t) {
+    t.type = keyOrNull(TYPES, t.type) || 'any';
+    t.builtin = false; // встроенные живут в RC.CHECKLISTS, свой им не притворяется
+    t.items = (Array.isArray(t.items) ? t.items : [])
+      .filter((i) => i && typeof i.t === 'string')
+      .map((i) => ({ t: i.t, hint: typeof i.hint === 'string' ? i.hint : '' }));
+  },
   configs(c) { c.date = dateOrNull(c.date); },
   // Состояние пункта прогона идёт в data-state без esc(): строка
   // `"><img onerror=…>` из копии исполнялась в деталях полёта
