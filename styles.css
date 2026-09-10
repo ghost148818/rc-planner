@@ -1359,7 +1359,10 @@ dialog.photo .dlg-body {
    список из тридцати строк пришлось бы прокручивать вслепую, в перчатках
    особенно. max-height — страховка на низкий экран: прокрутка внутри
    меню, страница под ним не едет. */
-.menu { max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+/* dvh, а не vh: в мобильном Safari с адресной строкой 100vh больше
+   видимой области, и низ длинного меню уезжал за экран (кламп позиции
+   в toggleMenu считает по window.innerHeight). */
+.menu { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
 .menu-grid[popover]:popover-open { display: grid; } /* .menu[popover]:popover-open ставит flex */
 .menu-grid button { justify-content: center; padding: 0 8px; }

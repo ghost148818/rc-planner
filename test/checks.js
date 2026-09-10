@@ -47,6 +47,9 @@ const SLOTS = cbox.OUT;
 const slotTypes = new Map(SLOTS.map(([k, , o]) => [k, o ? o.types : null]));
 ok(SLOTS.every(([, label]) => label && label.trim()), 'у каждого слота есть подпись');
 ok(new Set(SLOTS.map(([k]) => k)).size === SLOTS.length, 'ключи слотов уникальны');
+// Опции без списка типов уронили бы карточку борта, если бы не страховка
+// в compSlots: держим договор явным.
+ok(SLOTS.every(([, , o]) => !o || Array.isArray(o.types)), 'у каждого слота с опциями есть список типов');
 for (const k of ['pitot', 'pak']) {
   const t = slotTypes.get(k) || null;
   ok(Array.isArray(t) && t.includes('plane') && t.includes('wing'), `слот ${k} есть у самолёта и крыла`);

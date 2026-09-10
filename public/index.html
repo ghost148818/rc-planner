@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-oIgQ1Uv9BwyTxe+zo67IOCWtaJiFBxbon3GX4V01UdQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-HDKE/k6EjC1/95KNRz8Kw2/mX5Kgfgtspaj6q5nnGYA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="a2c72fe98a">
+  <meta name="build" content="1269b5d272">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1389,7 +1389,10 @@ dialog.photo .dlg-body {
    список из тридцати строк пришлось бы прокручивать вслепую, в перчатках
    особенно. max-height — страховка на низкий экран: прокрутка внутри
    меню, страница под ним не едет. */
-.menu { max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+/* dvh, а не vh: в мобильном Safari с адресной строкой 100vh больше
+   видимой области, и низ длинного меню уезжал за экран (кламп позиции
+   в toggleMenu считает по window.innerHeight). */
+.menu { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
 .menu-grid[popover]:popover-open { display: grid; } /* .menu[popover]:popover-open ставит flex */
 .menu-grid button { justify-content: center; padding: 0 8px; }
@@ -4550,7 +4553,10 @@ const COMPONENTS = [
 function compSlots(a) {
   const comps = (a && a.components) || {};
   const filled = (k) => !!(comps[k] && (comps[k].name || comps[k].fw || comps[k].notes));
-  return COMPONENTS.filter(([key, , o]) => !o || o.types.includes(a && a.type) || filled(key));
+  // (o.types || []) — слот с опциями, но без списка типов, не роняет
+  // карточку борта: он просто никому не положен и виден только там,
+  // где уже заполнен. Наличие списка сторожит test/checks.js.
+  return COMPONENTS.filter(([key, , o]) => !o || (o.types || []).includes(a && a.type) || filled(key));
 }
 
 // АКБ ставится только в ОДНУ модель: занятые другими исчезают из выбора.
@@ -5546,11 +5552,6 @@ function wxLimits() {
   };
 }
 
-// Все уровни ветра часа i, снизу вверх: [{ m: высота над землёй, v: м/с }].
-// elev — elevation ответа (высота земли в точке модели); null — барические
-// уровни не разбираем вовсе (высота полёта в пределах приземных уровней,
-// старый кэш или прогноз без elevation). null в скорости или в высоте —
-// уровня просто нет; НУЛЁМ он не становится: пропуск не штиль.
 // Подпись высоты за день: одно число, если уровень не гулял, иначе
 // диапазон — высота барического уровня меняется от часа к часу.
 function wxTopText(day) {
@@ -5558,6 +5559,11 @@ function wxTopText(day) {
   return day.top.min === day.top.max ? day.top.min + ' м' : day.top.min + '–' + day.top.max + ' м';
 }
 
+// Все уровни ветра часа i, снизу вверх: [{ m: высота над землёй, v: м/с }].
+// elev — elevation ответа (высота земли в точке модели); null — барические
+// уровни не разбираем вовсе (высота полёта в пределах приземных уровней,
+// старый кэш или прогноз без elevation). null в скорости или в высоте —
+// уровня просто нет; НУЛЁМ он не становится: пропуск не штиль.
 function wxHourLevels(H, i, elev) {
   const at = (key) => numOrNull((H[key] || [])[i]);
   const out = [];
