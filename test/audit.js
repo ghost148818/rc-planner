@@ -411,6 +411,115 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
       && !('prop' in c.components);
   }), 'комплектация копии приведена к строкам, мусор не протащен');
 
+  // Проба четырнадцатая: честность о высоте выше 200 м (2.1). Пропуск
+  // в данных НИКОГДА не должен превращаться в штиль — вместо этого
+  // экран говорит, докуда прогноз есть. Сети тут нет: подсовываем кэш.
+  // Посев и чтение — раздельно: render() меняет разметку в колбэке
+  // перехода, и DOM сразу после вызова ещё прежний.
+  const wxSeed = async (kind) => page.evaluate(async (k) => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
+    const time = [], z = [], w200 = [];
+    for (let h = 0; h < 24; h++) { time.push(today + 'T' + String(h).padStart(2, '0') + ':00'); z.push(4); w200.push(9); }
+    const H = { time, temperature_2m: z, wind_speed_10m: z, wind_gusts_10m: z,
+      wind_speed_80m: z, wind_speed_120m: z, wind_speed_180m: z, wind_speed_200m: w200,
+      precipitation: time.map(() => 0), precipitation_probability: time.map(() => 0), weather_code: time.map(() => 1) };
+    const P = [975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 700, 650];
+    let elevation = 152;
+    if (k === 'no-data') {
+      // ключи есть, значений нет — у модели нет барических уровней
+      for (const p of P) { H['wind_speed_' + p + 'hPa'] = time.map(() => null); H['geopotential_height_' + p + 'hPa'] = time.map(() => null); }
+    } else if (k === 'holes') {
+      // данные через час: половина часов без верхних уровней
+      for (const p of P) {
+        H['wind_speed_' + p + 'hPa'] = time.map((_, i) => (i % 2 ? null : 12));
+        H['geopotential_height_' + p + 'hPa'] = time.map((_, i) => (i % 2 ? null : 152 + 300));
+      }
+    } else if (k === 'underground') {
+      // Половина уровней под землёй (геопотенциал 111 м при elevation 152),
+      // половина — на 150 м над землёй, то есть НИЖЕ приземной лестницы.
+      // Ветер там нарочно ураганный: если такой уровень подмешается
+      // в расчёт, это сразу видно по вердикту.
+      P.forEach((p, i) => {
+        H['wind_speed_' + p + 'hPa'] = time.map(() => 30);
+        H['geopotential_height_' + p + 'hPa'] = time.map(() => (i % 2 ? 111 : 152 + 150));
+      });
+    } else if (k === 'bad-elev') {
+      elevation = '" onfocus="window.__xss7=1"';
+      for (const p of P) { H['wind_speed_' + p + 'hPa'] = time.map(() => 12); H['geopotential_height_' + p + 'hPa'] = time.map(() => 500); }
+    }
+    // k === 'old' — ключей барических уровней и elevation нет вовсе
+    if (k === 'old') elevation = undefined;
+    const json = { latitude: 55.7, longitude: 37.6, hourly: H,
+      daily: { time: [today], sunrise: [today + 'T05:41'], sunset: [today + 'T19:22'] } };
+    if (elevation !== undefined) json.elevation = elevation;
+    // Борт обязан быть СОБРАННЫМ: viewWeather сбрасывает выбор борта
+    // без установленной АКБ, и высота вернулась бы к общей (100 м).
+    await window.RCDB.put('batteries', { id: 'alt-batt', label: 'Проба АКБ', chem: 'Li-Ion', cells: 6, p: 3, capacity: 17500, weight: 1400, charge: 'ready' });
+    await window.RCDB.put('aircraft', { id: 'alt-air', name: 'Высотный', type: 'plane', maxWind: 18, maxAlt: 1500, batteryId: 'alt-batt', components: {} });
+    S.settings.weatherCache = { fetched: Date.now(), place: 'Проба высоты', json };
+    await saveSettings();
+    await window.loadAll();
+    UI.wx.aircraftId = 'alt-air'; UI.wx.alt = null; UI.wx.day = 0; UI.wx.data = null;
+    location.hash = '#/weather';
+    render();
+  }, kind);
+  const wxRead = async () => page.evaluate(() => {
+    const j = S.settings.weatherCache && S.settings.weatherCache.json;
+    const day = j && wxDay(j, 0, 18, 1500);
+    return {
+      text: document.getElementById('views').textContent,
+      html: document.getElementById('views').innerHTML,
+      alt12: day && day.hours[12] ? day.hours[12].alt : null,
+      minTop: day ? Math.min(...day.hours.map((x) => x.top)) : null,
+      minCap: day ? Math.min(...day.hours.map((x) => x.cap)) : null,
+      thin: day ? day.thin : null,
+      zeroAlt: day ? day.hours.some((x) => x.alt === 0) : null,
+      cached: !!S.settings.weatherCache,
+      elev: j ? j.elevation : undefined,
+    };
+  });
+  const wxProbe = async (kind) => {
+    await wxSeed(kind);
+    await page.waitForTimeout(250);
+    return wxRead();
+  };
+
+  const wxOld = await wxProbe('old');
+  ok(wxOld.text.includes('Показать прогноз') && wxOld.text.includes('без данных выше 200 м'),
+    'старый кэш: экран честно зовёт обновить прогноз');
+  ok(wxOld.cached, 'старый кэш не выброшен — приземные уровни всё ещё годные');
+
+  const wxNo = await wxProbe('no-data');
+  ok(wxNo.text.includes('только до 200 м'), 'точка без барических уровней: экран так и пишет');
+  ok(wxNo.alt12 === 9 && !wxNo.zeroAlt, 'пропуск наверху не выдаётся за штиль: считаем по 200 м');
+
+  const wxUnder = await wxProbe('underground');
+  ok(wxUnder.minTop >= 0 && wxUnder.minCap >= 0 && !/-\d+ м/.test(wxUnder.text),
+    'уровень под землёй не даёт отрицательных высот на экране');
+  ok(wxUnder.alt12 === 9,
+    'барический уровень ниже 200 м в расчёт не подмешивается: там приземные данные точнее');
+
+  const wxHoles = await wxProbe('holes');
+  // Уточнение «в N ч из 24» появляется, только когда дыры не во всех
+  // часах; здесь их 24 из 24, и сообщение говорит про худший час.
+  ok(wxHoles.thin > 0 && wxHoles.text.includes('Выше 200 м прогноза для этой точки нет'),
+    'дыры по часам названы честно: сказано, докуда прогноз есть');
+  ok(!wxHoles.zeroAlt, 'в часах без верхних данных ветер не становится нулём');
+
+  const wxElev = await wxProbe('bad-elev');
+  ok(wxElev.cached && wxElev.elev === null, 'нечисловой elevation приведён к null, кэш цел');
+  ok(!/NaN/.test(wxElev.text) && !/onfocus/.test(wxElev.html), 'из нечислового elevation не вышло ни NaN, ни атрибута');
+
+  // Запрос погоды: адрес собирается чистой функцией — проверяем без сети
+  const wxU = await page.evaluate(() => wxUrl(55.751234, 37.617778));
+  ok(wxU.includes('latitude=55.75&longitude=37.62'), 'запрос погоды: координаты огрублены до двух знаков');
+  ok(/wind_speed_950hPa/.test(wxU) && /geopotential_height_950hPa/.test(wxU),
+    'запрос погоды: барические уровни и их высоты');
+  ok(/wind_speed_200m/.test(wxU) && !/wind_speed_250m/.test(wxU),
+    'запрос погоды: приземные уровни до 200 м, выше их нет');
+  ok(wxU.startsWith('https://api.open-meteo.com/v1/forecast?') && !/pilot|notes|name=/.test(wxU),
+    'запрос погоды: тот же хост, кроме координат наружу ничего не уходит');
+
   // Проба одиннадцатая: свой шаблон чек-листа из копии. Пункты не массивом
   // роняли «Шаблоны» (t.items.length), форму шаблона и смену шаблона на
   // чек-листе; ключ прототипа в типе показывал исходник функции, как в

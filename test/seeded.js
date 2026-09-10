@@ -29,12 +29,21 @@ const TAP_MIN_GLOVES = 52;
 
 // Поддельный прогноз на 7 дней от «сегодня» по МСК: тот же формат, что
 // отдаёт Open-Meteo, — приложение читает его из кэша без запросов.
+// Барические уровни — с геопотенциалом НАД УРОВНЕМ МОРЯ (как у API):
+// высота над землёй = геопотенциал минус ELEV, и она «дышит» от часа
+// к часу — код обязан считать её по часу, а не брать из таблицы.
+// Числа взяты из живого замера 2026-09-10 (975 гПа ≈ 166 м над землёй,
+// 700 гПа ≈ 2937 м).
+const ELEV = 152;
+const PRES = [[975, 318], [950, 541], [925, 770], [900, 1003], [875, 1245],
+  [850, 1486], [825, 1740], [800, 1993], [775, 2260], [750, 2530], [700, 3089], [650, 3681]];
 function fakeForecast() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
   const d = new Date(today);
   const days = [];
   for (let i = 0; i < 7; i++) { const x = new Date(d); x.setDate(d.getDate() + i); days.push(x.toISOString().slice(0, 10)); }
-  const H = { time: [], temperature_2m: [], wind_speed_10m: [], wind_gusts_10m: [], wind_speed_80m: [], wind_speed_120m: [], wind_speed_180m: [], precipitation: [], precipitation_probability: [], weather_code: [] };
+  const H = { time: [], temperature_2m: [], wind_speed_10m: [], wind_gusts_10m: [], wind_speed_80m: [], wind_speed_120m: [], wind_speed_180m: [], wind_speed_200m: [], precipitation: [], precipitation_probability: [], weather_code: [] };
+  for (const [hpa] of PRES) { H['wind_speed_' + hpa + 'hPa'] = []; H['geopotential_height_' + hpa + 'hPa'] = []; }
   days.forEach((day, di) => {
     for (let h = 0; h < 24; h++) {
       const w = 3 + 6 * Math.abs(Math.sin((h + di * 3) / 5));
@@ -45,13 +54,19 @@ function fakeForecast() {
       H.wind_speed_80m.push(+(w * 1.3).toFixed(1));
       H.wind_speed_120m.push(+(w * 1.45).toFixed(1));
       H.wind_speed_180m.push(+(w * 1.6).toFixed(1));
+      H.wind_speed_200m.push(+(w * 1.65).toFixed(1));
+      PRES.forEach(([hpa, g]) => {
+        const agl = g - ELEV;
+        H['wind_speed_' + hpa + 'hPa'].push(+(w * (1 + agl / 900)).toFixed(1));
+        H['geopotential_height_' + hpa + 'hPa'].push(g + Math.round(14 * Math.sin((h + di) / 3)));
+      });
       H.precipitation.push(h >= 16 && h <= 18 && di === 0 ? 0.4 : 0);
       H.precipitation_probability.push(h >= 15 && h <= 19 && di === 0 ? 60 : 5);
       H.weather_code.push(h >= 16 && h <= 18 && di === 0 ? 61 : h < 8 ? 2 : 1);
     }
   });
   return { fetched: Date.now() - 20 * 60000, place: 'Поле у реки', json: {
-    latitude: 55.6, longitude: 37.9, hourly: H,
+    latitude: 55.6, longitude: 37.9, elevation: ELEV, hourly: H,
     daily: { time: days, sunrise: days.map((x) => x + 'T05:41'), sunset: days.map((x) => x + 'T19:22') },
   } };
 }
@@ -582,6 +597,42 @@ async function run(browser, tag, opts) {
   });
   ok((await count('[data-act="weather-day"]')) === 7, `${tag}: окна — семь чипов дней`);
   ok((await count('.strip.tap [data-act="weather-hour"]')) === 24, `${tag}: окна — полоска из 24 часов`);
+
+  // Высота полёта: меню значений и расчёт по барическим уровням (2.1)
+  ok((await count('[data-act="wx-alt-menu"]')) === 1, `${tag}: окна — кнопка выбора высоты`);
+  await page.click('[data-act="wx-alt-menu"]');
+  await page.waitForFunction(() => {
+    const m = document.getElementById('wx-alt-menu');
+    return m && (typeof m.togglePopover === 'function' ? m.matches(':popover-open') : !m.hidden);
+  });
+  ok((await count('#wx-alt-menu [data-act="wx-alt-set"]')) === 31,
+    `${tag}: в меню высоты тридцать значений и «по карточке борта»`);
+  ok(await page.evaluate(() => {
+    const r = document.getElementById('wx-alt-menu').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight + 1;
+  }), `${tag}: меню высоты помещается на экран целиком`);
+  await checkScreen(page, tag, 'weather-alt-menu', opts.viewport, !!opts.gloves);
+  await page.screenshot({ path: path.join(OUT, `${tag}-weather-alt-menu.png`) });
+  await page.click('#wx-alt-menu [data-alt="1500"]');
+  await painted(page);
+  ok((await page.textContent('.wx-strip-sub')).includes('до 1500 м (выбрано)'),
+    `${tag}: выбранная высота видна в подписи полоски`);
+  ok(/На 1[0-9]{3} м/.test(await page.textContent('.wx-hour .kv')),
+    `${tag}: карточка часа считает ветер на барическом уровне`);
+  // Высота уровня обязана меняться по часам: одинаковая на все 24 часа
+  // означала бы, что её взяли из таблицы, а не из геопотенциала.
+  ok(await page.evaluate(() => {
+    const j = UI.wx.data.json;
+    const i = (j.daily.time || []).indexOf(wxTodayISO());
+    return new Set(wxDay(j, i, 16, 1500).hours.map((x) => x.top)).size > 1;
+  }), `${tag}: высота барического уровня пересчитывается по каждому часу`);
+  // Выбор экрана в карточку борта не протекает
+  ok(await page.evaluate(() => (S.aircraft.find((a) => a.id === 'a1') || {}).maxAlt === 60),
+    `${tag}: высота в карточке борта не изменилась`);
+  await page.selectOption('select[name="wxmodel"]', 'a2');
+  await painted(page);
+  ok((await page.textContent('[data-act="wx-alt-menu"]')).includes('По карточке борта'),
+    `${tag}: смена борта сбрасывает выбранную высоту`);
 
   // --- Остальные экраны ---
   await shot('packing', '#/packing');

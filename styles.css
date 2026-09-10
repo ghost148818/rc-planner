@@ -1354,3 +1354,16 @@ dialog.photo .dlg-body {
 .thumb.tap:active { opacity: 0.75; }
 .thumb-btn { flex: none; display: block; border-radius: 14px; cursor: zoom-in; }
 .thumb-btn:active { opacity: 0.85; }
+
+/* Меню-сетка значений (высота полёта): тридцать значений видны разом —
+   список из тридцати строк пришлось бы прокручивать вслепую, в перчатках
+   особенно. max-height — страховка на низкий экран: прокрутка внутри
+   меню, страница под ним не едет. */
+.menu { max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.menu-grid[popover]:popover-open { display: grid; } /* .menu[popover]:popover-open ставит flex */
+.menu-grid button { justify-content: center; padding: 0 8px; }
+.menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
+.menu-grid button[aria-checked="true"] { border: 1px solid var(--text); }
+.wx-alt { display: inline-flex; align-items: center; gap: 6px; }
+.wx-alt svg { width: 16px; height: 16px; transform: rotate(90deg); color: var(--mut); }

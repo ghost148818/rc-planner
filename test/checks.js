@@ -57,6 +57,19 @@ for (const k of ['pitot', 'pak']) {
 ok(Array.isArray(slotTypes.get('tx')) && slotTypes.get('tx').length === 0,
   'слот «Передатчик» убран из всех типов, подпись сохранена для старых записей');
 
+// Поле «Высота полёта» и клэмп сохранения должны говорить одно и то же:
+// разъехавшись, они молча резали бы введённое значение.
+ok(/name="maxAlt"[^>]*min="10"[^>]*max="\$\{WX_ALT_MAX\}"/.test(appSrc) &&
+   /Math\.min\(WX_ALT_MAX, Math\.max\(10, maxAlt\)\)/.test(appSrc),
+  'карточка борта: поле «Высота полёта» и клэмп сохранения согласованы');
+ok(/const WX_ALT_MAX = 3000;/.test(appSrc), 'потолок высоты полёта — 3000 м');
+// Список переменных запроса строится из списка уровней, а не литералом:
+// иначе новый уровень попал бы в расчёт, но не в запрос.
+const hourlyBlock = appSrc.slice(appSrc.indexOf('const WX_HOURLY'), appSrc.indexOf('const WX_HOURLY') + 600);
+ok(/WX_PRESSURE\.map/.test(hourlyBlock) && /WX_SURF\.map/.test(hourlyBlock),
+  'переменные запроса погоды строятся из списков уровней');
+ok(!/wind_gusts_(?!10m)/.test(hourlyBlock), 'порывы запрашиваются только у земли (выше API их не отдаёт)');
+
 console.log('Готовые платформы:');
 ok(Array.isArray(RC.AIRCRAFT_PRESETS) && RC.AIRCRAFT_PRESETS.length >= 3, 'есть готовые платформы');
 const presetIds = new Set();
@@ -66,7 +79,8 @@ for (const p of RC.AIRCRAFT_PRESETS) {
   ok(p.weight > 300 && p.weight <= 10000, `«${p.name}»: сухой вес правдоподобен (${p.weight} г)`);
   ok(p.wingspan > 100 && p.wingspan <= 4000, `«${p.name}»: размах/диагональ правдоподобны`);
   ok(p.maxWind >= 6 && p.maxWind <= 30, `«${p.name}»: порог ветра в разумных пределах`);
-  ok(p.maxAlt >= 10 && p.maxAlt <= 200, `«${p.name}»: высота полёта до 200 м`);
+  ok(p.maxAlt >= 10 && p.maxAlt <= 3000, `«${p.name}»: высота полёта в пределах карточки (10…3000 м)`);
+  ok(p.maxAlt <= 300, `«${p.name}»: у готовой платформы типовая высота, а не рекордная (${p.maxAlt} м)`);
   ok(p.components && Object.values(p.components).every((c) => c && c.name), `«${p.name}»: компоненты заполнены`);
   for (const k of Object.keys(p.components || {})) {
     ok(slotTypes.has(k), `«${p.name}»: слот ${k} есть в COMPONENTS`);

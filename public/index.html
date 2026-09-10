@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-WTcsS8vrSlxiYPgFzHevL6KdvPMugfNXHfhuVGFVWFE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-oIgQ1Uv9BwyTxe+zo67IOCWtaJiFBxbon3GX4V01UdQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="23a2a5db0a">
+  <meta name="build" content="a2c72fe98a">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1385,6 +1385,19 @@ dialog.photo .dlg-body {
 .thumb-btn { flex: none; display: block; border-radius: 14px; cursor: zoom-in; }
 .thumb-btn:active { opacity: 0.85; }
 
+/* Меню-сетка значений (высота полёта): тридцать значений видны разом —
+   список из тридцати строк пришлось бы прокручивать вслепую, в перчатках
+   особенно. max-height — страховка на низкий экран: прокрутка внутри
+   меню, страница под ним не едет. */
+.menu { max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.menu-grid[popover]:popover-open { display: grid; } /* .menu[popover]:popover-open ставит flex */
+.menu-grid button { justify-content: center; padding: 0 8px; }
+.menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
+.menu-grid button[aria-checked="true"] { border: 1px solid var(--text); }
+.wx-alt { display: inline-flex; align-items: center; gap: 6px; }
+.wx-alt svg { width: 16px; height: 16px; transform: rotate(90deg); color: var(--mut); }
+
 </style>
 </head>
 <body>
@@ -2394,7 +2407,7 @@ RC.CHANGELOG = [
   {
     v: '2.1',
     date: '2026-09-10',
-    title: 'Оборудование по типу борта',
+    title: 'Высоты до 3000 м, копия борта, фото во весь экран',
     items: [
       'Состав вкладки «Компоненты» зависит от типа борта: у самолёта и крыла добавились «Трубка Пито» и «ПАК», у квада их нет.',
       'Слот «Передатчик» заменён на «ПАК». Старая запись не пропала: она видна отдельной строкой, пока вы не перенесёте её и не очистите поля.',
@@ -2404,6 +2417,10 @@ RC.CHANGELOG = [
       'Имя копии — «Название (2)», копия копии станет «(3)». Всё можно поправить в форме до создания.',
       'Тап по снимку разворачивает фото во весь экран: фото борта на «Сегодня», во «Флоте» и в карточке, фото повреждения в работах и в истории.',
       'В просмотре увеличивают кнопки «−» и «+», двойной тап и щипок двумя пальцами; увеличенное фото двигается пальцем. Закрыть — крестик, Esc или тап мимо.',
+      'Полёты выше 200 метров: на «Окнах» появился выбор высоты — меню с шагом 100 м до 3000 м. Выбор действует только на этом экране, карточка борта не меняется.',
+      'Ветер выше 200 м берётся с барических уровней прогноза; их высота над землёй пересчитывается в каждом часе, поэтому подпись «на 850 м» от часа к часу меняется.',
+      'Если прогноза выше 200 м для точки нет, экран так и пишет и считает окна по той высоте, где данные есть: пропуск не выдаётся за штиль.',
+      'В карточке борта «Высота полёта» принимает до 3000 м. Борт с высотой ровно 200 м теперь смотрит и на уровень 200 м — вердикт может стать строже.',
     ],
   },
   {
@@ -2758,7 +2775,9 @@ RC.HELP = {
         { h: 'Откуда берётся порог' },
         { list: [
           'В списке — только собранные борта (с аккумулятором). Порог ветра — «Макс. ветер» из карточки борта; если поле пустое, порог оценивается (значок «≈») по полному весу (сухой борт + выбранный аккумулятор) и габаритам.',
-          'Высота полёта — «Высота полёта» из карточки, иначе типовая по классу (квад 60 м, самолёт и крыло 150 м, другое 100 м); потолок — 200 м. Ветер на высоте берётся с уровней 80, 120 и 180 м только в пределах высоты полёта: низколетящий квад не бракуется ветром на 180 м.',
+          'Высота полёта — «Высота полёта» из карточки (до 3000 м), иначе типовая по классу (квад 60 м, самолёт и крыло 150 м, другое 100 м). На экране «Окна» высоту можно поменять на время: меню «Высота полёта», шаг 100 м до 3000 м, — карточка борта при этом не меняется.',
+          'Ветер на высоте: до 200 м — уровни 80, 120, 180 и 200 м над землёй; выше — барические уровни (975…650 гПа), их высота над землёй пересчитывается по геопотенциалу в каждом часе, поэтому подпись «на 850 м» от часа к часу меняется. Берутся только уровни в пределах высоты полёта, из них худший: низколетящий квад не бракуется ветром на 180 м.',
+          'Барические уровни есть не у каждой точки. Если их нет, экран так и пишет и считает окна по той высоте, где данные есть: пропуск никогда не выдаётся за штиль. Порывы прогноз даёт только у земли.',
           'Без борта считается порог 16 м/с и высота 100 м.',
         ] },
         { h: 'Вердикт часа' },
@@ -2933,6 +2952,7 @@ const UI = {
   updateReady: false, // service worker ждёт активации
   wx: {               // экран «Окна для полётов»
     siteId: '', aircraftId: '', batteryId: '', day: 0,
+    alt: null,        // высота полёта, выбранная на экране (null — по карточке борта)
     hour: null,       // выбранный час полоски (null — по умолчанию: сейчас / первое окно)
     loading: false, error: '', data: null, // data: {fetched, place, json}
   },
@@ -2960,6 +2980,31 @@ const WX_K = {
 };
 const WX_API = 'https://api.open-meteo.com/v1/forecast';
 const WX_DAYS = 7;
+// Приземные уровни ветра: высота над землёй фиксирована, from — с какой
+// высоты полёта уровень учитывается. Пороги 40/90/140 унаследованы от
+// прежнего wxLevels, чтобы вердикты существующих бортов не поехали.
+// Выше 200 м приземных уровней у Open-Meteo НЕТ: wind_speed_250m и выше
+// API принимает, но отдаёт сплошные null (замер 2026-09-10).
+const WX_SURF = [{ m: 80, from: 40 }, { m: 120, from: 90 }, { m: 180, from: 140 }, { m: 200, from: 190 }];
+// Выше 200 м — только барические уровни. Их высота — НАД УРОВНЕМ МОРЯ
+// и плавает во времени (975 гПа за неделю гулял между 125 и 229 м над
+// землёй), поэтому высота считается по geopotential_height в каждом
+// часе, а не по табличке. 1000 гПа не берём: он ниже 200 м, а в низине
+// уходит под землю (замер: геопотенциал 111 м при elevation 152).
+// 650 гПа нужен, чтобы потолок 3000 м был накрыт сверху — 700 гПа
+// в равнине это только ≈2937 м над землёй.
+const WX_PRESSURE = [975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 700, 650];
+const WX_ALT_SURF = 200;   // докуда хватает приземных уровней
+const WX_ALT_MAX = 3000;   // потолок высоты полёта: карточка борта и меню
+const WX_ALT_STEP = 100;   // шаг меню выбора высоты
+// Почасовые переменные запроса — ОДИН источник и для URL, и для теста.
+// Порывы только у земли: wind_gusts_100m и wind_gusts_1000hPa API
+// не отдаёт вовсе (ошибка «invalid String value», замер 2026-09-10).
+const WX_HOURLY = ['temperature_2m', 'precipitation', 'precipitation_probability',
+  'wind_speed_10m', 'wind_gusts_10m', 'weather_code']
+  .concat(WX_SURF.map((l) => 'wind_speed_' + l.m + 'm'))
+  .concat(WX_PRESSURE.map((p) => 'wind_speed_' + p + 'hPa'))
+  .concat(WX_PRESSURE.map((p) => 'geopotential_height_' + p + 'hPa'));
 
 let SWREG = null;
 let TIMER = null;
@@ -3538,7 +3583,14 @@ async function loadAll() {
     const shapeOk = j && j.hourly && j.daily && isoList(j.hourly.time) &&
       isoList(j.daily.time) && isoList(j.daily.sunrise) && isoList(j.daily.sunset);
     if (lat == null || lon == null || !shapeOk) delete S.settings.weatherCache;
-    else { j.latitude = lat; j.longitude = lon; }
+    else {
+      j.latitude = lat; j.longitude = lon;
+      // elevation идёт в арифметику (высота барического уровня над
+      // землёй), а не в разметку: нечисловое значение даёт NaN в подписи,
+      // а не инъекцию. Кэш из-за него не выбрасываем — приземные уровни
+      // всё ещё годные.
+      j.elevation = numOrNull(j.elevation);
+    }
   }
   // Группы флота из импортированной копии: только валидные записи
   // (id/parentId — безопасные строки, name — строка).
@@ -3632,6 +3684,15 @@ async function migrateIfNeeded() {
     }
     await refresh('packing');
     S.settings.migrPack1 = true;
+    touched = true;
+  }
+  if (!S.settings.migrWx3) {
+    // Формат прогноза изменился: добавились барические уровни, их
+    // геопотенциальные высоты и elevation. Старый кэш выбрасываем один
+    // раз — иначе он ещё шесть часов будет говорить «выше 200 м данных
+    // нет» там, где данные есть.
+    delete S.settings.weatherCache;
+    S.settings.migrWx3 = true;
     touched = true;
   }
   if (!S.settings.migrWx2) {
@@ -3781,6 +3842,14 @@ function toggleMenu(btn, id) {
   // телефоне при min-width 200px иначе обрезался бы левый край.
   const right = Math.round(window.innerWidth - r.right);
   m.style.right = Math.max(8, Math.min(right, window.innerWidth - 8 - m.offsetWidth)) + 'px';
+  // Вертикально так же, как горизонтально: не влезло под кнопкой —
+  // ставим над ней, не влезло и там — прижимаем к верху окна, остаток
+  // прокручивается внутри меню (max-height в CSS). Меню высоты — первое
+  // высокое: три пункта журнала помещались всегда.
+  const mh = m.offsetHeight;
+  let top = r.bottom + 6;
+  if (top + mh > window.innerHeight - 8) top = r.top - 6 - mh;
+  m.style.top = Math.round(Math.max(8, Math.min(top, window.innerHeight - 8 - mh))) + 'px';
   btn.setAttribute('aria-expanded', 'true');
 }
 function closeMenus() {
@@ -5453,28 +5522,91 @@ function wxEstimate(a, battWeight) {
 }
 
 // Порог ветра и высота полёта текущей выбранной модели (+ АКБ).
+// Высота, выбранная на экране «Окна»: только сотни в пределах 100…3000.
+function wxAltPick() {
+  const v = +UI.wx.alt;
+  return isFinite(v) && v >= WX_ALT_STEP && v <= WX_ALT_MAX
+    ? Math.round(v / WX_ALT_STEP) * WX_ALT_STEP : null;
+}
+
 function wxLimits() {
   const a = S.aircraft.find((x) => x.id === UI.wx.aircraftId);
-  if (!a) return { maxW: WX_DEFAULT_WIND, alt: 100, est: false, name: '', battName: '' };
+  const pick = wxAltPick();
+  if (!a) return { maxW: WX_DEFAULT_WIND, alt: pick || 100, altOwn: 100, pick: !!pick, est: false, name: '', battName: '' };
   const b = S.batteries.find((x) => x.id === UI.wx.batteryId);
   const own = wxOwnWind(a);
   return {
     maxW: own || wxEstimate(a, b && b.weight),
-    alt: wxOwnAlt(a),
+    alt: pick || wxOwnAlt(a),
+    altOwn: wxOwnAlt(a),
+    pick: !!pick,
     est: !own,
     name: a.name,
     battName: b ? b.label : '',
   };
 }
 
-// Уровни ветра Open-Meteo, попадающие в высоту полёта модели.
-// Ветер выше высоты полёта модель не касается.
-function wxLevels(alt) {
-  const levels = [];
-  if (alt > 40) levels.push(80);
-  if (alt > 90) levels.push(120);
-  if (alt > 140) levels.push(180);
-  return levels;
+// Все уровни ветра часа i, снизу вверх: [{ m: высота над землёй, v: м/с }].
+// elev — elevation ответа (высота земли в точке модели); null — барические
+// уровни не разбираем вовсе (высота полёта в пределах приземных уровней,
+// старый кэш или прогноз без elevation). null в скорости или в высоте —
+// уровня просто нет; НУЛЁМ он не становится: пропуск не штиль.
+// Подпись высоты за день: одно число, если уровень не гулял, иначе
+// диапазон — высота барического уровня меняется от часа к часу.
+function wxTopText(day) {
+  if (!day || !day.top) return '';
+  return day.top.min === day.top.max ? day.top.min + ' м' : day.top.min + '–' + day.top.max + ' м';
+}
+
+function wxHourLevels(H, i, elev) {
+  const at = (key) => numOrNull((H[key] || [])[i]);
+  const out = [];
+  const w10 = at('wind_speed_10m');
+  if (w10 != null) out.push({ m: 10, v: w10, from: 0 });
+  for (const L of WX_SURF) {
+    const v = at('wind_speed_' + L.m + 'm');
+    if (v != null) out.push({ m: L.m, v, from: L.from });
+  }
+  if (elev != null) {
+    for (const p of WX_PRESSURE) {
+      const v = at('wind_speed_' + p + 'hPa');
+      const g = at('geopotential_height_' + p + 'hPa'); // метры НАД УРОВНЕМ МОРЯ
+      if (v == null || g == null) continue;             // у модели нет барических уровней
+      const m = Math.round(g - elev);
+      if (m <= WX_ALT_SURF) continue; // ниже 200 м приземные точнее, а 1000 гПа бывает и под землёй
+      out.push({ m, v, hpa: p });
+    }
+  }
+  return out.sort((a, b) => a.m - b.m);
+}
+
+// Уровни в пределах высоты полёта. У приземных порог свой (from),
+// у барических — середина промежутка до предыдущего уровня: они редкие
+// (шаг ~250 м), иначе ветер над самой головой не попал бы в расчёт.
+function wxPickLevels(levels, alt) {
+  const pick = [];
+  for (let k = 0; k < levels.length; k++) {
+    const L = levels[k];
+    const from = L.from != null ? L.from : ((levels[k - 1] ? levels[k - 1].m : 0) + L.m) / 2;
+    if (alt > from) pick.push(L); else break;
+  }
+  return pick;
+}
+
+// Есть ли в прогнозе ветер выше 200 м.
+// 'no-keys' — снят старой версией (нет ключей или elevation): поможет
+//            кнопка «Показать прогноз»;
+// 'no-data' — ключи есть, но модель барические уровни не считает
+//            (замер: 68.97 N / 33.08 E — все часы null), обновление не поможет;
+// 'ok'      — данные есть хотя бы в одном часе.
+function wxAloftState(json) {
+  const H = json && json.hourly;
+  if (!H || numOrNull(json.elevation) == null) return 'no-keys';
+  const p0 = WX_PRESSURE[0];
+  if (!(('wind_speed_' + p0 + 'hPa') in H) || !(('geopotential_height_' + p0 + 'hPa') in H)) return 'no-keys';
+  const has = WX_PRESSURE.some((p) => (H['wind_speed_' + p + 'hPa'] || []).some((v) => v != null)
+    && (H['geopotential_height_' + p + 'hPa'] || []).some((v) => v != null));
+  return has ? 'ok' : 'no-data';
 }
 
 // Иконка часа. Код WMO (weather_code) точнее всего различает туман и снег;
@@ -5504,7 +5636,7 @@ function wxHelpHtml() {
   return `<p class="small muted">Порядок такой: <b>борт → место → дата</b>. Ограничения берутся
     из карточки борта, а не из общей константы.</p>
     <p class="small">Сейчас считаем для: <b>${lim.name ? esc(lim.name) : 'без борта'}</b>${lim.battName ? ' + <b>' + esc(lim.battName) + '</b>' : ''} —
-    порог ${lim.est && lim.name ? 'примерно ' : ''}<b>${w} м/с</b>, высота полёта <b>${lim.alt} м</b>.
+    порог ${lim.est && lim.name ? 'примерно ' : ''}<b>${w} м/с</b>, высота полёта <b>${lim.alt} м</b>${lim.pick ? ' (выбрана на экране)' : ''}.
     ${lim.est && lim.name ? 'Порог оценён по полному весу (сухой борт + АКБ) и габаритам: задайте «Макс. ветер» в карточке, чтобы считать по-своему.' : ''}</p>
 
     <div class="h2">Вердикт часа</div>
@@ -5538,9 +5670,14 @@ function wxHelpHtml() {
     час всегда «не стоит».</p>
 
     <div class="h2">Ветер на высоте</div>
-    <p class="small">Прогноз даёт ветер на 10, 80, 120 и 180 м. Берём только уровни в пределах
-    высоты полёта борта и худший из них: выше 40 м — добавляется 80 м, выше 90 м — ещё 120 м,
-    выше 140 м — ещё 180 м. Поэтому низколетящий квад не бракуется ветром на 180 метрах.</p>
+    <p class="small">До ${WX_ALT_SURF} м прогноз даёт ветер на 10, 80, 120, 180 и 200 м — это высоты
+    над землёй. Выше таких уровней у прогноза нет: ветер берётся с барических уровней
+    (${WX_PRESSURE[0]}…${WX_PRESSURE[WX_PRESSURE.length - 1]} гПа), а их высота над землёй
+    пересчитывается по геопотенциалу в КАЖДОМ часе — уровень «плавает» на десятки метров,
+    поэтому подпись «на 850 м» от часа к часу меняется. Берём только уровни в пределах высоты
+    полёта и худший из них: низколетящий квад не бракуется ветром на 180 метрах. Барические
+    уровни есть не у каждой точки — если их нет, экран пишет, до какой высоты прогноз есть,
+    и считает окна по ней. Порывы прогноз даёт только у земли.</p>
 
     <div class="h2">Как складывается окно</div>
     <p class="small">Окно — это подряд идущие часы без вердикта «не стоит», ночные тоже.
@@ -5595,7 +5732,10 @@ function wxDay(json, dayIdx, maxW, altM) {
   const H = json.hourly;
   const date = (json.daily.time || [])[dayIdx];
   if (!date) return null;
-  const levels = wxLevels(altM);
+  // Барические уровни разбираем ТОЛЬКО когда высота полёта выше 200 м:
+  // для обычного борта путь ровно прежний и лишней работы на семь чипов
+  // дней (7 × 24 часа) нет.
+  const aloft = altM > WX_ALT_SURF ? numOrNull(json.elevation) : null;
   const sunrise = json.daily.sunrise[dayIdx];
   const sunset = json.daily.sunset[dayIdx];
   const riseH = parseInt(sunrise.slice(11, 13), 10);
@@ -5609,14 +5749,17 @@ function wxDay(json, dayIdx, maxW, altM) {
     if (!H.time[i].startsWith(date)) continue;
     const hh = parseInt(H.time[i].slice(11, 13), 10);
     const at = (key) => num((H[key] || [])[i]);
-    const lvl = levels.map((l) => at('wind_speed_' + l + 'm')).filter((v) => v != null);
+    const all = wxHourLevels(H, i, aloft);
+    const above = wxPickLevels(all, altM).filter((l) => l.m > 10);
     const hr = {
       hh,
       light: hh >= riseH && hh <= setH,
       temp: at('temperature_2m'),
       w10: at('wind_speed_10m'),
       gust: at('wind_gusts_10m'),
-      alt: lvl.length ? Math.max(...lvl) : at('wind_speed_10m'),
+      alt: above.length ? Math.max(...above.map((l) => l.v)) : at('wind_speed_10m'),
+      top: above.length ? above[above.length - 1].m : 0, // докуда СЧИТАЛИ в этом часе
+      cap: all.length ? all[all.length - 1].m : 0,       // докуда вообще ЕСТЬ прогноз
       prec: at('precipitation'),
       pp: at('precipitation_probability') || 0,
       code: at('weather_code'),
@@ -5639,11 +5782,33 @@ function wxDay(json, dayIdx, maxW, altM) {
     } else if (run) { windows.push(run); run = null; }
   });
   if (run) windows.push(run);
+  // Высота барического уровня меняется от часа к часу, поэтому на день
+  // отдаём диапазон, а не одно число: подпись «на 850 м» честная только
+  // в пределах часа.
+  const tops = hours.map((x) => x.top).filter(Boolean);
+  const caps = hours.map((x) => x.cap).filter(Boolean);
   return {
     date, hours, windows,
-    topLevel: levels.length ? levels[levels.length - 1] : 0,
+    asked: altM,
+    top: tops.length ? { min: Math.min(...tops), max: Math.max(...tops) } : null,
+    cap: caps.length ? { min: Math.min(...caps), max: Math.max(...caps) } : null,
+    thin: hours.filter((x) => x.cap && x.cap < altM).length, // часы, где прогноз не достаёт
     sunrise: sunrise.slice(11, 16), sunset: sunset.slice(11, 16),
   };
+}
+
+// Адрес запроса погоды — отдельной чистой функцией: её проверяет тест
+// без похода в сеть (какие переменные уходят и что координаты огрублены).
+// ПРИВАТНОСТЬ: наружу уходят координаты, огрублённые до ~1 км (2 знака).
+// Сетка прогнозных моделей всё равно крупнее — на точность окон это
+// не влияет, а точное место (дом, точка взлёта) не уходит.
+function wxUrl(lat, lon) {
+  lat = +(+lat).toFixed(2);
+  lon = +(+lon).toFixed(2);
+  return WX_API + '?latitude=' + lat + '&longitude=' + lon +
+    '&hourly=' + WX_HOURLY.join(',') +
+    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) +
+    '&forecast_days=' + WX_DAYS;
 }
 
 async function wxLoad() {
@@ -5672,14 +5837,7 @@ async function wxLoad() {
     }
     lat = s.lat; lon = s.lon; place = s.name;
   }
-  // Приватность: наружу уходят координаты, огрублённые до ~1 км
-  // (2 знака). Сетка прогнозных моделей всё равно крупнее — на точность
-  // окон это не влияет, а точное место (дом, точка взлёта) не уходит.
-  lat = +(+lat).toFixed(2);
-  lon = +(+lon).toFixed(2);
-  const url = WX_API + '?latitude=' + lat + '&longitude=' + lon +
-    '&hourly=temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_speed_80m,wind_speed_120m,wind_speed_180m,weather_code' +
-    '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=' + encodeURIComponent(WX_TZ) + '&forecast_days=' + WX_DAYS;
+  const url = wxUrl(lat, lon);
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -5832,7 +5990,8 @@ function wxHourCardHtml(day, hr, lim) {
       </div>
       <div class="kv">
         <div><span class="k">У земли</span><span class="v">${wxNum(hr.w10)} м/с</span></div>
-        <div><span class="k">${day.topLevel ? `На ${day.topLevel} м` : 'На высоте'}</span><span class="v">${day.topLevel ? wxNum(hr.alt) + ' м/с' : 'как у земли'}</span></div>
+        <div><span class="k">${hr.top ? `На ${hr.top} м` : 'На высоте'}</span><span class="v">${hr.top ? wxNum(hr.alt) + ' м/с' : 'как у земли'}${
+          hr.cap && hr.cap < day.asked ? ` <span style="color:var(--warn)">выше ${hr.cap} м нет данных</span>` : ''}</span></div>
         <div><span class="k">Порывы</span><span class="v">до ${wxNum(hr.gust)} м/с</span></div>
         <div><span class="k">Осадки</span><span class="v">${hr.pp} %${hr.prec > 0 ? ` · ${wxMm(hr.prec)} мм` : ''}</span></div>
       </div>
@@ -5979,7 +6138,7 @@ function wxHeroHtml(a, compact) {
   else if (day.windows.length) { title = 'Окна на сегодня прошли'; cls = 'muted'; }
   else { title = 'Сегодня лучше не лететь'; cls = 'warn'; }
   const hr = day.hours.find((x) => x.hh === now) || day.hours[0];
-  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${day.topLevel ? ` · ${wxNum(hr.alt)} на ${day.topLevel} м` : ''} · порывы до ${wxNum(hr.gust)}`;
+  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${hr.top ? ` · ${wxNum(hr.alt)} на ${hr.top} м` : ''} · порывы до ${wxNum(hr.gust)}`;
   const stale = Date.now() - (+c.fetched || 0) > WX_STALE_MS
     ? ' · <span style="color:var(--warn)">устарел</span>' : '';
   const sub = compact ? windNow + stale
@@ -6013,7 +6172,7 @@ function wxRowHtml() {
   return `<div class="card flat">` +
     rowBtn('data-nav="#/weather"', `<span class="grow"><span class="t">Окна для полётов
       <span class="badge online">online</span></span>
-      <span class="d wrap">Ветер до 200 м и осадки по вашей локации</span></span>`, 'weather') + '</div>';
+      <span class="d wrap">Ветер у земли и на высоте, осадки по вашей локации</span></span>`, 'weather') + '</div>';
 }
 
 function viewWeather() {
@@ -6069,6 +6228,22 @@ function viewWeather() {
       emptyLabel: '— выберите —', pre: [['gps', 'Моё местоположение (GPS)']],
     }), wx.siteId, 'data-change="weather-site"'),
     sitesWithCoords.length ? '' : 'У локаций пока нет координат — выберите «+ Добавить локацию…»');
+  // Высота полёта: временное переопределение экрана — как выбор АКБ
+  // выше. Меню, а не select: тридцать значений в нативном списке
+  // на телефоне прокручиваются вслепую, а «По карточке борта» надо
+  // показать первым и целиком.
+  const altPick = wxAltPick();
+  h += field('Высота полёта', `<button type="button" class="pill wx-alt" data-act="wx-alt-menu"
+      data-alt="${altPick || ''}" aria-haspopup="menu" aria-expanded="false">
+      <span>${altPick ? 'до ' + altPick + ' м' : 'По карточке борта · ' + lim.altOwn + ' м'}</span>${ICONS.chev}</button>
+    <div class="menu menu-grid" popover="manual" id="wx-alt-menu" role="menu" aria-label="Высота полёта" hidden>
+      <button class="menu-head" role="menuitemradio" data-act="wx-alt-set" data-alt=""
+        aria-checked="${!altPick}">По карточке борта · ${lim.altOwn} м</button>
+      ${Array.from({ length: WX_ALT_MAX / WX_ALT_STEP }, (_, i) => (i + 1) * WX_ALT_STEP)
+        .map((m) => `<button role="menuitemradio" data-act="wx-alt-set" data-alt="${m}"
+          aria-checked="${altPick === m}">${m}</button>`).join('')}
+    </div>`,
+    'Действует только на этом экране. Выше 200 м ветер берётся с барических уровней — они есть не у каждой точки');
   // День — чипами (2.0): точка на чипе — лучший вердикт дня из кэша,
   // без данных чипы просто выбирают дату для запроса.
   h += field('Дата', wxDayChipsHtml(lim));
@@ -6100,13 +6275,30 @@ function viewWeather() {
           весь день ветер выше <span class="nowrap">${lim.maxW} м/с</span> или осадки.</div>`;
       }
 
+      // Честность о высоте: выше 200 м прогноз есть не всегда, и пропуск
+      // НЕ считается штилём — экран говорит, докуда данные есть.
+      if (lim.alt > WX_ALT_SURF) {
+        const aloft = wxAloftState(wx.data.json);
+        if (aloft === 'no-keys') {
+          h += `<div class="banner warn">Сохранённый прогноз снят без данных выше ${WX_ALT_SURF} м.
+            Нажмите «Показать прогноз» — окна пересчитаются на выбранную высоту.</div>`;
+        } else if (aloft === 'no-data') {
+          h += `<div class="banner warn">Для этой точки прогноз есть только до ${WX_ALT_SURF} м:
+            у модели нет барических уровней. Окна посчитаны по ветру до ${WX_ALT_SURF} м, выше может быть сильнее.</div>`;
+        } else if (day.thin && day.cap) {
+          h += `<div class="banner warn">Выше ${day.cap.min} м прогноза для этой точки нет.
+            Окна посчитаны по ветру до ${day.cap.min} м${day.thin < day.hours.length ? ` · в ${day.thin} ч из ${day.hours.length} данных нет выше` : ''}.</div>`;
+        }
+      }
+
       // Полоска дня с выбором часа; под ней — восход/закат и порог.
       const hour = wxSelectedHour(day);
       h += `<div class="card wx-strip-card">
         ${wxStripHtml(day, hour, true)}
         <div class="xs dim wx-strip-sub">восход ${day.sunrise} · закат ${day.sunset} ·
           ${lim.name ? '«' + esc(lim.name) + '» держит' : 'порог'} <span class="nowrap">${lim.est && lim.name ? '≈' : 'до '}${lim.maxW} м/с</span> ·
-          <span class="nowrap">до ${lim.alt} м</span> · ночь не запрещает, но снижает порог</div>
+          <span class="nowrap">до ${lim.alt} м${lim.pick ? ' (выбрано)' : ''}</span>${
+            day.cap && day.cap.min < day.asked ? ` · <span class="nowrap">прогноз до ${day.cap.min} м</span>` : ''} · ночь не запрещает, но снижает порог</div>
       </div>`;
 
       const hr = day.hours.find((x) => x.hh === hour) || day.hours[0];
@@ -6117,7 +6309,7 @@ function viewWeather() {
       // на главный вопрос, список нужен для сверки.
       h += `<details class="fold wx-fold"><summary>Все часы <span class="cnt muted small">24</span></summary><div class="fold-body">
         <p class="small muted" style="margin:0 0 8px">Полоска — сколько «съедено» от допустимого ветра
-        борта: берём худшее из ветра у земли${day.topLevel ? `, ветра на высоте (${day.topLevel} м)` : ''}
+        борта: берём худшее из ветра у земли${day.top ? `, ветра на высоте (${wxTopText(day)})` : ''}
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;
       h += '<div class="card flat">';
       h += day.hours.map((hr) => {
@@ -6133,8 +6325,8 @@ function viewWeather() {
             <div class="gauge"><i style="width:${Math.round(load * 100 / 1.15)}%;background:${col}"></i></div>
             <span class="chip ${chipCls}">${WX_WORDS[hr.verdict]}</span>
           </div>
-          <div class="wxr-sub">ветер у земли ${wxNum(hr.w10)} м/с${day.topLevel
-            ? ` · на высоте ${wxNum(hr.alt)}` : ''} · порывы до ${wxNum(hr.gust)} · ${wxNum(hr.temp)}°${rain}${marks}</div>
+          <div class="wxr-sub">ветер у земли ${wxNum(hr.w10)} м/с${hr.top
+            ? ` · на высоте ${wxNum(hr.alt)}${day.top && day.top.min !== day.top.max ? ` (${hr.top} м)` : ''}` : ''} · порывы до ${wxNum(hr.gust)} · ${wxNum(hr.temp)}°${rain}${marks}</div>
         </div>`;
       }).join('');
       h += '</div></div></details>';
@@ -7095,6 +7287,24 @@ const ACTIONS = {
 
   /* --- Погода --- */
   'photo-zoom': (el) => pvZoom(+el.dataset.d, 0, 0),
+  // Меню высоты открывается тем же toggleMenu, что и меню журнала;
+  // выбранное значение подкручиваем в видимую часть — значений тридцать.
+  'wx-alt-menu': (el) => {
+    toggleMenu(el, 'wx-alt-menu');
+    const m = $('#wx-alt-menu');
+    const cur = m && menuOpen(m) && m.querySelector('[aria-checked="true"]');
+    if (cur) m.scrollTop = Math.max(0, cur.offsetTop - m.clientHeight / 2);
+  },
+  // Временный выбор высоты — как переопределение АКБ: карточка борта
+  // не меняется (решение владельца 2026-09-10). Чтобы выбор сохранялся
+  // в карточку, достаточно дописать сюда put('aircraft', …).
+  'wx-alt-set': (el) => {
+    const v = +el.dataset.alt;
+    UI.wx.alt = el.dataset.alt === '' || !(v >= WX_ALT_STEP && v <= WX_ALT_MAX)
+      ? null : Math.round(v / WX_ALT_STEP) * WX_ALT_STEP;
+    closeMenus();
+    render(true);
+  },
   'wx-help': () => openModal('Как считается окно', wxHelpHtml()),
   // Превью Windy прямо на странице (embed-виджет; iframe через DOM —
   // сборка сторожит литерал как офлайн-ресурс, а это online по кнопке).
@@ -7291,7 +7501,7 @@ function openModelForm(a, presetId, saved, cloneId) {
       'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${numVal(a.maxWind)}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
-      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="200" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 200')}
+      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 3000')}
     </div>
     <div class="grid2">
       ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
@@ -7872,7 +8082,7 @@ const FORMS = {
     }
     a.maxWind = +String(fd.get('maxWind')).replace(',', '.') || null;
     const maxAlt = +fd.get('maxAlt');
-    a.maxAlt = maxAlt ? Math.min(200, Math.max(10, maxAlt)) : null;
+    a.maxAlt = maxAlt ? Math.min(WX_ALT_MAX, Math.max(10, maxAlt)) : null;
     const svcEvery = Math.round(+fd.get('svcEvery'));
     a.svcEvery = svcEvery > 0 ? Math.min(999, svcEvery) : null;
     const svcEveryMin = Math.round(+fd.get('svcEveryMin'));
@@ -8364,8 +8574,8 @@ function paint(keepScroll, toTop) {
   // «Окон»), data-day (чипы дней): без него активный элемент после
   // Enter уходил на body (ревью пакета 5).
   const fAct = focused && focused.dataset && focused.dataset.act;
-  const focusAct = fAct === 'ck-set' ? 'ck-menu' : fAct;
-  const focusKey = focusAct && ['i', 'h', 'day'].find((k) => focused.dataset[k] != null);
+  const focusAct = fAct === 'ck-set' ? 'ck-menu' : fAct === 'wx-alt-set' ? 'wx-alt-menu' : fAct;
+  const focusKey = focusAct && ['i', 'h', 'day', 'alt'].find((k) => focused.dataset[k] != null);
   const focusSel = focusKey
     ? `[data-act="${focusAct}"][data-${focusKey}="${focused.dataset[focusKey]}"]` : null;
 
@@ -8564,6 +8774,7 @@ document.addEventListener('change', (e) => {
     // АКБ, привязанная к модели, подставляется сама (можно переопределить)
     const wa = S.aircraft.find((x) => x.id === el.value);
     UI.wx.batteryId = (armedBattery(wa) || {}).id || '';
+    UI.wx.alt = null; // высота — тоже переопределение экрана, у нового борта своя
     render(true);
   } else if (kind === 'weather-batt') {
     UI.wx.batteryId = el.value;
