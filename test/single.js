@@ -121,7 +121,13 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   // 4б. Карточка борта: сегменты и версия прошивки компонента
   await page.click('[data-act="model-tab"][data-tab="components"]');
   await page.waitForSelector('[data-act="edit-comp"][data-key="fc"]');
-  ok((await page.locator('[data-act="edit-comp"]').count()) === 10, 'сегмент «Компоненты»: все строки, АКБ — информационная');
+  ok((await page.locator('[data-act="edit-comp"]').count()) === 11,
+    'сегмент «Компоненты» крыла: все строки, АКБ — информационная');
+  ok((await page.locator('[data-act="edit-comp"][data-key="pitot"]').count()) === 1 &&
+     (await page.locator('[data-act="edit-comp"][data-key="pak"]').count()) === 1,
+    'у крыла есть слоты «Трубка Пито» и «ПАК»');
+  ok((await page.locator('[data-act="edit-comp"][data-key="tx"]').count()) === 0,
+    'убранного слота «Передатчик» на чистом борте нет');
   await page.click('[data-act="edit-comp"][data-key="fc"]');
   await page.fill('dialog input[name="name"]', 'Matek F405');
   await page.fill('dialog input[name="fw"]', 'INAV 7.1');

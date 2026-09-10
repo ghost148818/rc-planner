@@ -289,6 +289,29 @@ async function run(browser, tag, opts) {
   }
   await shot('model-plane', '#/model/a2');
 
+  // Слоты оборудования зависят от типа борта (2.1): трубка Пито и ПАК —
+  // только у самолёта и крыла, убранного «Передатчика» нет ни у кого.
+  const compKeys = async (id) => {
+    await nav(page, '#/model/' + id);
+    await page.click('[data-act="model-tab"][data-tab="components"]');
+    await page.waitForSelector('.model-tabs [data-tab="components"][aria-pressed="true"]');
+    return page.evaluate(() => [...document.querySelectorAll('[data-act="edit-comp"]')].map((b) => b.dataset.key));
+  };
+  const quadKeys = await compKeys('a1');
+  ok(!quadKeys.includes('pitot') && !quadKeys.includes('pak'),
+    `${tag}: у квада нет слотов «Трубка Пито» и «ПАК»`);
+  ok(quadKeys.length === 9, `${tag}: у квада девять строк компонентов (${quadKeys.length})`);
+  const planeKeys = await compKeys('a2');
+  ok(planeKeys.includes('pitot') && planeKeys.includes('pak'),
+    `${tag}: у самолёта есть «Трубка Пито» и «ПАК»`);
+  ok(planeKeys.length === 11, `${tag}: у самолёта одиннадцать строк компонентов (${planeKeys.length})`);
+  ok(!quadKeys.includes('tx') && !planeKeys.includes('tx'),
+    `${tag}: убранного слота «Передатчик» нет ни у квада, ни у самолёта`);
+  await shot('model-plane-components', '#/model/a2', async (p) => {
+    await p.click('[data-act="model-tab"][data-tab="components"]');
+    await p.waitForSelector('.model-tabs [data-tab="components"][aria-pressed="true"]');
+  });
+
   // --- Полёт, выбор борта, чек-лист ---
   await shot('flight', '#/flight');
   ok(await has('[data-act="start-prep"]'), `${tag}: на «Полёте» есть «Начать полёт»`);

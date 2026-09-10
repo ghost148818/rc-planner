@@ -332,6 +332,62 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(await page.evaluate(() => UI.view === 'weather' && document.getElementById('views').innerHTML.length > 100), '«Окна» отрисованы после порчи кэша');
   ok(errors.length === 0, 'после проб 8–10 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
 
+  // Проба двенадцатая: убранный слот «Передатчик» (заменён на «ПАК» в 2.1).
+  // Запись пользователя не прячем и не переписываем: строка есть у того
+  // борта, где в слоте что-то лежит, и её нет у соседа того же типа.
+  // Плюс components не объектом — validateBackup проверяет только id.
+  await page.evaluate(async () => {
+    await window.RCDB.put('aircraft', { id: 'tx-old', name: 'Борт со старым TX', type: 'plane',
+      components: { tx: { name: 'RadioMaster TX16S', fw: '', notes: '' } } });
+    await window.RCDB.put('aircraft', { id: 'tx-none', name: 'Борт без TX', type: 'plane', components: {} });
+    await window.RCDB.put('aircraft', { id: 'tx-junk', name: 'Борт с мусором', type: 'plane', components: 'строка' });
+    await window.loadAll();
+  });
+  const compsOn = async (id) => {
+    await page.evaluate((h) => { location.hash = h; }, '#/model/' + id);
+    await page.waitForTimeout(80);
+    await page.click('[data-act="model-tab"][data-tab="components"]');
+    await page.waitForTimeout(150);
+    return page.evaluate(() => ({
+      keys: [...document.querySelectorAll('[data-act="edit-comp"]')].map((b) => b.dataset.key),
+      text: document.getElementById('views').textContent,
+    }));
+  };
+  const txOld = await compsOn('tx-old');
+  ok(txOld.keys.includes('tx') && txOld.text.includes('RadioMaster TX16S'),
+    'старая запись «Передатчик» видна на своём борту');
+  ok(!(await compsOn('tx-none')).keys.includes('tx'),
+    'у соседа того же типа строки «Передатчик» нет');
+  ok((await compsOn('tx-junk')).keys.length === 11,
+    'components не объектом не роняет сегмент «Компоненты»');
+  // Падало не на отрисовке, а на записи: в strict mode присваивание
+  // свойства строке бросает TypeError — компонент не сохранялся молча.
+  await page.click('[data-act="edit-comp"][data-key="motor"]');
+  await page.waitForSelector('dialog form[data-form="comp"]');
+  await page.fill('dialog input[name="name"]', 'Мотор после мусора');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  ok(await page.evaluate(() => {
+    const a = S.aircraft.find((x) => x.id === 'tx-junk');
+    return a.components && typeof a.components === 'object' && a.components.motor.name === 'Мотор после мусора';
+  }), 'компонент сохраняется, даже если components из копии пришли строкой');
+
+  // Очищенный слот уходит со строки сам — на этом держится вся затея
+  // с сохранением старых записей.
+  await page.evaluate((h) => { location.hash = h; }, '#/model/tx-old');
+  await page.waitForTimeout(80);
+  await page.click('[data-act="model-tab"][data-tab="components"]');
+  await page.waitForTimeout(150);
+  await page.click('[data-act="edit-comp"][data-key="tx"]');
+  await page.waitForSelector('dialog form[data-form="comp"]');
+  await page.fill('dialog input[name="name"]', '');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  ok((await page.locator('[data-act="edit-comp"][data-key="tx"]').count()) === 0,
+    'очищенное старое поле «Передатчик» уходит со строки само');
+  ok(await page.evaluate(() => !('tx' in S.aircraft.find((x) => x.id === 'tx-old').components)),
+    'пустая запись компонента не остаётся в базе');
+
   // Проба одиннадцатая: свой шаблон чек-листа из копии. Пункты не массивом
   // роняли «Шаблоны» (t.items.length), форму шаблона и смену шаблона на
   // чек-листе; ключ прототипа в типе показывал исходник функции, как в

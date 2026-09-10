@@ -1530,12 +1530,40 @@ function openMoveModal(a) {
   openModal(`«${esc(a.name)}» — в группу`, h);
 }
 
+/* Слоты оборудования: [ключ, подпись, опции]. Опции: types — типы бортов,
+   которым слот положен (нет опций — положен всем; ПУСТОЙ список — слот
+   убран, но подпись сохранена ради старых записей); hint — подсказка под
+   полем «Название / модель».
+
+   Правило показа — compSlots: слот виден, если положен типу борта ИЛИ
+   в нём у ЭТОГО борта уже что-то записано. Второе условие обязательно:
+   приложение опубликовано, и у чужих бортов в слоте «Передатчик» лежат
+   настоящие записи — их не прячем, не переносим и не переписываем.
+   Тот же приём, что у легаси-заметки АКБ в compBatteryRow.
+
+   Типы пишем литералами, без TYPES: test/checks.js исполняет этот блок
+   в песочнице и сверяет по нему ключи пресетов — блок самодостаточен. */
 const COMPONENTS = [
   ['motor', 'Мотор'], ['esc', 'ESC'], ['fc', 'Полётный контроллер'],
   ['rx', 'Приёмник (RX)'], ['gps', 'GPS'], ['servo', 'Сервоприводы'],
   ['prop', 'Пропеллер'], ['vtx', 'VTX'], ['camera', 'Камера'],
-  ['tx', 'Передатчик'], ['battery', 'Аккумулятор'],
+  ['pitot', 'Трубка Пито', { types: ['plane', 'wing'],
+    hint: 'Датчик воздушной скорости: трубка, шланги, модуль давления' }],
+  ['pak', 'ПАК', { types: ['plane', 'wing'],
+    hint: 'Программно-аппаратный комплекс: модуль идентификации и трекинга' }],
+  ['tx', 'Передатчик (старое поле)', { types: [],
+    hint: 'Слот заменён на «ПАК». Перенесите запись и очистите поля — строка исчезнет.' }],
+  ['battery', 'Аккумулятор'],
 ];
+
+// Слоты этого борта. a.components из копии может быть чем угодно
+// (validateBackup проверяет только id): индексируем своими ключами,
+// поэтому строка или массив на месте объекта даёт undefined.
+function compSlots(a) {
+  const comps = (a && a.components) || {};
+  const filled = (k) => !!(comps[k] && (comps[k].name || comps[k].fw || comps[k].notes));
+  return COMPONENTS.filter(([key, , o]) => !o || o.types.includes(a && a.type) || filled(key));
+}
 
 // АКБ ставится только в ОДНУ модель: занятые другими исчезают из выбора.
 function battOwner(bId) {
@@ -1786,7 +1814,7 @@ function modelOverviewHtml(a) {
 
   // Заполненные компоненты (с версией прошивки); пустые — за «Добавить»
   const comps = a.components || {};
-  const filled = COMPONENTS.filter(([key]) => key !== 'battery' && comps[key] && comps[key].name);
+  const filled = compSlots(a).filter(([key]) => key !== 'battery' && comps[key] && comps[key].name);
   h += `<div class="h2">Компоненты${filled.length ? ` <span class="cnt">${filled.length}</span>` : ''}</div><div class="card flat">`;
   h += filled.map(([key, label]) => compRow(a, key, label, comps[key])).join('');
   h += rowBtn('data-act="model-tab" data-tab="components"',
@@ -1827,12 +1855,12 @@ function modelOverviewHtml(a) {
   return h;
 }
 
-// Компоненты: все строки, АКБ — информационная.
+// Компоненты: строки по типу борта, АКБ — информационная.
 function modelComponentsHtml(a) {
   const comps = a.components || {};
-  return '<div class="card flat">' + COMPONENTS.map(([key, label]) =>
+  return '<div class="card flat">' + compSlots(a).map(([key, label]) =>
     key === 'battery' ? compBatteryRow(a) : compRow(a, key, label, comps[key])).join('') +
-    '</div><p class="small muted" style="margin-top:8px">У компонента есть поле «Версия прошивки» — она видна в «Обзоре».</p>';
+    '</div><p class="small muted" style="margin-top:8px">Состав зависит от типа борта: у самолёта и крыла есть «Трубка Пито» и «ПАК». У компонента есть поле «Версия прошивки» — она видна в «Обзоре».</p>';
 }
 
 // Обслуживание: открытые работы, «Добавить запись», история закрытых.
@@ -2488,7 +2516,7 @@ function viewPack() {
 // лёгкие парусят, тяжёлые пробивают ветер; большой long-range квад
 // (диагональ > 300 мм) инертнее и тяговооружён слабее фристайла.
 // Шкала рассчитана на опытных пилотов (решение владельца, 2026-08-24).
-// Калибровка по парку владельца (2026-08-25): Talon Pro + 6S3P ≈ 18,
+// Калибровка по парку владельца (2026-08-25): Talon + 6S3P ≈ 18,
 // X8 ≈ 20, T2 + 6S2P ≈ 18, 5″ + 6S 1450 ≈ 20, 10″ + 6S 8000 ≈ 18.
 function wxEstimate(a, battWeight) {
   let w = { quad: 20, plane: 16, wing: 18, other: 16 }[a.type] || WX_DEFAULT_WIND;
@@ -3715,9 +3743,13 @@ const ACTIONS = {
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     const key = el.dataset.key;
     const c = (a.components || {})[key] || {};
-    const label = (COMPONENTS.find((x) => x[0] === key) || [])[1] || key;
+    // Подпись и подсказка — из ПОЛНОГО справочника, а не из списка типа:
+    // у убранного слота своя подпись, и форма обязана открыться и для него.
+    const slot = COMPONENTS.find((x) => x[0] === key) || [];
+    const label = slot[1] || key;
+    const hint = (slot[2] && slot[2].hint) || '';
     openModal(label, `<form data-form="comp" data-id="${a.id}" data-key="${key}">
-      ${field('Название / модель', `<input type="text" name="name" value="${esc(c.name || '')}" placeholder="напр. T-Motor F60 2550KV">`)}
+      ${field('Название / модель', `<input type="text" name="name" value="${esc(c.name || '')}" placeholder="напр. T-Motor F60 2550KV">`, hint)}
       ${field('Версия прошивки', `<input type="text" name="fw" value="${esc(c.fw || '')}" placeholder="напр. 4.5.1">`, 'Показывается в «Обзоре» рядом с компонентом')}
       ${field('Заметки', `<textarea name="notes" placeholder="настройки, особенности, дата установки">${esc(c.notes || '')}</textarea>`)}
       <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -4739,12 +4771,18 @@ const FORMS = {
   comp: async (form) => {
     const a = S.aircraft.find((x) => x.id === form.dataset.id);
     const fd = new FormData(form);
-    a.components = a.components || {};
-    a.components[form.dataset.key] = {
+    const c = {
       name: fd.get('name').trim(),
       fw: (fd.get('fw') || '').trim(), // версия прошивки компонента (2.0)
       notes: fd.get('notes').trim(),
     };
+    // components из копии проверяет только validateBackup (там лишь id):
+    // строка на месте объекта роняла запись в strict mode.
+    a.components = a.components && typeof a.components === 'object' ? a.components : {};
+    // Пустая запись ключ не занимает: очищенный убранный слот («Передатчик»)
+    // уходит со строки насовсем, а не остаётся объектом из пустых строк.
+    if (c.name || c.fw || c.notes) a.components[form.dataset.key] = c;
+    else delete a.components[form.dataset.key];
     await put('aircraft', a);
     closeModal();
     render();

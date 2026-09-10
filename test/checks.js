@@ -33,6 +33,30 @@ for (const c of RC.CHECKLISTS) {
   ok(c.items.every((i) => i.t && typeof i.t === 'string'), `пункты «${c.name}» непустые`);
 }
 
+console.log('Слоты оборудования:');
+// Литерал COMPONENTS из app.js исполняем в песочнице — он самодостаточен
+// (типы бортов записаны литералами). Так проверка видит настоящие ключи
+// и типы, а не разбор регуляркой.
+const appSrc = read('app.js');
+const compBlock = (appSrc.match(/const COMPONENTS = \[[\s\S]*?\n\];/) || [])[0];
+ok(!!compBlock, 'блок COMPONENTS найден в app.js');
+const cbox = {};
+vm.createContext(cbox);
+vm.runInContext(compBlock + '\nthis.OUT = COMPONENTS;', cbox, { filename: 'app.js:COMPONENTS' });
+const SLOTS = cbox.OUT;
+const slotTypes = new Map(SLOTS.map(([k, , o]) => [k, o ? o.types : null]));
+ok(SLOTS.every(([, label]) => label && label.trim()), 'у каждого слота есть подпись');
+ok(new Set(SLOTS.map(([k]) => k)).size === SLOTS.length, 'ключи слотов уникальны');
+for (const k of ['pitot', 'pak']) {
+  const t = slotTypes.get(k) || null;
+  ok(Array.isArray(t) && t.includes('plane') && t.includes('wing'), `слот ${k} есть у самолёта и крыла`);
+  ok(Array.isArray(t) && !t.includes('quad') && !t.includes('other'), `слот ${k} не показывается кваду и «другому»`);
+}
+// Убранный «Передатчик» остаётся в справочнике ради подписи, но ни одному
+// типу не положен: он виден только борту, где запись уже есть.
+ok(Array.isArray(slotTypes.get('tx')) && slotTypes.get('tx').length === 0,
+  'слот «Передатчик» убран из всех типов, подпись сохранена для старых записей');
+
 console.log('Готовые платформы:');
 ok(Array.isArray(RC.AIRCRAFT_PRESETS) && RC.AIRCRAFT_PRESETS.length >= 3, 'есть готовые платформы');
 const presetIds = new Set();
@@ -44,6 +68,11 @@ for (const p of RC.AIRCRAFT_PRESETS) {
   ok(p.maxWind >= 6 && p.maxWind <= 30, `«${p.name}»: порог ветра в разумных пределах`);
   ok(p.maxAlt >= 10 && p.maxAlt <= 200, `«${p.name}»: высота полёта до 200 м`);
   ok(p.components && Object.values(p.components).every((c) => c && c.name), `«${p.name}»: компоненты заполнены`);
+  for (const k of Object.keys(p.components || {})) {
+    ok(slotTypes.has(k), `«${p.name}»: слот ${k} есть в COMPONENTS`);
+    const t = slotTypes.get(k);
+    ok(!t || t.includes(p.type), `«${p.name}»: слот ${k} положен типу ${p.type}`);
+  }
   ok(!presetIds.has(p.id), `«${p.id}» уникален`);
   presetIds.add(p.id);
 }
