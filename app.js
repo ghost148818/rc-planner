@@ -1849,7 +1849,10 @@ function modelOverviewHtml(a) {
 
   h += `<hr class="sep">
     <div class="btn-line">
+      <button class="btn" data-act="clone-model" data-id="${a.id}">Копия борта</button>
       <button class="btn" data-act="export-model" data-id="${a.id}">Экспорт борта</button>
+    </div>
+    <div class="btn-line">
       <button class="btn btn-danger" data-act="del-model" data-id="${a.id}">Удалить</button>
     </div>`;
   return h;
@@ -3706,11 +3709,41 @@ const ACTIONS = {
     openModal('Новый борт', `<div class="card flat">` +
       rowBtn('data-act="model-empty"',
         `<span class="grow"><span class="t">Пустой борт</span><span class="d">Заполню сам</span></span>`) +
+      (S.aircraft.length ? rowBtn('data-act="clone-pick"',
+        `<span class="grow"><span class="t">Копия имеющегося борта</span>
+        <span class="d">Те же ТТХ и комплектация, без фото и истории</span></span>`, 'paste') : '') +
       RC.AIRCRAFT_PRESETS.map((p, i) => rowBtn(`data-act="model-preset" data-i="${i}"`,
         `<span class="grow"><span class="t">${esc(p.name)}</span><span class="d">${esc(p.desc)}</span></span>`,
         ICONS[p.type] ? p.type : 'plane')).join('') +
       `</div><p class="small muted" style="margin-top:8px">Готовые платформы приходят с заводскими ТТХ
       и типовой комплектацией — всё можно поменять в карточке.</p>`);
+  },
+  // Выбор образца для копии. Строки БЕЗ превью фото: окно в приложении
+  // одно, и просмотр фото закрыл бы этот же список.
+  'clone-pick': () => {
+    openModal('Копия борта', `<p class="small muted">ТТХ и комплектация перейдут в новый борт.
+      Фото, аккумулятор, заметки, регламент и история — нет.</p><div class="card flat">` +
+      S.aircraft.map((a) => rowBtn(`data-act="clone-model" data-id="${esc(a.id)}"`,
+        `<span class="grow"><span class="t">${esc(a.name)}</span>
+        <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}</span></span>`,
+        ICONS[a.type] ? a.type : 'plane')).join('') + '</div>');
+  },
+  // Копия борта: форма предзаполнена полями образца, комплектацию
+  // протаскивает data-clone (полем формы она не является — как и у
+  // пресетов). НЕ копируем (решение владельца 2026-09-10): фото,
+  // аккумулятор (одна АКБ — один борт), заметки, регламент осмотра,
+  // группу флота, пометку «подготовлен», статус и всю историю —
+  // у нового id полётов, работ и прогонов просто нет. Конфигурации
+  // копируются вместе с бортом, в FORMS.model.
+  'clone-model': (el) => {
+    const src = S.aircraft.find((x) => x.id === el.dataset.id);
+    if (!src) return;
+    closeModal();
+    openModelForm({
+      name: cloneName(src.name), type: src.type, manufacturer: src.manufacturer,
+      weight: src.weight, wingspan: src.wingspan,
+      maxWind: src.maxWind, maxAlt: src.maxAlt,
+    }, null, null, src.id);
   },
   'model-empty': () => { closeModal(); openModelForm(null); },
   'model-preset': (el) => {
@@ -4315,12 +4348,16 @@ function typePicker(current) {
 
 // saved — значения формы, если её прервали ради «+ Добавить АКБ…»
 // (фото через стэш не переживает — единственное поле-файл).
-function openModelForm(a, presetId, saved) {
+function openModelForm(a, presetId, saved, cloneId) {
   const isNew = !a || !a.id;
   a = a || { type: 'quad' };
   if (saved) a = Object.assign({}, a, saved);
-  const title = a.id ? 'Изменить борт' : presetId ? 'Новый борт · проверьте ТТХ' : 'Новый борт';
-  openModal(title, `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''} ${presetId ? `data-preset="${presetId}"` : ''}>
+  // Заголовок уходит в <h2> БЕЗ esc() (openModal) — только литералы,
+  // имя образца в него не попадает.
+  const title = a.id ? 'Изменить борт'
+    : cloneId ? 'Копия борта · проверьте поля'
+    : presetId ? 'Новый борт · проверьте ТТХ' : 'Новый борт';
+  openModal(title, `<form data-form="model" ${a.id ? `data-id="${a.id}"` : ''} ${presetId ? `data-preset="${presetId}"` : ''} ${cloneId ? `data-clone="${esc(cloneId)}"` : ''}>
     ${field('Название', `<input type="text" name="name" required value="${esc(a.name || '')}" placeholder="напр. Mini Talon">`)}
     ${field('Тип', typePicker(a.type))}
     <div class="grid2">
@@ -4342,7 +4379,9 @@ function openModelForm(a, presetId, saved) {
     </div>
     <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
       Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>
-    ${field('Фото', `<input type="file" name="photo" accept="image/*">`, a.photo ? 'Фото уже есть — новое заменит его' : '')}
+    ${field('Фото', `<input type="file" name="photo" accept="image/*">`,
+      a.photo ? 'Фото уже есть — новое заменит его'
+        : cloneId ? 'Фото образца не копируется — снимите новое' : '')}
     ${field('Заметки', `<textarea name="notes">${esc(a.notes || '')}</textarea>`)}
     <button class="btn btn-primary" type="submit">${isNew ? 'Добавить' : 'Сохранить'}</button>
   </form>`);
@@ -4724,14 +4763,48 @@ async function afterNested(what, id) {
   return false;
 }
 
+// Имя копии: «Apex 5″» → «Apex 5″ (2)»; копия копии — «(3)», а не
+// «Apex 5″ (2) (2)». Свободный номер ищется по всему флоту, сравнение
+// без регистра и краевых пробелов — иначе вторая копия того же борта
+// заводила бы второй «(2)».
+function cloneName(name) {
+  const base = String(name || 'Борт').replace(/\s*\(\d+\)\s*$/, '').trim() || 'Борт';
+  const taken = new Set(S.aircraft.map((x) => String(x.name || '').trim().toLowerCase()));
+  for (let n = 2; n <= 99; n++) {
+    const cand = base + ' (' + n + ')';
+    if (!taken.has(cand.toLowerCase())) return cand;
+  }
+  return base + ' (копия)';
+}
+
+// Комплектация нового борта — от образца или от готовой платформы.
+// Копия ГЛУБОКАЯ: клон правит свои компоненты, образец цел. Берём только
+// собственные ключи и только три строковых поля: запись из чужой копии
+// произвольна, а ключи прототипа в этом проекте уже дважды протаскивали
+// в разметку исходник функции. Нет комплектации — пустой словарь.
+function copyComponents(srcObj) {
+  const out = {};
+  const c = srcObj && srcObj.components;
+  if (!c || typeof c !== 'object') return out;
+  for (const k of Object.keys(c)) {
+    const v = c[k];
+    if (v && typeof v === 'object') {
+      out[k] = { name: String(v.name || ''), fw: String(v.fw || ''), notes: String(v.notes || '') };
+    }
+  }
+  return out;
+}
+
 const FORMS = {
   model: async (form) => {
     const fd = new FormData(form);
     const id = form.dataset.id;
     const preset = RC.AIRCRAFT_PRESETS.find((p) => p.id === form.dataset.preset);
+    // Копия борта: комплектация приходит от образца, а не от платформы.
+    const src = form.dataset.clone ? S.aircraft.find((x) => x.id === form.dataset.clone) : null;
     const a = id ? S.aircraft.find((x) => x.id === id) : {
       id: uid(), statusManual: '', createdAt: Date.now(),
-      components: preset ? JSON.parse(JSON.stringify(preset.components)) : {},
+      components: copyComponents(src || preset),
     };
     a.name = fd.get('name').trim();
     a.type = fd.get('type');
@@ -4764,6 +4837,13 @@ const FORMS = {
     const photo = fd.get('photo');
     if (photo && photo.size) { a.photo = photo; dropPhotoURL(a.id); }
     await put('aircraft', a);
+    // Конфигурации копии — своими записями: тот же файл и текст, новые
+    // id и владелец. Полёты, работы и прогоны не копируются никогда.
+    if (!id && src) {
+      for (const c of S.configs.filter((x) => x.aircraftId === src.id)) {
+        await put('configs', Object.assign({}, c, { id: uid(), aircraftId: a.id, createdAt: Date.now() }));
+      }
+    }
     closeModal();
     if (!id) UI.justCreated = a.id; // баннер «что дальше» на карточке
     go('#/model/' + a.id);
@@ -5356,6 +5436,7 @@ document.addEventListener('change', (e) => {
       const form = el.closest('form');
       const orig = form.dataset.id ? S.aircraft.find((x) => x.id === form.dataset.id) : null;
       const preset = form.dataset.preset || null;
+      const clone = form.dataset.clone || null; // копия борта: образец не терять
       const values = Object.fromEntries(new FormData(form));
       delete values.photo;
       // отмена диалога АКБ возвращает ПОСЛЕДНИЙ выбор в форме
@@ -5363,7 +5444,7 @@ document.addEventListener('change', (e) => {
       values.batteryId = el.dataset.prev || (orig && orig.batteryId) || '';
       UI.modalReturn = {
         field: 'batteryId',
-        reopen: (patch) => openModelForm(orig, preset, Object.assign({}, values, patch)),
+        reopen: (patch) => openModelForm(orig, preset, Object.assign({}, values, patch), clone),
       };
       openBattPicker();
       return;

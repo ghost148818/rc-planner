@@ -388,6 +388,29 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(await page.evaluate(() => !('tx' in S.aircraft.find((x) => x.id === 'tx-old').components)),
     'пустая запись компонента не остаётся в базе');
 
+  // Проба тринадцатая: комплектация копии из чужой резервной копии.
+  // validateBackup проверяет только id, поэтому значения произвольны:
+  // копия обязана получить только строки, а мусор не тащить. Мелкая
+  // копия (components образца как есть) протащила бы объект и число.
+  await page.evaluate(async () => {
+    await window.RCDB.put('aircraft', { id: 'clone-src', name: 'Образец с мусором', type: 'plane',
+      components: { motor: { name: { bad: 1 }, fw: 5, notes: null }, prop: 'строка' } });
+    await window.loadAll();
+    location.hash = '#/model/clone-src';
+  });
+  await page.waitForTimeout(150);
+  await page.click('[data-act="clone-model"]');
+  await page.waitForSelector('dialog form[data-form="model"][data-clone]');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => {
+    const c = S.aircraft.find((a) => a.id !== 'clone-src' && String(a.name).startsWith('Образец с мусором'));
+    if (!c || !c.components) return false;
+    const m = c.components.motor || {};
+    return typeof m.name === 'string' && typeof m.fw === 'string' && typeof m.notes === 'string'
+      && !('prop' in c.components);
+  }), 'комплектация копии приведена к строкам, мусор не протащен');
+
   // Проба одиннадцатая: свой шаблон чек-листа из копии. Пункты не массивом
   // роняли «Шаблоны» (t.items.length), форму шаблона и смену шаблона на
   // чек-листе; ключ прототипа в типе показывал исходник функции, как в

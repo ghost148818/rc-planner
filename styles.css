@@ -328,6 +328,8 @@ button.row:active, a.row:active { background: var(--card-2); }
   margin-top: 2px;
 }
 .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+/* Второй ряд кнопок: деструктивное действие стоит отдельно от остальных. */
+.btn-line + .btn-line { margin-top: 8px; }
 
 /* ---------- Формы ---------- */
 .field { margin-bottom: 12px; }

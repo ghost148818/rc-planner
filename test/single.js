@@ -140,6 +140,69 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.waitForSelector('[data-act="session-info"]');
   ok(true, 'сегмент «История» показывает полёт борта');
 
+  // 4в. Копия борта: те же ТТХ и комплектация, без АКБ, фото и истории
+  await page.click('[data-act="model-tab"][data-tab="overview"]');
+  await page.waitForSelector('[data-act="clone-model"]');
+  await page.click('[data-act="clone-model"]');
+  await page.waitForSelector('dialog form[data-form="model"][data-clone]');
+  ok((await page.inputValue('dialog input[name="name"]')) === 'Test Wing (2)',
+    'имя копии — «Test Wing (2)»');
+  ok((await page.inputValue('dialog select[name="batteryId"]')) === '',
+    'в форме копии аккумулятор не выбран');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForFunction(() => {
+    const h = document.querySelector('.head h1');
+    return h && h.textContent === 'Test Wing (2)';
+  });
+  const cl = await page.evaluate(() => {
+    const src = S.aircraft.find((a) => a.name === 'Test Wing');
+    const c = S.aircraft.find((a) => a.name === 'Test Wing (2)');
+    return {
+      sep: c.id !== src.id, type: c.type === src.type, span: c.wingspan === src.wingspan,
+      fc: (c.components.fc || {}).name, fw: (c.components.fc || {}).fw,
+      batt: c.batteryId || null, photo: !!c.photo, prepared: !!c.prepared,
+      notes: c.notes || '', svc: c.svcEvery || null,
+      hist: S.sessions.filter((s) => s.aircraftId === c.id).length
+          + S.maintenance.filter((m) => m.aircraftId === c.id).length
+          + S.runs.filter((r) => r.aircraftId === c.id).length,
+      srcHist: S.sessions.filter((s) => s.aircraftId === src.id).length,
+      srcBatt: src.batteryId || null,
+    };
+  });
+  ok(cl.sep && cl.type && cl.span, 'копия — отдельная запись с теми же ТТХ');
+  ok(cl.fc === 'Matek F405' && cl.fw === 'INAV 7.1', 'комплектация с версией прошивки скопирована');
+  ok(cl.batt === null && !!cl.srcBatt, 'аккумулятор не копируется, у образца остался');
+  ok(!cl.photo && !cl.prepared && !cl.notes, 'фото, пометка «подготовлен» и заметки не копируются');
+  ok(cl.hist === 0 && cl.srcHist === 1, 'история копии пуста, у образца цела');
+
+  // Копия глубокая: правка компонента копии не трогает образец
+  await page.click('[data-act="model-tab"][data-tab="components"]');
+  await page.waitForSelector('[data-act="edit-comp"][data-key="fc"]');
+  await page.click('[data-act="edit-comp"][data-key="fc"]');
+  await page.fill('dialog input[name="name"]', 'Speedybee F405');
+  await page.click('dialog button[type="submit"]');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  ok(await page.evaluate(() => S.aircraft.find((a) => a.name === 'Test Wing').components.fc.name === 'Matek F405'),
+    'правка компонента копии не тронула образец');
+
+  // Копия копии — «(3)», а не «Test Wing (2) (2)»
+  await page.click('[data-act="model-tab"][data-tab="overview"]');
+  await page.waitForSelector('[data-act="clone-model"]');
+  await page.click('[data-act="clone-model"]');
+  await page.waitForSelector('dialog form[data-form="model"][data-clone]');
+  ok((await page.inputValue('dialog input[name="name"]')) === 'Test Wing (3)',
+    'копия копии — «Test Wing (3)»');
+
+  // Образец не теряется, если по дороге завели новую АКБ
+  await page.selectOption('dialog select[name="batteryId"]', '__new');
+  await page.waitForSelector('dialog [data-act="batt-empty"]');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog form[data-form="model"]');
+  ok((await page.locator('dialog form[data-form="model"][data-clone]').count()) === 1,
+    'после захода в форму АКБ копия помнит образец');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog', { state: 'detached' });
+
   // 5. Перезагрузка — данные на месте (IndexedDB)
   await page.reload();
   await page.waitForSelector('#tabbar .tab');
@@ -179,7 +242,7 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await download.saveAs(backupFile);
   const backup = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
   ok(backup.format === 'rcplanner' && backup.version === 1, 'файл экспорта в формате rcplanner v1');
-  ok(backup.data.aircraft.length === 1 && backup.data.sessions.length === 1, 'в экспорте модель и полёт');
+  ok(backup.data.aircraft.length === 2 && backup.data.sessions.length === 1, 'в экспорте борт, его копия и полёт');
 
   // 7. Стирание
   await page.click('[data-act="wipe-all"]');
