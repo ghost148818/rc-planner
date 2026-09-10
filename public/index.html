@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-zg6izk1b7nxh7vxKpASx/pYDuyIXL88wtwFOpIcKKGE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-WTcsS8vrSlxiYPgFzHevL6KdvPMugfNXHfhuVGFVWFE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#14181e">
-  <meta name="build" content="c797c9c7b4">
+  <meta name="build" content="23a2a5db0a">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1324,6 +1324,67 @@ select.sel-sm {
 .help .fold-body .banner { margin-top: 4px; }
 .help .fold-body .card.flat { margin-bottom: 10px; }
 
+/* ---------- Просмотр фото во весь экран ----------
+   Тот же dialog, что у остальных окон (Esc, тап по фону, body.locked и
+   снятие узла по transitionend уже работают), но лист развёрнут на весь
+   экран: фото рассматривают, а не читают под ним подпись. Фон чёрный
+   в обеих темах — так снимок виден честно. */
+dialog.photo {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  border-radius: 0;
+  background: #000;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 700px) { dialog.photo { margin: 0; border-radius: 0; } }
+/* Шапка окна впервые дотягивается до выреза экрана. */
+dialog.photo .dlg-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+dialog.photo .dlg-close { color: #fff; }
+dialog.photo .dlg-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 calc(8px + env(safe-area-inset-bottom));
+  overflow: hidden; /* прокрутки нет: снимок двигаем сами */
+}
+.pv { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pv-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none; /* жесты разбираем сами, иначе браузер уводит их в прокрутку */
+  cursor: grab;
+}
+/* width/height: auto — рамка картинки СОВПАДАЕТ с самим снимком (а не
+   с коробкой, как при object-fit): на этом держится ограничение
+   панорамы в pvApply. */
+.pv-img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+.pv-bar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; }
+.pv-scale { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; color: var(--mut); }
+.pv-cap { text-align: center; padding: 0 16px 6px; margin: 0; }
+.thumb.tap { cursor: zoom-in; }
+.thumb.tap:active { opacity: 0.75; }
+.thumb-btn { flex: none; display: block; border-radius: 14px; cursor: zoom-in; }
+.thumb-btn:active { opacity: 0.85; }
+
 </style>
 </head>
 <body>
@@ -2341,6 +2402,8 @@ RC.CHANGELOG = [
       'Копия борта: кнопка «Копия борта» в «Обзоре» карточки и пункт в окне «Новый борт». ТТХ, комплектация и файлы конфигураций переезжают в новый борт.',
       'Копия не наследует фото, аккумулятор, заметки, регламент осмотра и историю: АКБ ставится ровно в один борт, а налёт у нового борта свой.',
       'Имя копии — «Название (2)», копия копии станет «(3)». Всё можно поправить в форме до создания.',
+      'Тап по снимку разворачивает фото во весь экран: фото борта на «Сегодня», во «Флоте» и в карточке, фото повреждения в работах и в истории.',
+      'В просмотре увеличивают кнопки «−» и «+», двойной тап и щипок двумя пальцами; увеличенное фото двигается пальцем. Закрыть — крестик, Esc или тап мимо.',
     ],
   },
   {
@@ -2577,6 +2640,8 @@ RC.HELP = {
         'Вкладка «Флот» — два списка: «Борта» и «Аккумуляторы». Новый борт — кнопка «Добавить»: пустой или готовая платформа с заводскими характеристиками, которые можно поправить в форме. Новый аккумулятор заводится так же: пустой или готовая сборка.',
         { h: 'Карточка борта' },
         'Наверху — статус, аккумулятор с чипом заряда, три плитки (полётов, налёт, последний полёт), полоска регламента и кнопка «Чек-лист и полёт». Ниже сегменты: «Обзор» (паспорт, компоненты, открытые работы, конфигурации, заметки, экспорт и удаление), «Компоненты» (мотор, ESC, полётный контроллер, приёмник, GPS, сервоприводы, пропеллер, VTX, камера, а у самолёта и крыла ещё трубка Пито и ПАК; у каждого — название, версия прошивки и заметки), «Обслуживание», «История» (все полёты борта).',
+        { h: 'Фото во весь экран' },
+        'Тап по снимку разворачивает его во весь экран — так видно повреждение или разъём. Работает везде, где есть фото: борт на «Сегодня», во «Флоте» и в карточке, фото повреждения в открытой работе и в истории обслуживания. В просмотре увеличивают кнопки «−» и «+», двойной тап и щипок двумя пальцами; увеличенное фото двигается пальцем. Закрыть — крестик, Esc или тап мимо.',
         { h: 'Копия борта' },
         'Несколько бортов одной сборки заводятся копией: кнопка «Копия борта» в «Обзоре» карточки или пункт «Копия имеющегося борта» в окне «Новый борт». В новый борт переезжают ТТХ, комплектация и файлы конфигураций; фото, аккумулятор, заметки, регламент осмотра и вся история — нет. Имя предлагается как «Название (2)», всё можно поправить в форме до создания.',
         { h: 'Оборудование по типу борта' },
@@ -3832,20 +3897,38 @@ function confirmModal(text, act, dataAttrs, btnLabel) {
     </div>`);
 }
 
-// lg — крупное превью 72 px (герой на «Сегодня»).
+// Снимок борта. lg — крупное превью 72 px (герои «Сегодня» и карточки).
+// Тап по снимку разворачивает фото на весь экран, тап по остальной
+// строке ведёт как прежде. Крупное превью стоит в свободном месте — там
+// это настоящая кнопка, и фото достижимо с клавиатуры. Мелкое в четырёх
+// местах из пяти лежит ВНУТРИ кнопки строки и кнопкой быть не может
+// (вложенных кнопок в HTML нет): его тап ловит перехватчик в делегате.
+// Новое место вызова с lg внутри кнопки заводить нельзя.
 function aircraftThumb(a, lg) {
   const u = photoURL(a);
   const cls = lg ? 'thumb lg' : 'thumb';
-  return u
-    ? `<img class="${cls}" src="${u}" alt="">`
-    : `<span class="${cls} ph">${ICONS[a.type] || ICONS.plane}</span>`;
+  if (!u) return `<span class="${cls} ph">${ICONS[a.type] || ICONS.plane}</span>`;
+  const img = `<img class="${cls}" src="${u}" alt="Фото борта: ${esc(a.name)}">`;
+  return lg
+    ? `<button class="thumb-btn" data-photo="aircraft" data-id="${esc(a.id)}" data-cap="${esc(a.name)}"
+        aria-label="Показать фото борта во весь экран">${img}</button>`
+    : `<img class="${cls} tap" src="${u}" alt="Фото борта: ${esc(a.name)}" title="Показать фото"
+        data-photo="aircraft" data-id="${esc(a.id)}" data-cap="${esc(a.name)}">`;
 }
 
 // Фото повреждения к записи обслуживания. Кэш object URL общий с фото
-// бортов — id записей уникальны на всё хранилище.
-function maintThumb(m) {
+// бортов — id записей уникальны на всё хранилище. btn — превью стоит
+// в свободном месте (открытые работы) и может быть кнопкой; в истории
+// работ оно внутри rowBtn, там работает только перехватчик.
+function maintThumb(m, btn) {
   const u = photoURL(m);
-  return u ? `<img class="thumb" src="${u}" alt="">` : '';
+  if (!u) return '';
+  const alt = `Фото повреждения: ${esc(m.title)}`;
+  return btn
+    ? `<button class="thumb-btn" data-photo="maintenance" data-id="${esc(m.id)}" data-cap="${esc(m.title)}"
+        aria-label="Показать фото повреждения во весь экран"><img class="thumb" src="${u}" alt="${alt}"></button>`
+    : `<img class="thumb tap" src="${u}" alt="${alt}" title="Показать фото"
+        data-photo="maintenance" data-id="${esc(m.id)}" data-cap="${esc(m.title)}">`;
 }
 
 /* ============================================================
@@ -4615,7 +4698,7 @@ function compBatteryRow(a) {
 // следующий очевидный шаг.
 function maintOpenRows(list) {
   return list.map((m) => `<div class="row">
-    ${maintThumb(m)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:var(--seg)">
+    ${maintThumb(m, true)}<button class="grow" data-act="edit-maint" data-id="${m.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(m.title)}</span>
       <span class="d">${MAINT_KINDS[m.kind] || ''} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></button>
     <button class="btn btn-sm" data-act="maint-done" data-id="${m.id}">Выполнено</button>
@@ -7011,6 +7094,7 @@ const ACTIONS = {
   },
 
   /* --- Погода --- */
+  'photo-zoom': (el) => pvZoom(+el.dataset.d, 0, 0),
   'wx-help': () => openModal('Как считается окно', wxHelpHtml()),
   // Превью Windy прямо на странице (embed-виджет; iframe через DOM —
   // сборка сторожит литерал как офлайн-ресурс, а это online по кнопке).
@@ -7262,6 +7346,130 @@ function mapX2lon(x, z) { return x / Math.pow(2, z) * 360 - 180; }
 function mapY2lat(y, z) {
   const n = Math.PI - 2 * Math.PI * y / Math.pow(2, z);
   return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+/* ---------- Просмотр фото во весь экран ----------
+   Object URL берётся из общего кэша PHOTO_URLS и при закрытии НЕ
+   отзывается: та же ссылка держит миниатюру на экране под окном, и
+   отозванную кэш продолжал бы отдавать. Отзыв остаётся ровно там, где
+   был, — dropPhotoURL при замене и удалении записи и полная чистка
+   в wipe-all-yes и doImport. */
+const PV = { scale: 1, x: 0, y: 0 };
+const PV_STEPS = [1, 2, 3, 5];
+const PV_MAX = 8;
+
+function openPhotoView(store, id, caption) {
+  const rec = (store === 'maintenance' ? S.maintenance : S.aircraft).find((x) => x.id === id);
+  const u = rec && photoURL(rec);
+  if (!u) return; // запись или фото успели убрать — молча ничего
+  PV.scale = 1; PV.x = 0; PV.y = 0;
+  // Заголовок уходит в <h2> БЕЗ esc() (openModal) — только литерал;
+  // название борта живёт в подписи под фото и экранируется.
+  openModal('Фото', `<div class="pv">
+      <div class="pv-view"><img class="pv-img" src="${u}" alt="${esc(caption || '')}" draggable="false"></div>
+      ${caption ? `<p class="small muted pv-cap">${esc(caption)}</p>` : ''}
+      <div class="pv-bar">
+        <button class="btn btn-sm" data-act="photo-zoom" data-d="-1" aria-label="Уменьшить">${ICONS.minus}</button>
+        <span class="pv-scale" aria-live="polite">100%</span>
+        <button class="btn btn-sm" data-act="photo-zoom" data-d="1" aria-label="Увеличить">${ICONS.plus}</button>
+      </div>
+    </div>`);
+  const d = $('#modal-root dialog');
+  d.classList.add('photo');
+  wirePhotoView($('.pv-view', d));
+}
+
+// Применение состояния. Панорама ограничена рамкой: увести снимок за
+// край и «потерять» его нельзя. На 1× смещение всегда обнуляется.
+function pvApply() {
+  const img = $('#modal-root .pv-img');
+  if (!img) return;
+  const view = img.parentElement;
+  const mx = Math.max(0, (img.clientWidth * PV.scale - view.clientWidth) / 2);
+  const my = Math.max(0, (img.clientHeight * PV.scale - view.clientHeight) / 2);
+  PV.x = Math.min(mx, Math.max(-mx, PV.x));
+  PV.y = Math.min(my, Math.max(-my, PV.y));
+  img.style.transform = `translate(${PV.x}px, ${PV.y}px) scale(${PV.scale})`;
+  const s = $('#modal-root .pv-scale');
+  if (s) s.textContent = Math.round(PV.scale * 100) + '%';
+}
+
+// Ступень вверх или вниз от ЛЮБОГО текущего масштаба: после щипка на
+// 4.3× «+» даёт 5, а не откатывает к 2.
+function pvZoom(dir, cx, cy) {
+  const next = dir > 0
+    ? (PV_STEPS.find((s) => s > PV.scale + 0.01) || PV_MAX)
+    : (PV_STEPS.slice().reverse().find((s) => s < PV.scale - 0.01) || 1);
+  pvSetScale(next, cx, cy);
+}
+
+// Точка (cx, cy) — от ЦЕНТРА рамки; она остаётся под пальцем.
+function pvSetScale(next, cx, cy) {
+  const k = next / PV.scale;
+  PV.x = (cx || 0) - k * ((cx || 0) - PV.x);
+  PV.y = (cy || 0) - k * ((cy || 0) - PV.y);
+  PV.scale = next;
+  if (next <= 1) { PV.scale = 1; PV.x = 0; PV.y = 0; }
+  pvApply();
+}
+
+// Панорама одним пальцем и щипок двумя — одной моделью: середина между
+// касаниями остаётся под пальцами, k — во сколько раз развели пальцы
+// (для одного пальца k = 1, получается чистый сдвиг). Координаты — от
+// центра рамки; прямоугольник берётся на pointerdown и не пересчитывается.
+// Схема та же, что у перетаскивания мини-карты (порог тапа 6 px).
+function wirePhotoView(view) {
+  if (!view) return;
+  const pts = new Map();
+  let st = null, lastTap = 0;
+  const mid = (r) => {
+    const a = [...pts.values()];
+    const p = (q) => ({ x: q.x - r.left - r.width / 2, y: q.y - r.top - r.height / 2 });
+    if (!a.length) return { x: 0, y: 0, d: 0 };
+    if (a.length < 2) return Object.assign(p(a[0]), { d: 0 });
+    const u = p(a[0]), v = p(a[1]);
+    return { x: (u.x + v.x) / 2, y: (u.y + v.y) / 2, d: Math.hypot(u.x - v.x, u.y - v.y) };
+  };
+  const grab = (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Синтетический pointerId (тесты) захвату не поддаётся — ронять
+    // страницу из-за этого нельзя: набор ловит любую ошибку консоли.
+    try { view.setPointerCapture(e.pointerId); } catch (err) {}
+    const r = view.getBoundingClientRect();
+    const m = mid(r);
+    st = { r, x: m.x, y: m.y, d: m.d, px: PV.x, py: PV.y, s: PV.scale, moved: false };
+  };
+  view.addEventListener('pointerdown', grab);
+  view.addEventListener('pointermove', (e) => {
+    if (!st || !pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const m = mid(st.r);
+    if (Math.abs(m.x - st.x) + Math.abs(m.y - st.y) > 6) st.moved = true;
+    const pinch = pts.size > 1 && st.d > 10;
+    const k = pinch ? Math.min(PV_MAX, Math.max(1, st.s * (m.d / st.d))) / st.s : 1;
+    PV.scale = st.s * k;
+    PV.x = m.x - k * (st.x - st.px);
+    PV.y = m.y - k * (st.y - st.py);
+    pvApply();
+  });
+  const end = (e) => {
+    if (!st) return;
+    const solo = pts.size === 1;
+    const p = { x: st.x, y: st.y };
+    pts.delete(e.pointerId);
+    if (solo && !st.moved) {
+      // Двойной тап: 1× ⇄ 2× вокруг точки касания.
+      const now = Date.now();
+      if (now - lastTap < 300) { pvSetScale(PV.scale > 1 ? 1 : 2, p.x, p.y); lastTap = 0; }
+      else lastTap = now;
+    }
+    if (!pts.size) { st = null; return; }
+    const r = view.getBoundingClientRect();
+    const m = mid(r);
+    st = { r, x: m.x, y: m.y, d: m.d, px: PV.x, py: PV.y, s: PV.scale, moved: true };
+  };
+  view.addEventListener('pointerup', end);
+  view.addEventListener('pointercancel', end);
 }
 
 function openMapPicker(box, form) {
@@ -8236,6 +8444,17 @@ document.addEventListener('click', (e) => {
   // кнопке «⋯» ведёт в toggleMenu, тап по пункту — ниже, через data-act.
   const inMenu = e.target.closest('.menu');
   if (!inMenu && !e.target.closest('[aria-haspopup="menu"]')) closeMenus();
+  // Снимок в строке лежит ВНУТРИ кнопки строки (data-nav ведёт в карточку
+  // борта, data-act — в форму работы): перехватываем до неё, иначе тап по
+  // фото уводил бы с экрана. Кнопкой снимок там сделать нельзя — вложенных
+  // кнопок в HTML нет; крупное превью в героях кнопкой быть может, у него
+  // data-photo висит на самой кнопке, и путь тот же.
+  const ph = e.target.closest('[data-photo]');
+  if (ph) {
+    e.preventDefault();
+    openPhotoView(ph.dataset.photo, ph.dataset.id, ph.dataset.cap || '');
+    return;
+  }
   const nav = e.target.closest('[data-nav]');
   if (nav) { e.preventDefault(); go(nav.dataset.nav); return; }
   const act = e.target.closest('[data-act]');

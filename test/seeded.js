@@ -87,6 +87,24 @@ async function seed(page) {
     st.pilot = 'Пилот'; st.weatherCache = wx; st.favTools = ['betaflight-app', 'elrs-web-flasher'];
     st.lastBackupAt = now - 20 * day;
     await put('settings', st);
+    // Фото для просмотра во весь экран: рисуем canvas'ом — посев остаётся
+    // офлайн и не тянет файлов. Кадры НЕ квадратные: вписывание в рамку
+    // и ограничение панорамы иначе не проверить.
+    const shot = (w, h, bg, text) => new Promise((res) => {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const g = c.getContext('2d');
+      g.fillStyle = bg; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#fff'; g.font = 'bold 120px sans-serif'; g.textBaseline = 'middle';
+      g.fillText(text, 60, h / 2);
+      c.toBlob(res, 'image/png');
+    });
+    const a1rec = await window.RCDB.get('aircraft', 'a1');
+    a1rec.photo = await shot(1200, 800, '#2b6cb0', 'APEX');
+    await put('aircraft', a1rec);
+    const m2rec = await window.RCDB.get('maintenance', 'm2');
+    m2rec.photo = await shot(900, 1200, '#9b2c2c', 'DMG');
+    await put('maintenance', m2rec);
     localStorage.setItem('rcp.hi', '1');
     await window.loadAll();
   }, fakeForecast());
@@ -311,6 +329,74 @@ async function run(browser, tag, opts) {
     await p.click('[data-act="model-tab"][data-tab="components"]');
     await p.waitForSelector('.model-tabs [data-tab="components"][aria-pressed="true"]');
   });
+
+  // --- Фото во весь экран ---
+  await nav(page, '#/model/a1');
+  await page.click('.model-hero [data-photo="aircraft"]');
+  await page.waitForSelector('dialog.photo[open] .pv-img');
+  ok(await page.evaluate(() => {
+    const d = document.querySelector('dialog.photo');
+    return Math.abs(d.getBoundingClientRect().height - window.innerHeight) < 2;
+  }), `${tag}: просмотр фото — на весь экран, а не лист на 92 %`);
+  ok(await page.evaluate(() => {
+    const img = document.querySelector('.pv-img'), v = img.parentElement;
+    const r = img.getBoundingClientRect(), b = v.getBoundingClientRect();
+    return r.width <= b.width + 1 && r.height <= b.height + 1 && r.width > b.width * 0.5;
+  }), `${tag}: снимок вписан в рамку целиком`);
+  ok(await page.evaluate(() => {
+    const t = document.querySelector('#views img.thumb, #views .thumb-btn img');
+    return !t || t.src === document.querySelector('.pv-img').src;
+  }), `${tag}: просмотр берёт ссылку из общего кэша, нового URL не создаёт`);
+  await checkScreen(page, tag, 'photo-view', opts.viewport, !!opts.gloves);
+  await page.screenshot({ path: path.join(OUT, `${tag}-photo-view.png`) });
+
+  await page.click('[data-act="photo-zoom"][data-d="1"]');
+  await page.waitForFunction(() => /scale\(2\)/.test(document.querySelector('.pv-img').style.transform));
+  ok((await page.textContent('.pv-scale')) === '200%', `${tag}: «+» увеличивает вдвое, масштаб подписан`);
+  await page.click('[data-act="photo-zoom"][data-d="-1"]');
+  await page.waitForFunction(() => {
+    const t = document.querySelector('.pv-img').style.transform;
+    return /scale\(1\)/.test(t) && /translate\(0px, 0px\)/.test(t);
+  });
+  ok(true, `${tag}: «−» возвращает 100 % и сбрасывает панораму`);
+
+  // Щипок двумя пальцами идёт теми же pointer-обработчиками
+  const pinched = await page.evaluate(() => {
+    const v = document.querySelector('.pv-view'), r = v.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const ev = (t, id, x, y) => v.dispatchEvent(new PointerEvent(t, {
+      pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+    ev('pointerdown', 1, cx - 40, cy); ev('pointerdown', 2, cx + 40, cy);
+    ev('pointermove', 1, cx - 120, cy); ev('pointermove', 2, cx + 120, cy);
+    ev('pointerup', 1, cx - 120, cy); ev('pointerup', 2, cx + 120, cy);
+    return document.querySelector('.pv-img').style.transform;
+  });
+  ok(/scale\((?:[2-9]|1\.[5-9])/.test(pinched), `${tag}: щипок двумя пальцами увеличивает фото (${pinched})`);
+
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog', { state: 'detached' });
+  ok(!(await page.evaluate(() => document.body.classList.contains('locked'))),
+    `${tag}: Esc закрывает просмотр и снимает замок страницы`);
+
+  // Тап по снимку в строке «Флота» открывает просмотр, а не карточку борта
+  await nav(page, '#/fleet');
+  await page.click('.fleet-row img[data-photo="aircraft"]');
+  await page.waitForSelector('dialog.photo[open]');
+  ok((await page.evaluate(() => location.hash)) === '#/fleet',
+    `${tag}: тап по снимку в строке не уводит в карточку борта`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog', { state: 'detached' });
+
+  // Снимок повреждения в истории работ лежит внутри кнопки записи
+  await nav(page, '#/model/a1');
+  await page.click('[data-act="model-tab"][data-tab="maint"]');
+  await page.waitForSelector('img[data-photo="maintenance"]');
+  await page.click('img[data-photo="maintenance"]');
+  await page.waitForSelector('dialog.photo[open] .pv-img');
+  ok((await page.locator('dialog form[data-form="maint"]').count()) === 0,
+    `${tag}: снимок в истории работ открывает просмотр, а не форму записи`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog', { state: 'detached' });
 
   // --- Полёт, выбор борта, чек-лист ---
   await shot('flight', '#/flight');
