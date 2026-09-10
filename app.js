@@ -4940,11 +4940,26 @@ function openSiteForm(s, showMap) {
   }
 }
 
-// Оценка веса пакета (г) по химии, банкам и ёмкости — типовая удельная
-// энергия с проводами. Всегда правится вручную в форме.
+/* Химия аккумуляторов — ЕДИНСТВЕННЫЙ источник: из него строится и селект
+   формы, и оценка веса, и инвариант в test/checks.js. Второе число —
+   типовая удельная энергия пакета с проводами (Вт·ч/кг).
+
+   LiHV — тот же LiPo, заряжаемый до 4.35 В на банку (владелец, 10 сен):
+   по массе от LiPo не отличается, разница в напряжении, а напряжение
+   приложение не считает вовсе. Порядок строк — порядок в селекте.
+
+   Список массивом, а не объектом: поиск идёт find'ом, и химия из чужой
+   резервной копии («constructor») не достаёт значение из прототипа. */
+const BATT_CHEM = [
+  ['LiPo', 145], ['LiHV', 145], ['Li-Ion', 220], ['LiFe', 110], ['NiMH', 75],
+];
+
+// Оценка веса пакета (г) по химии, банкам и ёмкости. Всегда правится
+// вручную в форме.
 function battEstimateWeight(chem, cells, capacity) {
   if (!cells || !capacity) return 0;
-  const dens = { LiPo: 145, 'Li-Ion': 220, LiFe: 110, NiMH: 75 }[chem] || 145;
+  const row = BATT_CHEM.find(([k]) => k === chem);
+  const dens = row ? row[1] : 145;
   const wh = capacity / 1000 * cells * 3.7;
   return Math.round(wh / dens * 1000 / 10) * 10;
 }
@@ -4976,7 +4991,7 @@ function openBattForm(b, presetId) {
   openModal(title, `<form data-form="batt" ${b.id ? `data-id="${b.id}"` : ''}>
     ${field('Метка', `<input type="text" name="label" required value="${esc(b.label || '')}" placeholder="напр. LiPo 4S #3">`)}
     <div class="grid2">
-      ${field('Химия', selectHtml('chem', [['LiPo', 'LiPo'], ['Li-Ion', 'Li-Ion'], ['LiFe', 'LiFe'], ['NiMH', 'NiMH']], b.chem))}
+      ${field('Химия', selectHtml('chem', BATT_CHEM.map(([k]) => [k, k]), b.chem))}
       ${field('Банки (S / P)', `<div style="display:flex;gap:8px;align-items:center">
         <input type="number" name="cells" min="1" max="14" value="${numVal(b.cells)}" placeholder="6" style="flex:1">
         <span class="muted">S ×</span>

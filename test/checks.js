@@ -73,7 +73,25 @@ ok(/WX_PRESSURE\.map/.test(hourlyBlock) && /WX_SURF\.map/.test(hourlyBlock),
   'переменные запроса погоды строятся из списков уровней');
 ok(!/wind_gusts_(?!10m)/.test(hourlyBlock), 'порывы запрашиваются только у земли (выше API их не отдаёт)');
 
+console.log('Химия аккумуляторов:');
+// Литерал BATT_CHEM из app.js исполняем в песочнице — из него же
+// строится селект формы и оценка веса, так что тест и приложение
+// не могут разойтись.
+const chemBlock = (appSrc.match(/const BATT_CHEM = \[[\s\S]*?\n\];/) || [])[0];
+ok(!!chemBlock, 'блок BATT_CHEM найден в app.js');
+const chbox = {};
+vm.createContext(chbox);
+vm.runInContext(chemBlock + '\nthis.OUT = BATT_CHEM;', chbox, { filename: 'app.js:BATT_CHEM' });
+const CHEMS = chbox.OUT.map(([k]) => k);
+for (const k of ['LiPo', 'LiHV', 'Li-Ion', 'LiFe', 'NiMH']) {
+  ok(CHEMS.includes(k), `химия ${k} есть в списке`);
+}
+ok(chbox.OUT.every(([k, d]) => k && d > 0), 'у каждой химии есть подпись и удельная энергия');
+ok(new Set(CHEMS).size === CHEMS.length, 'химии не повторяются');
+ok(/selectHtml\('chem', BATT_CHEM\.map/.test(appSrc), 'селект химии строится из BATT_CHEM, а не из своего литерала');
+
 console.log('Готовые платформы:');
+
 ok(Array.isArray(RC.AIRCRAFT_PRESETS) && RC.AIRCRAFT_PRESETS.length >= 3, 'есть готовые платформы');
 const presetIds = new Set();
 for (const p of RC.AIRCRAFT_PRESETS) {
@@ -99,7 +117,7 @@ ok(Array.isArray(RC.BATTERY_PRESETS) && RC.BATTERY_PRESETS.length >= 3, 'ест�
 const battIds = new Set();
 for (const b of RC.BATTERY_PRESETS) {
   ok(b.id && b.label && b.desc, `«${b.label || b.id}» описан`);
-  ok(['LiPo', 'Li-Ion', 'LiFe', 'NiMH'].includes(b.chem), `«${b.label}»: химия известна`);
+  ok(CHEMS.includes(b.chem), `«${b.label}»: химия известна`);
   ok(b.cells >= 1 && b.cells <= 14 && b.p >= 1 && b.p <= 10, `«${b.label}»: банки S/P правдоподобны`);
   ok(b.capacity > 100 && b.capacity <= 60000, `«${b.label}»: ёмкость правдоподобна`);
   ok(b.weight > 30 && b.weight <= 5000, `«${b.label}»: вес правдоподобен (${b.weight} г)`);

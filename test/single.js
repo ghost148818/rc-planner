@@ -71,6 +71,12 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   await page.waitForSelector('dialog input[name="label"]');
   const presetCap = await page.evaluate(() => String(RC.BATTERY_PRESETS[0].capacity));
   ok((await page.inputValue('dialog input[name="capacity"]')) === presetCap, 'готовая сборка заполнила форму');
+  // Химия из BATT_CHEM: LiHV выбирается (сообщение из эксплуатации 10 сен)
+  const chems = await page.$$eval('dialog select[name="chem"] option', (o) => o.map((x) => x.value));
+  ok(chems.join(',') === 'LiPo,LiHV,Li-Ion,LiFe,NiMH', 'в списке химии пять вариантов, включая LiHV (' + chems.join(', ') + ')');
+  await page.selectOption('dialog select[name="chem"]', 'LiHV');
+  ok((await page.inputValue('dialog select[name="chem"]')) === 'LiHV', 'LiHV выбирается в форме');
+  await page.selectOption('dialog select[name="chem"]', 'Li-Ion');
   await page.fill('dialog input[name="label"]', 'Test 6S');
   await page.click('dialog button[type="submit"]');
   // У новой АКБ состояния заряда нет (форма его не спрашивает): «Начать
