@@ -1,14 +1,14 @@
 {
   "name": "RC Planner",
   "short_name": "RC Planner",
-  "description": "Локальный офлайн-помощник авиамоделиста и FPV-пилота: модели, чек-листы, полёты, обслуживание.",
+  "description": "Локальный офлайн-помощник авиамоделиста и FPV-пилота: борта, чек-листы, полёты, обслуживание, погода.",
   "lang": "ru",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#14181e",
-  "theme_color": "#14181e",
+  "background_color": "#0b1017",
+  "theme_color": "#0b1017",
   "icons": [
     {
       "src": "icons/icon-192.png?v=f807a6a1",
@@ -25,6 +25,24 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Начать полёт",
+      "short_name": "Полёт",
+      "description": "Выбор борта и чек-лист",
+      "url": "./#/prep"
+    },
+    {
+      "name": "Журнал полётов",
+      "short_name": "Журнал",
+      "url": "./#/journal"
+    },
+    {
+      "name": "Окна для полётов",
+      "short_name": "Погода",
+      "url": "./#/weather"
     }
   ]
 }

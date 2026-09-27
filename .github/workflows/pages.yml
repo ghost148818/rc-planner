@@ -1,6 +1,7 @@
-# Выкладка на GitHub Pages: публикуется готовая сборка из public/
-# (та же папка, что у GitVerse Pages). Сборку в CI не повторяем:
-# public/ коммитится вместе с исходниками после npm run build.
+# Выкладка на GitHub Pages: сборка public/ (та же папка, что у GitVerse
+# Pages) повторяется здесь — так на сайт попадают и картинки из
+# assets/art, закоммиченные без пересборки. build.js зависимостей
+# не требует: npm install не нужен.
 # Включить один раз: Settings → Pages → Source: GitHub Actions.
 # Для ветки, отличной от main: Settings → Environments → github-pages →
 # Deployment branches — добавить правило для этой ветки.
@@ -28,6 +29,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node build.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

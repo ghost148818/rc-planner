@@ -32,11 +32,45 @@ const svgTime = fs.statSync(ICON_SRC).mtimeMs;
 for (const f of ICON_FILES) {
   const p = path.join(ICON_DIR, f);
   if (!fs.existsSync(p)) fail('нет иконки ' + f + ' — выполните: npm run icons');
-  if (fs.statSync(p).mtimeMs < svgTime) fail('иконка ' + f + ' старше app-icon.svg — выполните: npm run icons');
+  // В CI время файлов — момент checkout, а не правки: сверять нечего.
+  if (!process.env.CI && fs.statSync(p).mtimeMs < svgTime) fail('иконка ' + f + ' старше app-icon.svg — выполните: npm run icons');
 }
 
 // --- Источники ---
-const css = read('styles.css');
+// Стили — styles/NN-*.css по порядку номера; порядок слоёв задаёт
+// @layer в первом файле, поэтому склейка ничего не перемешивает.
+const CSS_FILES = fs.readdirSync(path.join(ROOT, 'styles')).filter((f) => /^\d\d-[\w-]+\.css$/.test(f)).sort();
+if (!CSS_FILES.length) fail('в styles/ нет стилей');
+const css = CSS_FILES.map((f) => '/* == styles/' + f + ' == */\n' + read('styles/' + f)).join('\n');
+
+// --- Картинки (assets/art) ---
+// Слоты — assets/art/slots.json: имя файла, вид и где используется.
+// Сборка берёт только СУЩЕСТВУЮЩИЕ файлы: для каждого — правило CSS,
+// копия в public/art/ и строка прекэша в sw.js. Нет файла — остаётся
+// запасной вид (процедурный фон, иконка). Офлайн-файл dist/ картинок
+// не получает: он один и без соседних файлов, пути art/… там мертвы.
+// Проверки размеров, форматов и безопасности SVG — test/art.js.
+const ART_DIR = path.join(ROOT, 'assets', 'art');
+const ART_SLOTS = JSON.parse(read('assets/art/slots.json')).slots;
+const artPresent = ART_SLOTS.filter((a) => fs.existsSync(path.join(ART_DIR, a.file)));
+const artUrl = (a) => 'url("art/' + a.file + '")';
+const artCss = artPresent.map((a) => {
+  const name = a.file.replace(/\.\w+$/, '');
+  const sel = '[data-art="' + name + '"]';
+  if (a.kind === 'var') return ':root{' + a.var + ':' + artUrl(a) + '}';
+  if (a.kind === 'img') {
+    return sel + '{--art-img:' + artUrl(a) + '}' + sel + '>svg{visibility:hidden}' +
+      '.welcome-art' + sel + '{display:block}.welcome-art' + sel + '+.welcome-ic{display:none}';
+  }
+  if (a.kind === 'mask') {
+    return '.empty-art' + sel + '{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;' +
+      'background:linear-gradient(135deg,var(--accent),var(--accent-2));' +
+      '-webkit-mask:' + artUrl(a) + ' center/contain no-repeat;mask:' + artUrl(a) + ' center/contain no-repeat}' +
+      '.empty-art' + sel + '>svg{display:none}';
+  }
+  fail('неизвестный вид слота ' + a.kind + ' у ' + a.file);
+  return '';
+}).join('\n');
 // Исходники приложения — src/NN-*.js, порядок задаёт номер в имени.
 // Это обычные скрипты (не ES-модули): у них общая глобальная область,
 // поэтому вклейка подряд ничего не меняет в поведении. Тот же список
@@ -91,8 +125,9 @@ const pwaHead = [
   '<link rel="icon" href="icons/icon.svg?v=' + iconsVer + '" type="image/svg+xml">',
 ].join('\n  ');
 
-const htmlPWA = replaceBlock(html, 'pwa', pwaHead);
-const htmlSingle = replaceBlock(html, 'pwa', '');
+const artBlock = artCss ? '<style>\n@layer art {\n' + artCss + '\n}\n</style>' : '';
+const htmlPWA = replaceBlock(replaceBlock(html, 'pwa', pwaHead), 'art', artBlock);
+const htmlSingle = replaceBlock(replaceBlock(html, 'pwa', ''), 'art', '');
 
 // --- Проверка внешних ссылок на ресурсы ---
 // Ссылки в каталоге инструментов (внутри JS-строк, открываются пользователем) —
@@ -144,7 +179,10 @@ const version = crypto.createHash('sha1')
 // __VERSION__ живёт в <meta>, не в скриптах — хэши после подстановки верны.
 const outPWA = htmlPWAHashed.replace(/__VERSION__/g, version);
 const outSingle = htmlSingleHashed.replace(/__VERSION__/g, version + '-single');
-const sw = read('pwa/sw.js').replace(/__VERSION__/g, version);
+const swSrc = read('pwa/sw.js');
+if (!swSrc.includes('/* __ART__ */')) fail('в pwa/sw.js нет метки /* __ART__ */ для прекэша картинок');
+const sw = swSrc.replace(/__VERSION__/g, version)
+  .replace('/* __ART__ */', artPresent.map((a) => "'./art/" + a.file + "',").join('\n  '));
 
 // --- Запись public/ ---
 const PUB = path.join(ROOT, 'public');
@@ -157,6 +195,10 @@ fs.writeFileSync(path.join(PUB, '.nojekyll'), '');
 for (const f of ICON_FILES) {
   fs.copyFileSync(path.join(ICON_DIR, f), path.join(PUB, 'icons', f));
 }
+if (artPresent.length) {
+  fs.mkdirSync(path.join(PUB, 'art'), { recursive: true });
+  for (const a of artPresent) fs.copyFileSync(path.join(ART_DIR, a.file), path.join(PUB, 'art', a.file));
+}
 
 // --- Запись dist/ ---
 const DIST = path.join(ROOT, 'dist');
@@ -167,3 +209,4 @@ const kb = (n) => Math.round(n / 1024) + ' КБ';
 console.log('Сборка ' + version);
 console.log('  public/index.html   ' + kb(outPWA.length));
 console.log('  dist/rc-planner.html ' + kb(outSingle.length));
+console.log('  картинки: ' + (artPresent.length ? artPresent.length + ' из ' + ART_SLOTS.length : 'нет — запасной вид'));

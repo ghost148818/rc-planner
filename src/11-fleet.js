@@ -50,7 +50,7 @@ function fleetRow(a) {
 function viewFleet() {
   let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить', help: 'fleet' }) + fleetSeg('fleet');
   if (!S.aircraft.length) {
-    return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт');
+    return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт', 'fleet');
   }
   const groups = fleetGroups();
   h += `<div class="fleet-bar">

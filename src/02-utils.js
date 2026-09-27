@@ -235,14 +235,26 @@ function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return n
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
-// Тема и режим «В перчатках» — только UI-предпочтения в localStorage.
-// rcp.theme: light|dark, отсутствует — как в системе; rcp.gloves: '1'.
+// Тема и режим интерфейса — только UI-предпочтения в localStorage.
+// rcp.theme: light|dark, отсутствует — как в системе.
+// rcp.ui: gloves|max, отсутствует — «Стандарт». До 3.0 режим «В перчатках»
+// хранился в rcp.gloves='1' — переводится на новый ключ при первом чтении.
 // Тот же расчёт продублирован инлайн-скриптом в index.html, чтобы первая
 // отрисовка не мигала; здесь — источник для настроек и смены темы системы.
-const THEME_COLOR = { dark: '#14181e', light: '#f2f3f5' };
+const THEME_COLOR = { dark: '#0b1017', light: '#eef2f7' };
+const UI_MODES = ['gloves', 'standard', 'max'];
 function themePref() {
   const t = lsGet('rcp.theme');
   return t === 'light' || t === 'dark' ? t : 'system';
+}
+function uiMode() {
+  let u = lsGet('rcp.ui');
+  if (!u && lsGet('rcp.gloves') === '1') {
+    u = 'gloves';
+    lsSet('rcp.ui', u);
+    lsDel('rcp.gloves');
+  }
+  return UI_MODES.includes(u) ? u : 'standard';
 }
 function applyTheme() {
   let t = themePref();
@@ -251,8 +263,7 @@ function applyTheme() {
   }
   const root = document.documentElement;
   root.dataset.theme = t;
-  if (lsGet('rcp.gloves') === '1') root.dataset.gloves = '';
-  else delete root.dataset.gloves;
+  root.dataset.ui = uiMode();
   const meta = $('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLOR[t];
 }

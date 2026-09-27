@@ -6,7 +6,7 @@
 function viewPacking() {
   // Своей вкладки у сборов нет (2.0): «Назад» ведёт на «Сегодня» — и из «Ещё» тоже.
   let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор', help: 'packing' });
-  if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор');
+  if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор', 'packing');
   h += '<div class="card flat">';
   h += S.packing.map((p) => {
     const done = p.items.filter((i) => i.done).length;

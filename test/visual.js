@@ -39,8 +39,9 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     const tab = await page.locator('#tabbar .tab').first().boundingBox();
     ok(tab && tab.height >= 48, `${name}: вкладки не меньше 48px (${tab && Math.round(tab.height)}px)`);
 
-    // Панель вкладок: на телефоне и планшете — полоса снизу, от 900 px —
-    // рельса слева (88 px во всю высоту), «Сегодня» — две колонки.
+    // Панель вкладок (3.0): на телефоне и планшете — плавающий док у нижнего
+    // края (отступ до 24 px, в пределах экрана, по центру), от 900 px —
+    // рельса слева 88 px с полями 12 px, «Сегодня» — две колонки.
     const bar = await page.locator('#tabbar').boundingBox();
     await page.evaluate(() => { location.hash = '#/today'; });
     await page.waitForTimeout(60);
@@ -50,12 +51,14 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
         left: Math.round(v.getBoundingClientRect().left) };
     });
     if (viewport.width >= 900) {
-      ok(bar && Math.round(bar.width) === 88 && bar.height >= viewport.height - 1,
+      ok(bar && Math.round(bar.width) === 88 && bar.height >= viewport.height - 25 && bar.x <= 12,
         `${name}: вкладки — рельса 88px во всю высоту (${bar && Math.round(bar.width)}×${bar && Math.round(bar.height)})`);
       ok(grid.twoCol && grid.display === 'grid' && grid.left >= 88, `${name}: «Сегодня» — две колонки правее рельсы`);
     } else {
-      ok(bar && Math.round(bar.width) === viewport.width && bar.y + bar.height >= viewport.height - 1,
-        `${name}: вкладки — полоса снизу во всю ширину`);
+      const gapL = bar ? bar.x : -1, gapR = bar ? viewport.width - bar.x - bar.width : -1;
+      ok(bar && gapL >= 0 && gapR >= 0 && Math.abs(gapL - gapR) <= 1 && bar.width >= Math.min(viewport.width - 24, 560) - 1 &&
+        bar.y + bar.height >= viewport.height - 24 && bar.y + bar.height <= viewport.height,
+        `${name}: вкладки — док у нижнего края по центру (${bar && Math.round(bar.x)},${bar && Math.round(bar.y)} ${bar && Math.round(bar.width)}×${bar && Math.round(bar.height)})`);
       ok(grid.twoCol && grid.display !== 'grid', `${name}: «Сегодня» — одна колонка`);
     }
 
@@ -98,31 +101,45 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     await page.waitForSelector('#tabbar .tab');
     ok((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light',
       'без выбора тема следует за системой (светлая)');
-    ok((await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content)) === '#f2f3f5',
+    ok((await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content)) === '#eef2f7',
       'theme-color подстроен под светлую тему');
     await context.close();
   }
 
-  // Режим «В перчатках»: токены растут, панель и строки крупнее
+  // Режимы интерфейса (3.0): «В перчатках» — токены растут, панель и
+  // строки крупнее; «Максимум» и возврат к «Стандарту»; старый ключ
+  // rcp.gloves переводится на rcp.ui.
   {
     const { context, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 } });
     await page.goto(srv.url);
     await page.waitForSelector('#tabbar .tab');
+    const ui = () => page.evaluate(() => document.documentElement.dataset.ui);
+    ok((await ui()) === 'standard', 'по умолчанию режим «Стандарт»');
     await page.evaluate(() => { location.hash = '#/more'; });
-    await page.click('[data-act="gloves-set"][data-gloves="1"]');
+    await page.click('[data-act="ui-set"][data-ui="gloves"]');
     await page.waitForTimeout(60);
-    ok(await page.evaluate(() => document.documentElement.hasAttribute('data-gloves')), 'режим «В перчатках» включается');
+    ok((await ui()) === 'gloves', 'режим «В перчатках» включается');
     const tabG = await page.locator('#tabbar .tab').first().boundingBox();
-    ok(tabG && tabG.height >= 68, `в перчатках вкладки не меньше 68px (${tabG && Math.round(tabG.height)}px)`);
+    ok(tabG && tabG.height >= 64, `в перчатках вкладки не меньше 64px (${tabG && Math.round(tabG.height)}px)`);
     const rowG = await page.locator('#views .row').first().boundingBox();
-    ok(rowG && rowG.height >= 64, `в перчатках строки не меньше 64px (${rowG && Math.round(rowG.height)}px)`);
+    ok(rowG && rowG.height >= 68, `в перчатках строки не меньше 68px (${rowG && Math.round(rowG.height)}px)`);
     await page.reload();
     await page.waitForSelector('#tabbar .tab');
-    ok(await page.evaluate(() => document.documentElement.hasAttribute('data-gloves')), 'перчатки переживают перезагрузку');
+    ok((await ui()) === 'gloves', 'перчатки переживают перезагрузку');
     await page.screenshot({ path: path.join(SHOTS, 'phone-gloves.png') });
-    await page.click('[data-act="gloves-set"][data-gloves="0"]');
+    await page.click('[data-act="ui-set"][data-ui="max"]');
     await page.waitForTimeout(60);
-    ok(!(await page.evaluate(() => document.documentElement.hasAttribute('data-gloves'))), 'режим выключается');
+    ok((await ui()) === 'max', 'режим «Максимум» включается');
+    await page.screenshot({ path: path.join(SHOTS, 'phone-max.png') });
+    await page.click('[data-act="ui-set"][data-ui="standard"]');
+    await page.waitForTimeout(60);
+    ok((await ui()) === 'standard' && !(await page.evaluate(() => localStorage.getItem('rcp.ui'))), 'возврат к «Стандарту» снимает ключ');
+    // Старый ключ режима «В перчатках» (до 3.0) — тот же режим после обновления
+    await page.evaluate(() => localStorage.setItem('rcp.gloves', '1'));
+    await page.reload();
+    await page.waitForSelector('#tabbar .tab');
+    ok((await ui()) === 'gloves', 'старый rcp.gloves=1 открывается в перчатках');
+    ok(await page.evaluate(() => localStorage.getItem('rcp.ui') === 'gloves' && localStorage.getItem('rcp.gloves') === null), 'rcp.gloves переведён на rcp.ui');
     ok(errors.length === 0, 'перчатки: ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
     await context.close();
   }

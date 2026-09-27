@@ -15,6 +15,8 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/maskable-512.png',
   './icons/apple-touch-180.png',
+  // Картинки из assets/art — сборка подставляет существующие (метка ниже).
+  /* __ART__ */
 ];
 
 self.addEventListener('install', (e) => {

@@ -4,7 +4,7 @@
 // управление передаётся только по кнопке «Обновить» в настройках.
 'use strict';
 
-const VERSION = '0a076a9123';
+const VERSION = 'a17126d8df';
 const CACHE = 'rcplanner-' + VERSION;
 const ASSETS = [
   './',
@@ -15,6 +15,8 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/maskable-512.png',
   './icons/apple-touch-180.png',
+  // Картинки из assets/art — сборка подставляет существующие (метка ниже).
+  
 ];
 
 self.addEventListener('install', (e) => {

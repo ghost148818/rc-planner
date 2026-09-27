@@ -165,8 +165,11 @@ function rowBtn(attrs, inner, icon) {
   return `<button class="row" ${attrs}>${i}${inner}<span class="chev">${ICONS.chev}</span></button>`;
 }
 
-function emptyState(text, btnAct, btnLabel) {
-  return `<div class="empty">${ICONS.plane}<p>${text}</p>
+// Пустое состояние. art — ключ слота картинки (assets/art/empty-<art>.svg):
+// есть файл — вместо иконки неоновый рисунок, нет — иконка самолёта.
+function emptyState(text, btnAct, btnLabel, art) {
+  const key = ['fleet', 'journal', 'batteries', 'sites', 'packing'].includes(art) ? art : 'generic';
+  return `<div class="empty"><span class="empty-art" data-art="empty-${key}" aria-hidden="true">${ICONS.plane}</span><p>${text}</p>
     ${btnAct ? `<button class="btn btn-sm" data-act="${btnAct}">${btnLabel}</button>` : ''}</div>`;
 }
 
@@ -272,7 +275,10 @@ function confirmModal(text, act, dataAttrs, btnLabel) {
 function aircraftThumb(a, lg) {
   const u = photoURL(a);
   const cls = lg ? 'thumb lg' : 'thumb';
-  if (!u) return `<span class="${cls} ph">${ICONS[a.type] || ICONS.plane}</span>`;
+  // Без фото — заглушка по типу: картинка assets/art/type-<тип>.webp,
+  // если она есть в сборке, иначе иконка типа. Тип нормализован в NORM.
+  const type = TYPES[a.type] ? a.type : 'other';
+  if (!u) return `<span class="${cls} ph" data-art="type-${type}">${ICONS[type] || ICONS.plane}</span>`;
   const img = `<img class="${cls}" src="${u}" alt="Фото борта: ${esc(a.name)}">`;
   return lg
     ? `<button class="thumb-btn" data-photo="aircraft" data-id="${esc(a.id)}" data-cap="${esc(a.name)}"

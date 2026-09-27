@@ -1,0 +1,127 @@
+/* Режимы интерфейса. Токены размеров и силы эффектов — в 00-tokens.css;
+   здесь только то, что меняет вид, а не числа. */
+
+@layer modes {
+  /* ================= «В перчатках»: минимум =================
+     Только главное и крупно: без фона, стекла, свечения и анимаций
+     рамок; вторичные блоки (.opt) скрыты; панель вкладок — сплошная
+     полоса у нижнего края; следующий шаг — толстая статичная обводка. */
+  :root[data-ui="gloves"] {
+    --art-opacity: 0;
+  }
+  :root[data-ui="gloves"]::before,
+  :root[data-ui="gloves"] body::before,
+  :root[data-ui="gloves"] body::after { display: none; }
+  :root[data-ui="gloves"] .opt { display: none !important; }
+  :root[data-ui="gloves"] .card,
+  :root[data-ui="gloves"] .stat,
+  :root[data-ui="gloves"] .gauge-tile,
+  :root[data-ui="gloves"] .banner { background: var(--surface); box-shadow: none; border-color: var(--line); }
+  :root[data-ui="gloves"] .card.hero,
+  :root[data-ui="gloves"] .hud-card { background: var(--surface); border: 2px solid var(--line); }
+  :root[data-ui="gloves"] .hero-flight { border-color: var(--ok); }
+  :root[data-ui="gloves"] #tabbar {
+    left: 0; right: 0; bottom: 0;
+    max-width: none;
+    border-radius: 0;
+    border: 0;
+    border-top: 2px solid var(--line);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    background: var(--bg-2);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  :root[data-ui="gloves"] #tabbar .tab { font-size: 13px; border-radius: 12px; }
+  :root[data-ui="gloves"] #tabbar .tab svg { width: 28px; height: 28px; }
+  :root[data-ui="gloves"] #tabbar .tab-ind { background: var(--surface-3); box-shadow: inset 0 -3px 0 var(--accent); }
+  :root[data-ui="gloves"] .head h1 { font-size: 29px; }
+  :root[data-ui="gloves"] .h2 { font-size: 14px; }
+  :root[data-ui="gloves"] .h2::before { box-shadow: none; width: 4px; height: 14px; }
+  :root[data-ui="gloves"] .chip { font-size: 14px; }
+  :root[data-ui="gloves"] .chip::before, :root[data-ui="gloves"] .row[data-st]::before { box-shadow: none; }
+  :root[data-ui="gloves"] .row[data-st]::before { width: 5px; }
+  :root[data-ui="gloves"] .btn-primary { background: var(--ok); box-shadow: none; }
+  :root[data-ui="gloves"] .check-row input[type="checkbox"] { width: 30px; height: 30px; }
+  :root[data-ui="gloves"] .timer { font-size: 64px; }
+  :root[data-ui="gloves"] .ring { --size: min(80vw, 300px); }
+  :root[data-ui="gloves"] .ring .ring-fill { filter: none; stroke-width: 14; }
+  :root[data-ui="gloves"] .ring .ring-track { stroke-width: 14; }
+  :root[data-ui="gloves"] .ring .ring-ticks { display: none; }
+  :root[data-ui="gloves"] .ck .st { border-width: 2px; }
+  :root[data-ui="gloves"] .ck .st svg { width: 28px; height: 28px; }
+  :root[data-ui="gloves"] .strip:not(.tap) { height: 20px; }
+  :root[data-ui="gloves"] .menu, :root[data-ui="gloves"] dialog { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-2); }
+  :root[data-ui="gloves"] dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, 0.7); }
+  /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
+  :root[data-ui="gloves"] [data-next] { animation: none; box-shadow: none; outline: 3px solid var(--accent); outline-offset: 3px; }
+  :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; }
+  :root[data-ui="gloves"] [data-next]::after { display: none; }
+
+  /* ================= «Максимум»: стекло, аврора, неон ================= */
+  :root[data-ui="max"] { --art-opacity: 1; }
+  :root[data-ui="max"] body::before {
+    inset: -30%;
+    background:
+      radial-gradient(28% 22% at 22% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
+      radial-gradient(26% 22% at 82% 26%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%),
+      radial-gradient(34% 26% at 62% 82%, color-mix(in srgb, var(--ok) 20%, transparent), transparent 70%),
+      radial-gradient(22% 18% at 18% 78%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+    animation: aurora 38s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  :root[data-ui="max"][data-theme="light"] body::before { opacity: 0.55; }
+  :root[data-ui="max"] body::after {
+    display: block;
+    inset: 0;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
+    mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
+  }
+  /* Стекло: только крупные поверхности — у каждого backdrop-filter своя
+     цена на телефоне, у десятков строк списка его нет. */
+  :root[data-ui="max"] .card.hero,
+  :root[data-ui="max"] .hud-card,
+  :root[data-ui="max"] .wx-hero,
+  :root[data-ui="max"] .ready-panel .gauge-tile,
+  :root[data-ui="max"] dialog {
+    -webkit-backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
+    backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
+  }
+  :root[data-ui="max"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 82%, transparent); }
+  /* Живая рамка героя: градиент бежит по кругу */
+  :root[data-ui="max"] .card.hero,
+  :root[data-ui="max"] .hud-card {
+    background:
+      var(--sheen) padding-box,
+      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
+      conic-gradient(from var(--glow-a), color-mix(in srgb, var(--accent) 80%, transparent), color-mix(in srgb, var(--accent-2) 55%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 55%, transparent) 85%, color-mix(in srgb, var(--accent) 80%, transparent)) border-box;
+    animation: glow-spin 9s linear infinite;
+    animation-delay: var(--glow-phase-slow, 0s);
+    box-shadow: var(--shadow), 0 0 40px -18px var(--accent);
+  }
+  :root[data-ui="max"] .head h1 {
+    background: linear-gradient(100deg, var(--text) 55%, color-mix(in srgb, var(--accent) 80%, var(--text)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  :root[data-ui="max"] .timer:not(.landed) { text-shadow: 0 0 22px color-mix(in srgb, var(--c, var(--ok)) 55%, transparent); }
+  :root[data-ui="max"] .btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 0 0 1px color-mix(in srgb, var(--ok) 60%, transparent), 0 12px 38px -10px var(--ok); }
+  :root[data-ui="max"] #tabbar { background: color-mix(in srgb, var(--bg-2) 62%, transparent); box-shadow: var(--shadow-pop), 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent) inset; }
+  :root[data-ui="max"] #tabbar .tab[aria-current="page"] svg { filter: drop-shadow(0 0 6px var(--accent)); }
+  /* Карточки проявляются при прокрутке — на том, что умеет
+     animation-timeline (без поддержки всё просто видно сразу). */
+  @supports (animation-timeline: view()) {
+    @keyframes reveal { from { opacity: 0; transform: translateY(18px) scale(0.985); } }
+    :root[data-ui="max"] #views .card:not(.hero),
+    :root[data-ui="max"] #views .stat {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
+}

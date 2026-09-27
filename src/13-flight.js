@@ -14,7 +14,7 @@ function viewFlight() {
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
   if (!S.aircraft.length && !activeSessions().length) {
-    return h + emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
+    return h + emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт', 'fleet');
   }
   h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
 
@@ -60,7 +60,7 @@ function viewPrep() {
   // Шаг 1 — выбрать модель.
   if (!UI.prep) {
     let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите борт', help: 'flight' });
-    if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт');
+    if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт', 'fleet');
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>

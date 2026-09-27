@@ -1,0 +1,210 @@
+/* Каркас: колонка экранов, плавающая панель вкладок (рельса на
+   десктопе), шапка экрана, заголовки разделов, две колонки «Сегодня». */
+
+@layer layout {
+  #views {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 14px 16px calc(var(--tab-h) + var(--dock-gap) + 30px + env(safe-area-inset-bottom));
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+
+  /* ---------- Панель вкладок: плавающий док ---------- */
+  #tabbar {
+    position: fixed;
+    left: var(--dock-gap);
+    right: var(--dock-gap);
+    bottom: calc(var(--dock-gap) + env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: space-around;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--bg-2) 86%, transparent);
+    border: 1px solid var(--line-soft);
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    z-index: 20;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  #tabbar .tab {
+    position: relative;
+    flex: 1 1 0;
+    min-height: calc(var(--tab-h) - 10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    border-radius: 19px;
+    transition: color 0.2s var(--ease);
+  }
+  #tabbar .tab svg { width: 24px; height: 24px; position: relative; z-index: 1; transition: transform 0.25s var(--ease-spring); }
+  #tabbar .tab span { position: relative; z-index: 1; }
+  #tabbar .tab:active svg { transform: scale(0.88); }
+  #tabbar .tab[aria-current="page"] { color: var(--text); }
+  #tabbar .tab[aria-current="page"] svg { color: var(--accent); }
+  /* Подложка активной вкладки — отдельный элемент с view-transition-name:
+     при смене вкладки она переезжает к новой, а не мигает. */
+  #tabbar .tab-ind {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+    view-transition-name: tab-ind;
+  }
+  /* Точка «идёт полёт» у иконки «Полёт» — видна с любой вкладки */
+  #tabbar .tab .live {
+    position: absolute;
+    top: 7px;
+    right: calc(50% - 19px);
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 2px var(--bg-2);
+    z-index: 2;
+  }
+
+  /* ---------- Шапка экрана ---------- */
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 16px;
+    min-height: 44px;
+  }
+  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; }
+  .head .grow { flex: 1; min-width: 0; }
+  .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 3px; }
+  .back {
+    width: var(--seg); height: var(--seg);
+    margin-left: -8px;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mut);
+    border-radius: 50%;
+  }
+  .back svg { width: 24px; height: 24px; }
+  .back:active { background: var(--surface-2); }
+  .head .head-act {
+    color: var(--accent);
+    font-size: 15px; font-weight: 600;
+    min-height: var(--seg);
+    padding: 0 12px;
+    flex: none;
+    white-space: nowrap;
+    border-radius: 999px;
+    background: var(--accent-bg);
+  }
+  .head .head-act:active { transform: scale(0.97); }
+  .head .head-ic {
+    width: var(--seg); height: var(--seg);
+    margin-right: -6px;
+    padding: 0;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mut);
+    border-radius: 50%;
+    background: none;
+  }
+  .head .head-ic svg { width: 23px; height: 23px; }
+  .head .head-ic[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+  .head .head-help { color: var(--dim); }
+  .head .head-act + .head-help { margin-left: 2px; }
+
+  /* Состояние дня в подписи шапки «Сегодня» */
+  .state-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 1px 9px 1px 7px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 650;
+    vertical-align: 1px;
+    color: var(--c, var(--mut));
+    background: color-mix(in srgb, var(--c, var(--mut)) 14%, transparent);
+  }
+  .state-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .state-pill.field, .state-pill.flying { --c: var(--ok); }
+  .state-pill.debrief { --c: var(--info); }
+  .state-pill.home { --c: var(--accent); }
+
+  /* ---------- Заголовок раздела ---------- */
+  .h2 {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mut);
+    margin: 24px 2px 9px;
+  }
+  .h2::before {
+    content: "";
+    align-self: center;
+    width: 3px; height: 12px;
+    border-radius: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 calc(8px * var(--fx-glow)) var(--accent);
+    flex: none;
+  }
+  .h2 .cnt { color: var(--dim); font-weight: 550; letter-spacing: 0; text-transform: none; }
+  .h3 { font-weight: 650; margin: 14px 0 6px; }
+
+  /* ---------- «Сегодня»: две колонки ----------
+     Разметка одна: .today-main (шапка, баннеры, блоки состояния) и
+     aside.today-side (условия, полёты дня, копия). На телефоне обёртки
+     прозрачны для раскладки (display: contents), #views — flex-колонка,
+     порядок задаёт order: шапка (0) → герой дня (1) → условия (2) →
+     остальное (3) → полёты дня и копия (4) → блоки после них, .late (5). */
+  @media (max-width: 899px) {
+    #views.two-col { display: flex; flex-direction: column; }
+    .today-main, .today-side { display: contents; }
+    .today-main > * { order: 3; }
+    .today-main > .today-top { order: 0; }
+    .today-main > .card.hero, .today-main > .stat-line, .today-main > .ready-panel { order: 1; }
+    .today-main > .late { order: 5; }
+    .today-side > * { order: 4; }
+    .today-side > .wx-slot { order: 2; }
+    .side-only { display: none; }
+    #views.two-col .today-main > .h2, #views.two-col .today-side > .h2 { margin-top: 12px; }
+    #views.two-col .today-main > .btn { margin-bottom: 10px; }
+  }
+
+  /* ---------- Десктоп и планшет от 900 px ----------
+     Панель — вертикальная рельса слева; «Сегодня» — две колонки,
+     остальные экраны — одна колонка 760 px. */
+  @media (min-width: 900px) {
+    #tabbar {
+      inset: 12px auto 12px 12px;
+      width: 88px;
+      max-width: none;
+      margin: 0;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 6px;
+    }
+    #tabbar .tab { flex: none; width: 74px; min-height: 66px; }
+    #views { margin: 0 auto 0 100px; max-width: 1140px; padding: 24px 32px 32px; }
+    #views:not(.two-col) { max-width: 812px; }
+    #views.two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 372px;
+      gap: 28px;
+      align-items: start;
+    }
+    .today-main, .today-side { min-width: 0; }
+    .today-side > .wx-slot > .h2 { margin-top: 6px; }
+  }
+  @media (min-width: 1300px) {
+    #views { margin-left: auto; }
+  }
+}

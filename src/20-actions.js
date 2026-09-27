@@ -734,9 +734,11 @@ const ACTIONS = {
     applyTheme();
     render(true);
   },
-  'gloves-set': (el) => {
-    if (el.dataset.gloves === '1') lsSet('rcp.gloves', '1');
-    else lsDel('rcp.gloves');
+  // Режим интерфейса: «В перчатках» · «Стандарт» · «Максимум».
+  'ui-set': (el) => {
+    const m = el.dataset.ui;
+    if (!UI_MODES.includes(m)) return;
+    if (m === 'standard') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
     applyTheme();
     render(true);
   },

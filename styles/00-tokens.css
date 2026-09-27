@@ -1,0 +1,184 @@
+/* RC Planner 3.0 · «Кокпит». Дизайн-система: слои, токены, темы, режимы.
+
+   Слои (@layer) задают приоритет раз и навсегда, без гонки
+   специфичности: поздний слой сильнее раннего. !important работает
+   наоборот — в первом слое он сильнее всего, поэтому «без движения»
+   (prefers-reduced-motion) живёт в reset.
+
+   Три режима интерфейса — html[data-ui]:
+     gloves   — «В перчатках»: крупно, контрастно, без эффектов и лишнего;
+     standard — по умолчанию: чисто, мягкое свечение следующего шага;
+     max      — «Максимум»: стекло, аврора, неон, живые рамки.
+   Тема — html[data-theme] (dark | light), выбор хранит localStorage. */
+
+@layer reset, tokens, base, layout, components, screens, effects, modes, art, print;
+
+/* Угол бегущей рамки и доля заполнения шкал — типизированные свойства:
+   только так их можно анимировать (у обычной custom property нет типа,
+   браузер переключает её скачком). */
+@property --glow-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --aurora-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+@layer tokens {
+  :root {
+    color-scheme: dark;
+    /* Поверхности: графит с холодным синим подтоном */
+    --bg: #0b1017;
+    --bg-2: #111822;
+    --surface: #151d28;
+    --surface-2: #1c2633;
+    --surface-3: #243142;
+    --line: #283444;
+    --line-soft: rgba(120, 150, 190, 0.14);
+    --text: #eaf0f7;
+    --mut: #9eabbb;
+    --dim: #6c7a8c;
+    --link: #6cc7ff;
+
+    /* Акцент — «приборный» циан: фокус, следующий шаг, активная вкладка */
+    --accent: #3fd6f0;
+    --accent-2: #7c8cff;
+    --on-accent: #041318;
+
+    /* Смысловые цвета: только статусы и вердикты */
+    --ok: #3ddc84;
+    --warn: #f3c24b;
+    --maint: #f08a3c;
+    --bad: #ff5a5f;
+    --info: #6ea8ff;
+    --unk: #8995a5;
+    --on-ok: #04140b;
+
+    --ok-bg: rgba(61, 220, 132, 0.13);
+    --warn-bg: rgba(243, 194, 75, 0.13);
+    --maint-bg: rgba(240, 138, 60, 0.15);
+    --bad-bg: rgba(255, 90, 95, 0.13);
+    --info-bg: rgba(110, 168, 255, 0.14);
+    --unk-bg: rgba(137, 149, 165, 0.15);
+    --accent-bg: rgba(63, 214, 240, 0.12);
+
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+    --shadow-pop: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --glow-period: 3.2s;
+
+    --radius: 18px;
+    --radius-sm: 13px;
+    --radius-xs: 10px;
+
+    /* Размеры касания и шрифта — всё, что растёт в перчатках */
+    --tap: 48px;      /* поля ввода, кнопки карты, квадратные кнопки */
+    --row: 58px;      /* строка списка, пункт чек-листа */
+    --row-pad: 10px;  /* вертикальный отступ строки; его же вычитает .row > button.grow */
+    --btn: 50px;      /* обычная кнопка */
+    --primary: 58px;  /* главная кнопка экрана */
+    --seg: 44px;      /* сегменты, малые кнопки, чипы-кнопки — не ниже порога 44 */
+    --font: 16px;     /* основной текст */
+    --font-d: 13px;   /* вторичная строка, подписи */
+    --ck-box: 44px;   /* клетка чек-листа */
+    --tab-h: 64px;    /* высота панели вкладок */
+    --dock-gap: 10px; /* зазор плавающей панели от краёв */
+
+    /* Сила эффектов: режимы меняют только эти числа */
+    --fx-glow: 1;       /* множитель свечения */
+    --fx-blur: 0px;     /* размытие стекла */
+    --card-alpha: 100%; /* непрозрачность карточек */
+  }
+
+  /* Широкая гамма: на дисплеях P3 (iPhone, Mac) неон ярче, без выхода
+     за sRGB на остальных. */
+  @supports (color: oklch(0.5 0.1 200)) {
+    @media (color-gamut: p3) {
+      :root {
+        --accent: oklch(0.84 0.15 205);
+        --ok: oklch(0.82 0.21 150);
+        --warn: oklch(0.86 0.16 85);
+        --bad: oklch(0.7 0.22 22);
+        --maint: oklch(0.76 0.17 52);
+      }
+    }
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #eef2f7;
+    --bg-2: #f7f9fc;
+    --surface: #ffffff;
+    --surface-2: #f2f5f9;
+    --surface-3: #e7ecf3;
+    --line: #d8dfe8;
+    --line-soft: rgba(30, 50, 80, 0.1);
+    --text: #0f1722;
+    --mut: #4d5a6a;
+    --dim: #7f8b9a;
+    --link: #0a64c8;
+
+    --accent: #0a93b5;
+    --accent-2: #4c5bd4;
+    --on-accent: #ffffff;
+
+    --ok: #12894b;
+    --warn: #8f6a06;
+    --maint: #b0530f;
+    --bad: #cc2f36;
+    --info: #1f63c7;
+    --unk: #6b7684;
+    --on-ok: #ffffff;
+
+    --ok-bg: rgba(18, 137, 75, 0.1);
+    --warn-bg: rgba(143, 106, 6, 0.1);
+    --maint-bg: rgba(176, 83, 15, 0.11);
+    --bad-bg: rgba(204, 47, 54, 0.09);
+    --info-bg: rgba(31, 99, 199, 0.09);
+    --unk-bg: rgba(107, 118, 132, 0.11);
+    --accent-bg: rgba(10, 147, 181, 0.1);
+
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px -16px rgba(20, 40, 70, 0.35);
+    --shadow-pop: 0 18px 44px -14px rgba(20, 40, 70, 0.35);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent 40%);
+  }
+
+  /* ---- «В перчатках»: крупнее всё, что трогают пальцем ---- */
+  :root[data-ui="gloves"] {
+    --tap: 60px;
+    --row: 70px;
+    --row-pad: 12px;
+    --btn: 62px;
+    --primary: 74px;
+    --seg: 56px;
+    --font: 18px;
+    --font-d: 15px;
+    --ck-box: 58px;
+    --tab-h: 76px;
+    --dock-gap: 0px;
+    --radius: 16px;
+    --fx-glow: 0;
+    /* Контраст выше: вторичный текст светлее, линии заметнее */
+    --mut: #b9c4d2;
+    --dim: #8e9aab;
+    --line: #34435a;
+  }
+  :root[data-ui="gloves"][data-theme="light"] {
+    --mut: #3a4655;
+    --dim: #5d6978;
+    --line: #c3ccd8;
+  }
+
+  /* ---- «Максимум»: стекло и свечение ---- */
+  :root[data-ui="max"] {
+    --fx-glow: 1.6;
+    --fx-blur: 16px;
+    --card-alpha: 74%;
+    --bg: #070b12;
+  }
+  :root[data-ui="max"][data-theme="light"] {
+    --bg: #e9eef6;
+    --card-alpha: 80%;
+  }
+}

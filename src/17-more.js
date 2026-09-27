@@ -21,11 +21,14 @@ function viewMore() {
     ${[['system', 'Как в системе'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(([v, l]) =>
       `<button data-act="theme-set" data-theme="${v}" aria-pressed="${themeNow === v}">${l}</button>`).join('')}
   </div>`);
-  const gloves = lsGet('rcp.gloves') === '1';
-  h += field('Размер элементов', `<div class="seg">
-    <button data-act="gloves-set" data-gloves="0" aria-pressed="${!gloves}">Обычный</button>
-    <button data-act="gloves-set" data-gloves="1" aria-pressed="${gloves}">В перчатках</button>
-  </div>`, 'Крупнее кнопки и строки — для поля');
+  const mode = uiMode();
+  const modeCard = (m, label, note) => `<button class="mode-card" data-act="ui-set" data-ui="${m}" aria-pressed="${mode === m}">
+      <span class="mode-prev ${m}" aria-hidden="true"><i></i><i></i><b></b></span>${label}<small>${note}</small></button>`;
+  h += field('Интерфейс', `<div class="mode-pick" role="group" aria-label="Режим интерфейса">
+    ${modeCard('gloves', 'В перчатках', 'крупно, только главное')}
+    ${modeCard('standard', 'Стандарт', 'чисто, мягкая подсветка')}
+    ${modeCard('max', 'Максимум', 'стекло, неон, живой фон')}
+  </div>`, 'Подсветка всегда ведёт к следующему шагу. «Максимум» тратит чуть больше батареи');
   h += `<form data-form="pilot">` + field('Имя пилота / позывной',
     `<input type="text" name="pilot" value="${esc(S.settings.pilot || '')}" placeholder="необязательно">`) +
     `<button class="btn btn-sm" type="submit">Сохранить</button></form>`;
@@ -130,7 +133,7 @@ function mapLinks(s) {
 
 function viewSites() {
   let h = pageHead('Локации', { back: '#/more', act: 'add-site', actLabel: 'Добавить', help: 'sites' });
-  if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию');
+  if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию', 'sites');
   h += '<div class="card flat">';
   h += S.sites.map((s) => `<div class="row">
     <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:var(--seg)">
@@ -179,7 +182,7 @@ function battSortCmp() {
 
 function viewBatteries() {
   let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить' }) + fleetSeg('batteries');
-  if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ');
+  if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ', 'batteries');
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
     ${selectHtml('battSort', [['name', 'По названию'], ['charge', 'По заряду'], ['chem', 'По химии'], ['cycles', 'По циклам']],

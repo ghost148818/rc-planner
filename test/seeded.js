@@ -19,13 +19,13 @@ const { ok, finish, serve, newPage } = require('./helpers');
 const PUB = path.join(__dirname, '..', 'public');
 const OUT = path.join(__dirname, 'shots', 'seeded');
 
-// Порог касания: 44 px, в перчатках 52 — для ВСЕХ кнопок, ссылок-кнопок,
+// Порог касания: 44 px, в перчатках 56 (3.0; было 52) — для ВСЕХ кнопок, ссылок-кнопок,
 // строк и селектов без исключений. Токен --seg (сегменты, малые кнопки,
 // чипы, пилюли, кнопки шапки) поднят до тех же 44/52 по финальному
 // ревью 2.0: прежнее исключение «по токену» отключало порог для самых
 // частых кнопок («Чек-лист», сегменты, «Назад», «Открыть» в каталоге).
 const TAP_MIN = 44;
-const TAP_MIN_GLOVES = 52;
+const TAP_MIN_GLOVES = 56;
 
 // Поддельный прогноз на 7 дней от «сегодня» по МСК: тот же формат, что
 // отдаёт Open-Meteo, — приложение читает его из кэша без запросов.
@@ -284,10 +284,10 @@ async function run(browser, tag, opts) {
   await seed(page);
   await page.evaluate(({ theme, gloves }) => {
     localStorage.setItem('rcp.theme', theme);
-    if (gloves) localStorage.setItem('rcp.gloves', '1'); else localStorage.removeItem('rcp.gloves');
+    if (gloves) localStorage.setItem('rcp.ui', 'gloves'); else localStorage.removeItem('rcp.ui');
     window.applyTheme();
   }, { theme: opts.theme, gloves: !!opts.gloves });
-  if (opts.gloves) ok(await page.evaluate(() => document.documentElement.hasAttribute('data-gloves')), `${tag}: режим «В перчатках» включён`);
+  if (opts.gloves) ok(await page.evaluate(() => document.documentElement.dataset.ui === 'gloves'), `${tag}: режим «В перчатках» включён`);
 
   const shot = async (name, hash, pre, opts2) => {
     await nav(page, hash);

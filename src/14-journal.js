@@ -45,7 +45,7 @@ function viewJournal() {
     <button data-act="journal-tab" data-tab="log" aria-pressed="${tab === 'log'}">Полёты</button>
     <button data-act="journal-tab" data-tab="stats" aria-pressed="${tab === 'stats'}">Статистика</button>
   </div>`;
-  if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт');
+  if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт', 'journal');
   const fid = journalFilterId();
   if (S.aircraft.length > 1) {
     h += `<div class="pill-row">${pillSelect('journalAircraft',
@@ -53,7 +53,7 @@ function viewJournal() {
       fid, `class="sel-pill${fid ? ' sel' : ''}" data-change="journal-aircraft" aria-label="Фильтр по борту"`)}</div>`;
   }
   const done = journalDone();
-  if (!done.length) return h + emptyState('У этого борта полётов пока не было.');
+  if (!done.length) return h + emptyState('У этого борта полётов пока не было.', '', '', 'journal');
   return h + (tab === 'stats' ? journalStatsHtml(done) : journalLogHtml(done));
 }
 

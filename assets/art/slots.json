@@ -1,0 +1,22 @@
+{
+  "_": "Слоты картинок RC Planner. Файлы кладутся в assets/art/ ровно с этими именами. Сборка подхватывает только существующие; нет файла — остаётся запасной вид (процедурный фон, иконка). ТЗ — docs/art-brief.md, проверка — npm run art:check.",
+  "slots": [
+    { "file": "bg-dark.webp",       "kind": "var",  "var": "--art-bg-dark",       "w": 1290, "h": 2796, "maxKB": 220, "alpha": false, "use": "фон тёмной темы, телефон (портрет)" },
+    { "file": "bg-dark-wide.webp",  "kind": "var",  "var": "--art-bg-dark-wide",  "w": 2560, "h": 1600, "maxKB": 300, "alpha": false, "use": "фон тёмной темы, планшет и десктоп от 900 px" },
+    { "file": "bg-light.webp",      "kind": "var",  "var": "--art-bg-light",      "w": 1290, "h": 2796, "maxKB": 220, "alpha": false, "use": "фон светлой темы, телефон" },
+    { "file": "bg-light-wide.webp", "kind": "var",  "var": "--art-bg-light-wide", "w": 2560, "h": 1600, "maxKB": 300, "alpha": false, "use": "фон светлой темы, планшет и десктоп" },
+    { "file": "type-quad.webp",  "kind": "img", "w": 512, "h": 512, "maxKB": 80, "alpha": true, "use": "заглушка борта без фото: FPV-квадрокоптер" },
+    { "file": "type-plane.webp", "kind": "img", "w": 512, "h": 512, "maxKB": 80, "alpha": true, "use": "заглушка борта без фото: самолёт" },
+    { "file": "type-wing.webp",  "kind": "img", "w": 512, "h": 512, "maxKB": 80, "alpha": true, "use": "заглушка борта без фото: летающее крыло" },
+    { "file": "type-other.webp", "kind": "img", "w": 512, "h": 512, "maxKB": 80, "alpha": true, "use": "заглушка борта без фото: другое" },
+    { "file": "welcome-1.webp", "kind": "img", "w": 720, "h": 480, "maxKB": 110, "alpha": true, "use": "приветствие, шаг 1 «Что это»" },
+    { "file": "welcome-2.webp", "kind": "img", "w": 720, "h": 480, "maxKB": 110, "alpha": true, "use": "приветствие, шаг 2 «Как устроен день»" },
+    { "file": "welcome-3.webp", "kind": "img", "w": 720, "h": 480, "maxKB": 110, "alpha": true, "use": "приветствие, шаг 3 «Приватность»" },
+    { "file": "empty-fleet.svg",     "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "пустой флот" },
+    { "file": "empty-journal.svg",   "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "пустой журнал полётов" },
+    { "file": "empty-batteries.svg", "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "нет аккумуляторов" },
+    { "file": "empty-sites.svg",     "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "нет локаций" },
+    { "file": "empty-packing.svg",   "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "нет наборов сборов" },
+    { "file": "empty-generic.svg",   "kind": "mask", "w": 240, "h": 160, "maxKB": 12, "use": "прочие пустые состояния" }
+  ]
+}

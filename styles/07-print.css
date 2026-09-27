@@ -1,0 +1,35 @@
+/* Печать журнала.
+   Фон листа задаётся ЯВНО у тела: тёмная тема базовая, у html фона нет,
+   и фон body уходит на холст листа (замер 2026-09-07: заливка во всю
+   область листа). Белый только у html не спасает. min-height снимается
+   ради WebKit: он при печати считает vh от окна и выталкивает пустой лист.
+   Перенос в ЛЮБОМ месте — только колонкам со свободным текстом (борт,
+   АКБ, локация, заметки): длинное слово растягивало таблицу за край.
+   Всем ячейкам его давать нельзя — служебные колонки режут слова посреди
+   слога. Поля страницы и заливку шапки не навязываем: это выбор
+   владельца в диалоге печати. Фоновые слои (картинка, аврора, сетка)
+   на лист не попадают. */
+
+@layer print {
+  #print-area { display: none; }
+  @media print {
+    html, body { background: #fff; min-height: 0; }
+    html::before, body::before, body::after { display: none !important; }
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
+    #print-area h1 { font-size: 16pt; margin-bottom: 4pt; }
+    #print-area p { margin-bottom: 8pt; }
+    #print-area table { width: 100%; border-collapse: collapse; }
+    #print-area th, #print-area td {
+      border: 1pt solid #444;
+      padding: 3pt 5pt;
+      text-align: left;
+      vertical-align: top;
+      font-size: 10pt;
+    }
+    #print-area td:nth-child(3), #print-area td:nth-child(5),
+    #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
+    #print-area th { background: #eee; }
+    #print-area tr { break-inside: avoid; }
+  }
+}

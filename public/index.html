@@ -6,1402 +6,2056 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-Vmi+O8C5ZKdmu8OY40RGM6SNcaYEcT3JUqFDSZ8FkRc=' 'sha256-/CRhuhBhH6SGx2fsNEV2uVX+7K1SXTYa67CaDIjSs4g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
-  <meta name="theme-color" content="#14181e">
-  <meta name="build" content="0a076a9123">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-Omk4bs53UXykf93l2NeF9f0aqMzms0cnszoeJqn8Nig='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta name="theme-color" content="#0b1017">
+  <meta name="build" content="a17126d8df">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
-    // Тема и режим «В перчатках» до первой отрисовки, чтобы не мигало.
-    // Тот же расчёт живёт в app.js как applyTheme(): без сохранённого
-    // выбора тема берётся у системы.
+    // Тема и режим интерфейса до первой отрисовки, чтобы не мигало.
+    // Тот же расчёт живёт в src/02-utils.js как applyTheme()/uiMode():
+    // без сохранённого выбора тема берётся у системы, режим — «Стандарт».
+    // rcp.gloves='1' — старый ключ режима «В перчатках» (до 3.0).
     try {
-      var t = localStorage.getItem('rcp.theme');
+      var d = document.documentElement, t = localStorage.getItem('rcp.theme');
       if (t !== 'light' && t !== 'dark') {
         t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
       }
-      document.documentElement.dataset.theme = t;
-      if (localStorage.getItem('rcp.gloves') === '1') document.documentElement.dataset.gloves = '';
-    } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+      d.dataset.theme = t;
+      var u = localStorage.getItem('rcp.ui');
+      if (!u && localStorage.getItem('rcp.gloves') === '1') u = 'gloves';
+      d.dataset.ui = u === 'gloves' || u === 'max' ? u : 'standard';
+    } catch (e) {
+      document.documentElement.dataset.theme = 'dark';
+      document.documentElement.dataset.ui = 'standard';
+    }
   </script>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/apple-touch-180.png?v=f807a6a1">
   <link rel="icon" href="icons/icon.svg?v=f807a6a1" type="image/svg+xml">
   <style>
-/* RC Planner — «полевой инструмент»: тёмный графит (тема по умолчанию —
-   как в системе), высокий контраст, крупные touch-элементы, цвет только
-   у статусов. Размеры касания — токены в :root, режим «В перчатках»
-   (html[data-gloves]) переопределяет их одним блоком. */
+/* == styles/00-tokens.css == */
+/* RC Planner 3.0 · «Кокпит». Дизайн-система: слои, токены, темы, режимы.
 
-/* ---------- Токены ---------- */
-:root {
-  --bg: #101318;
-  --bg-el: #171b21;
-  --card: #1c2129;
-  --card-2: #232935;
-  --line: #2b323d;
-  --text: #e9ecf1;
-  --mut: #9aa3af;
-  --dim: #6b7480;
-  --link: #79b8ff;
+   Слои (@layer) задают приоритет раз и навсегда, без гонки
+   специфичности: поздний слой сильнее раннего. !important работает
+   наоборот — в первом слое он сильнее всего, поэтому «без движения»
+   (prefers-reduced-motion) живёт в reset.
 
-  --ok: #39c26d;
-  --warn: #e2b53e;
-  --maint: #e07b39;
-  --bad: #e5484d;
-  --unk: #8a919b;
+   Три режима интерфейса — html[data-ui]:
+     gloves   — «В перчатках»: крупно, контрастно, без эффектов и лишнего;
+     standard — по умолчанию: чисто, мягкое свечение следующего шага;
+     max      — «Максимум»: стекло, аврора, неон, живые рамки.
+   Тема — html[data-theme] (dark | light), выбор хранит localStorage. */
 
-  --ok-bg: rgba(57, 194, 109, 0.14);
-  --warn-bg: rgba(226, 181, 62, 0.14);
-  --maint-bg: rgba(224, 123, 57, 0.16);
-  --bad-bg: rgba(229, 72, 77, 0.14);
-  --unk-bg: rgba(138, 145, 155, 0.16);
-  --info: #6aa8ff;
-  --info-bg: rgba(106, 168, 255, 0.14);
+@layer reset, tokens, base, layout, components, screens, effects, modes, art, print;
 
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --radius: 12px;
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+/* Угол бегущей рамки и доля заполнения шкал — типизированные свойства:
+   только так их можно анимировать (у обычной custom property нет типа,
+   браузер переключает её скачком). */
+@property --glow-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --aurora-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 
-  /* Размеры касания и шрифта: всё, что должно расти в перчатках */
-  --tap: 48px;      /* поля ввода, кнопки карты, квадратные кнопки */
-  --row: 56px;      /* строка списка, пункт чек-листа */
-  --row-pad: 10px;  /* вертикальный отступ строки; его же вычитает .row > button.grow */
-  --btn: 48px;      /* обычная кнопка */
-  --primary: 56px;  /* главная кнопка экрана */
-  --seg: 44px;      /* сегменты, малые кнопки, кнопки в строке — не ниже порога касания 44 */
-  --font: 16px;     /* основной текст */
-  --font-d: 13px;   /* вторичная строка, подписи */
-  --ck-box: 44px;   /* клетка чек-листа */
-  --tab-h: 60px;    /* вкладка нижней панели */
-}
+@layer tokens {
+  :root {
+    color-scheme: dark;
+    /* Поверхности: графит с холодным синим подтоном */
+    --bg: #0b1017;
+    --bg-2: #111822;
+    --surface: #151d28;
+    --surface-2: #1c2633;
+    --surface-3: #243142;
+    --line: #283444;
+    --line-soft: rgba(120, 150, 190, 0.14);
+    --text: #eaf0f7;
+    --mut: #9eabbb;
+    --dim: #6c7a8c;
+    --link: #6cc7ff;
 
-/* Режим «В перчатках»: крупнее кнопки и строки — для поля */
-:root[data-gloves] {
-  --tap: 56px;
-  --row: 64px;
-  --btn: 56px;
-  --primary: 64px;
-  --seg: 52px;
-  --font: 17px;
-  --font-d: 14px;
-  --ck-box: 52px;
-  --tab-h: 68px;
-}
+    /* Акцент — «приборный» циан: фокус, следующий шаг, активная вкладка */
+    --accent: #3fd6f0;
+    --accent-2: #7c8cff;
+    --on-accent: #041318;
 
-:root[data-theme="light"] {
-  --bg: #f2f3f5;
-  --bg-el: #ffffff;
-  --card: #ffffff;
-  --card-2: #f6f7f9;
-  --line: #dcdfe4;
-  --text: #191d23;
-  --mut: #565f6a;
-  --dim: #8a929c;
-  --link: #0b62c4;
+    /* Смысловые цвета: только статусы и вердикты */
+    --ok: #3ddc84;
+    --warn: #f3c24b;
+    --maint: #f08a3c;
+    --bad: #ff5a5f;
+    --info: #6ea8ff;
+    --unk: #8995a5;
+    --on-ok: #04140b;
 
-  --ok: #178a4c;
-  --warn: #9a7414;
-  --maint: #b55a1a;
-  --bad: #cf3237;
-  --unk: #6b7480;
+    --ok-bg: rgba(61, 220, 132, 0.13);
+    --warn-bg: rgba(243, 194, 75, 0.13);
+    --maint-bg: rgba(240, 138, 60, 0.15);
+    --bad-bg: rgba(255, 90, 95, 0.13);
+    --info-bg: rgba(110, 168, 255, 0.14);
+    --unk-bg: rgba(137, 149, 165, 0.15);
+    --accent-bg: rgba(63, 214, 240, 0.12);
 
-  --ok-bg: rgba(23, 138, 76, 0.1);
-  --warn-bg: rgba(154, 116, 20, 0.1);
-  --maint-bg: rgba(181, 90, 26, 0.12);
-  --bad-bg: rgba(207, 50, 55, 0.1);
-  --unk-bg: rgba(107, 116, 128, 0.12);
-  --info: #0b62c4;
-  --info-bg: rgba(11, 98, 196, 0.1);
-}
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+    --shadow-pop: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
 
-/* ---------- База ---------- */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font: var(--font)/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  min-height: 100dvh;
-  overscroll-behavior-y: contain;
-}
-img { max-width: 100%; display: block; }
-a { color: var(--link); text-decoration: none; }
-a:active { opacity: 0.7; }
-button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --glow-period: 3.2s;
 
-/* ---------- Каркас ---------- */
-#views {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 12px 16px calc(var(--tab-h) + 28px + env(safe-area-inset-bottom));
-}
+    --radius: 18px;
+    --radius-sm: 13px;
+    --radius-xs: 10px;
 
-/* Нижняя панель */
-#tabbar {
-  position: fixed;
-  inset: auto 0 0 0;
-  display: flex;
-  justify-content: center;
-  gap: 0;
-  background: var(--bg-el);
-  border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 20;
-}
-#tabbar .tab {
-  flex: 1 1 0;
-  max-width: 128px;
-  min-height: var(--tab-h);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: var(--dim);
-  font-size: 11px;
-  line-height: 1;
-}
-#tabbar .tab svg { width: 24px; height: 24px; }
-#tabbar .tab[aria-current="page"] { color: var(--text); }
-#tabbar .tab[aria-current="page"] svg { color: var(--ok); }
-/* Точка «идёт полёт» у иконки вкладки «Полёт» */
-#tabbar .tab { position: relative; }
-#tabbar .tab .live {
-  position: absolute;
-  top: 10px;
-  right: calc(50% - 18px);
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 0 2px var(--bg-el);
-}
+    /* Размеры касания и шрифта — всё, что растёт в перчатках */
+    --tap: 48px;      /* поля ввода, кнопки карты, квадратные кнопки */
+    --row: 58px;      /* строка списка, пункт чек-листа */
+    --row-pad: 10px;  /* вертикальный отступ строки; его же вычитает .row > button.grow */
+    --btn: 50px;      /* обычная кнопка */
+    --primary: 58px;  /* главная кнопка экрана */
+    --seg: 44px;      /* сегменты, малые кнопки, чипы-кнопки — не ниже порога 44 */
+    --font: 16px;     /* основной текст */
+    --font-d: 13px;   /* вторичная строка, подписи */
+    --ck-box: 44px;   /* клетка чек-листа */
+    --tab-h: 64px;    /* высота панели вкладок */
+    --dock-gap: 10px; /* зазор плавающей панели от краёв */
 
-/* ---------- Шапка страницы ---------- */
-.head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 14px;
-  min-height: 40px;
-}
-.head h1 { font-size: 21px; line-height: 1.2; flex: 1; }
-/* Заголовок с подписью тянется на всю ширину — кнопка справа уходит
-   к краю (как глобальный .grow на макете), иначе меню «⋯» позиционируется
-   от середины шапки */
-.head .grow { flex: 1; min-width: 0; }
-.head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
-.back {
-  width: var(--seg); height: var(--seg);
-  margin-left: -8px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--mut);
-  border-radius: 50%;
-}
-.back svg { width: 22px; height: 22px; }
-.head .head-act { color: var(--link); font-size: 15px; min-height: var(--seg); padding: 0 6px; flex: none; white-space: nowrap; }
-.head .head-ic {
-  width: var(--seg); height: var(--seg);
-  margin-right: -6px;
-  padding: 0;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--mut);
-  border-radius: 50%;
-}
-.head .head-ic svg { width: 22px; height: 22px; }
-.head .head-ic[aria-expanded="true"] { background: var(--card-2); color: var(--text); }
-
-.h2 {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--mut);
-  margin: 20px 0 8px;
-}
-/* Счётчик в заголовке раздела: «Сегодня 2 полёта · 28 мин» */
-.h2 .cnt { color: var(--dim); font-weight: 500; letter-spacing: 0; text-transform: none; }
-
-/* ---------- Карточки и списки ---------- */
-.card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 10px;
-}
-.card.flat { padding: 0; overflow: hidden; }
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--row);
-  padding: var(--row-pad) 14px;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  background: var(--card);
-}
-.row:last-child { border-bottom: 0; }
-button.row:active, a.row:active { background: var(--card-2); }
-.row .grow { flex: 1; min-width: 0; }
-.row .t { display: block; font-size: var(--font); }
-.row .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .chev { color: var(--dim); flex: none; }
-.row .chev svg { width: 18px; height: 18px; }
-.row .row-ic { color: var(--mut); flex: none; display: flex; }
-.row .row-ic svg { width: 22px; height: 22px; }
-
-.thumb {
-  width: 52px; height: 52px;
-  border-radius: 10px;
-  background: var(--card-2);
-  object-fit: cover;
-  flex: none;
-}
-.thumb.ph {
-  display: flex; align-items: center; justify-content: center;
-  color: var(--dim);
-}
-.thumb.ph svg { width: 26px; height: 26px; }
-
-/* ---------- Статусы ---------- */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-  flex: none;
-}
-.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.st-ready { color: var(--ok); background: var(--ok-bg); }
-.st-check { color: var(--warn); background: var(--warn-bg); }
-.st-maintenance { color: var(--maint); background: var(--maint-bg); }
-.st-grounded { color: var(--bad); background: var(--bad-bg); }
-.st-unknown { color: var(--unk); background: var(--unk-bg); }
-/* Заряд АКБ: зелёный — заряжен, синий — после полёта */
-.st-flown { color: var(--info); background: var(--info-bg); }
-.bt-ready { color: var(--ok); }
-.bt-flown { color: var(--info); }
-
-.badge {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: var(--mut);
-  font-size: 11px;
-  vertical-align: 2px;
-}
-/* online — информационная пометка, не предупреждение: синий, не жёлтый */
-.badge.online { color: var(--info); border-color: var(--info); }
-
-/* ---------- Кнопки ---------- */
-.btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--btn);
-  padding: 10px 18px;
-  border-radius: var(--radius);
-  background: var(--card-2);
-  border: 1px solid var(--line);
-  font-size: var(--font);
-  font-weight: 600;
-  transition: transform 0.08s var(--ease);
-}
-.btn svg { width: 20px; height: 20px; flex: none; }
-/* Нажатие подтверждается масштабом, а не прозрачностью */
-.btn:active { transform: scale(0.98); }
-.btn-primary {
-  background: var(--ok);
-  border-color: var(--ok);
-  color: #08130c;
-  min-height: var(--primary);
-  font-size: calc(var(--font) + 1px);
-}
-:root[data-theme="light"] .btn-primary { color: #fff; }
-.btn-danger { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
-/* «Посадка» — единственная кнопка, которую жмут не глядя: крупнее главной */
-.btn-land { min-height: calc(var(--primary) + 8px); font-size: 18px; }
-.btn-sm { width: auto; min-height: var(--seg); padding: 6px 14px; font-size: 14px; font-weight: 500; display: inline-flex; }
-/* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
-.ic-btn {
-  width: var(--seg); min-height: var(--seg); flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--dim);
-  border-radius: 8px;
-}
-.ic-btn svg { width: 20px; height: 20px; }
-.ic-btn.on { color: var(--warn); }
-.btn + .btn { margin-top: 8px; }
-/* Кнопки в строке списка (Я.Карты/OSM у локации) и в баннере («Во «Флот»»
-   и «К обучению» после добавления борта, «Завершить»/«Удалить» у забытого
-   полёта) стоят в ряд, не столбиком: иначе вторая ниже первой на 8 px */
-.row .btn + .btn,
-.banner .btn + .btn { margin-top: 0; }
-.btn-line { display: flex; gap: 8px; flex-wrap: wrap; }
-/* Текстовая кнопка-ссылка под главной («Как считается окно» в «Окнах»):
-   без рамки и заливки, но полной высоты касания — порог 44/52 общий для всех кнопок */
-.link-btn {
-  display: block; width: 100%; min-height: var(--seg);
-  color: var(--link); font-size: 14px; font-weight: 500; text-align: center;
-  margin-top: 2px;
-}
-.btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
-/* Второй ряд кнопок: деструктивное действие стоит отдельно от остальных. */
-.btn-line + .btn-line { margin-top: 8px; }
-
-/* ---------- Формы ---------- */
-.field { margin-bottom: 12px; }
-.field label {
-  display: block;
-  font-size: var(--font-d);
-  color: var(--mut);
-  margin-bottom: 4px;
-}
-input[type="text"], input[type="number"], input[type="date"], input[type="time"],
-input[type="search"], select, textarea {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--bg-el);
-  color: var(--text);
-  font: inherit;
-}
-textarea { min-height: 84px; resize: vertical; field-sizing: content; }
-select { appearance: none; }
-input[type="file"] { color: var(--mut); font-size: 14px; }
-/* Чекбокс в форме («Выполнено», «Основная локация»): цель касания — вся
-   строка-подпись высотой с сегмент, а не клетка 22 px; в перчатках растёт
-   вместе с токенами (ревью 2.0, раунд 2). */
-.check-row {
-  display: flex; gap: 12px; align-items: center;
-  min-height: var(--seg); padding: 4px 0;
-  color: var(--text); font-size: var(--font); cursor: pointer;
-}
-.check-row input[type="checkbox"] {
-  width: 24px; height: 24px; flex: none; margin: 0;
-  accent-color: var(--ok);
-}
-:root[data-gloves] .check-row input[type="checkbox"] { width: 28px; height: 28px; }
-.field .hint { font-size: 12px; color: var(--dim); margin-top: 3px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
-
-/* Сегментированный переключатель */
-.seg {
-  display: flex;
-  background: var(--bg-el);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
-}
-.seg button {
-  flex: 1;
-  min-height: var(--seg);
-  border-radius: 8px;
-  color: var(--mut);
-  font-size: 14px;
-}
-.seg button[aria-pressed="true"] { background: var(--card-2); color: var(--text); font-weight: 600; }
-/* Селект в виде пилюли (фильтр журнала, локация/АКБ на чек-листе):
-   ширина по содержимому, стрелка рисуется своей рамкой не нужна —
-   достаточно закруглённой формы и подчёркнутого выбора (.sel) */
-.pill-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 4px; scrollbar-width: none; }
-.pill-row::-webkit-scrollbar { display: none; }
-select.sel-pill {
-  width: auto;
-  max-width: 100%;
-  min-height: var(--seg);
-  padding: 6px 30px 6px 12px;
-  border-radius: 999px;
-  background: var(--card-2);
-  font-size: 14px;
-  flex: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
-    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
-  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-select.sel-pill.sel { border-color: var(--text); }
-/* Селект по ширине ВЫБРАННОГО пункта (pillSelect в app.js): нативный
-   select с width:auto растёт по самому длинному <option> и на телефоне
-   уезжал за край. В одной grid-клетке лежат невидимая копия подписи
-   (::after из data-v — она задаёт ширину; отступы и кегль повторяют
-   селект) и сам селект поверх — абсолютно, вне потока: иначе его
-   внутренняя ширина (самый длинный пункт) всё равно раздувает клетку.
-   В flex-ряду обёртка ужимается (min-width: 0), а не переполняет ряд. */
-.sel-fit { display: inline-grid; position: relative; flex: 0 1 auto; min-width: 0; max-width: 100%; vertical-align: middle; }
-.sel-fit::after {
-  content: attr(data-v);
-  visibility: hidden;
-  white-space: nowrap;
-  font-size: 14px;
-  padding: 6px 30px 6px 12px;
-  border: 1px solid transparent;
-  min-height: var(--seg);
-  /* Клетка грида по умолчанию не ужимается ниже содержимого, поэтому
-     длинное имя локации или АКБ раздувало ряд и страница ехала вбок
-     (замер 2026-09-07: 60 px прокрутки на чек-листе). Обрезаем НЕВИДИМУЮ
-     копию подписи, а не сам селект: обрезка селекта срезала бы ему
-     кольцо фокуса (:focus-visible рисуется снаружи рамки). */
-  min-width: 0;
-  overflow: hidden;
-}
-.sel-fit.sm::after { font-size: 13px; padding: 4px 26px 4px 10px; }
-.sel-fit > select { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; }
-
-/* Меню действий (popover): верхний слой, позиция под кнопкой ставится
-   в toggleMenu. Переопределяем UA-стили popover (inset/margin/border).
-   Без нативной поддержки :popover-open неизвестен — правила с ним
-   отбрасываются, меню живёт на атрибуте hidden. */
-.menu {
-  position: fixed;
-  inset: auto;
-  margin: 0;
-  padding: 6px;
-  min-width: 200px;
-  max-width: calc(100vw - 16px);
-  background: var(--bg-el);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 25;
-}
-.menu[hidden] { display: none; }
-.menu button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--tap);
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 15px;
-  text-align: left;
-  white-space: nowrap;
-}
-.menu button svg { width: 20px; height: 20px; color: var(--mut); flex: none; }
-.menu button:active { background: var(--card-2); }
-.menu button[disabled] { color: var(--dim); cursor: default; }
-.menu[popover]:popover-open {
-  display: flex;
-  opacity: 1;
-  transform: none;
-  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease),
-    overlay 0.16s var(--ease) allow-discrete, display 0.16s var(--ease) allow-discrete;
-}
-@starting-style {
-  .menu[popover]:popover-open { opacity: 0; transform: translateY(-6px); }
-}
-.menu[popover]::backdrop { background: transparent; }
-
-/* Сегмент с иконками: класс модели в форме */
-.seg-ic button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 62px;
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 6px 2px;
-}
-.seg-ic button svg { width: 24px; height: 24px; }
-.seg-ic button[aria-pressed="true"] svg { color: var(--ok); }
-
-/* ---------- Чек-лист ---------- */
-.ck {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  min-height: var(--row);
-}
-.ck:last-child { border-bottom: 0; }
-.ck .grow { flex: 1; min-width: 0; }
-.ck .t { display: block; font-size: var(--font); }
-.ck .d { display: block; color: var(--mut); font-size: calc(var(--font-d) - 0.5px); }
-.ck .st {
-  flex: none;
-  width: var(--ck-box); height: var(--ck-box);
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--dim);
-  background: var(--bg-el);
-  transition: background 0.14s var(--ease), border-color 0.14s var(--ease), color 0.14s var(--ease);
-}
-.ck .st svg { width: 22px; height: 22px; }
-.ck[data-state="ok"] .st { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
-.ck[data-state="ok"] .t { color: var(--mut); }
-.ck[data-state="skip"] .st { color: var(--unk); background: var(--unk-bg); }
-.ck[data-state="skip"] .t { color: var(--dim); text-decoration: line-through; }
-.ck[data-state="fail"] .st { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
-
-.progress {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--card-2);
-  overflow: hidden;
-  margin: 8px 0 4px;
-}
-.progress i { display: block; height: 100%; background: var(--ok); border-radius: 3px; transition: width 0.24s var(--ease); }
-
-/* ---------- Таймер и данные ---------- */
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.timer {
-  font-family: var(--mono);
-  font-size: 56px;
-  font-weight: 600;
-  text-align: center;
-  letter-spacing: 0.02em;
-  margin: 18px 0;
-  font-variant-numeric: tabular-nums;
-}
-/* Мигает только двоеточие; после посадки число гаснет в --mut */
-@keyframes colon-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.timer .colon { animation: colon-blink 1s ease-in-out infinite; }
-.timer.landed { color: var(--mut); }
-.timer.landed .colon { animation: none; }
-.stat-line { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
-.stat {
-  flex: 1 1 90px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-}
-.stat .v { font-family: var(--mono); font-size: 20px; font-weight: 600; }
-.stat .k { color: var(--mut); font-size: 12px; margin-top: 2px; }
-/* Четыре плитки: на телефоне 2×2 вместо «3 + 1» вразнобой. */
-.stat-line.four .stat { flex: 1 1 130px; }
-
-/* Полоски статистики: подпись — дорожка — значение. */
-.bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
-.bar-row .n {
-  flex: 0 0 88px;
-  color: var(--mut);
-  font-size: var(--font-d);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bar-track {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--card-2);
-  overflow: hidden;
-}
-.bar-track i { display: block; height: 100%; background: var(--info); border-radius: 4px; transition: width 0.24s var(--ease); }
-.bar-row .v {
-  flex: 0 0 auto;
-  min-width: 76px;
-  text-align: right;
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-}
-
-/* ---------- Сворачиваемые блоки ---------- */
-details.fold { border-top: 1px solid var(--line); }
-details.fold summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 8px 2px;
-  cursor: pointer;
-  color: var(--text);
-  font-weight: 600;
-}
-details.fold summary::-webkit-details-marker { display: none; }
-details.fold summary::after {
-  content: "";
-  margin-left: auto;
-  width: 8px; height: 8px;
-  border-right: 2px solid var(--dim);
-  border-bottom: 2px solid var(--dim);
-  transform: rotate(45deg);
-  transition: transform 0.15s;
-}
-details.fold[open] summary::after { transform: rotate(-135deg); }
-/* Длинные списки (каталог, история) не раскладываются, пока не видны */
-details.fold .fold-body { padding: 0 2px 14px; content-visibility: auto; contain-intrinsic-size: auto 400px; }
-/* Журнал длиннее 20 строк: карточки дней раскладываются по мере прокрутки.
-   Заглушка — по числу строк карточки (--n из разметки): с постоянными
-   200 px scrollHeight врал и render(true) на длинном списке прыгал
-   на сотни пикселей (ревью пакета 5). Строка полёта выше --row: две
-   строки текста (1,45 em основного и вторичного шрифта) + поля 20 px
-   + граница 1 px, у последней границы нет — замер 63/66 px */
-.card.flat.cv {
-  content-visibility: auto;
-  contain-intrinsic-size: auto calc(((var(--font) + var(--font-d)) * 1.45 + 22px) * var(--n, 3) - 1px);
-}
-
-/* ---------- Баннеры ---------- */
-.banner {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  font-size: 14px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--mut);
-}
-.banner > svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
-.banner.ok { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
-.banner.warn { border-color: var(--warn); color: var(--warn); background: var(--warn-bg); }
-
-.empty {
-  text-align: center;
-  color: var(--mut);
-  padding: 36px 16px;
-}
-.empty svg { width: 44px; height: 44px; color: var(--dim); margin: 0 auto 10px; }
-.empty p { margin-bottom: 14px; }
-
-/* ---------- Diff ---------- */
-.diff {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.5;
-  background: var(--bg-el);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 0;
-  overflow-x: auto;
-  white-space: pre;
-}
-.diff div { padding: 0 12px; }
-.diff .add { background: var(--ok-bg); color: var(--ok); }
-.diff .del { background: var(--bad-bg); color: var(--bad); }
-.pre {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  background: var(--bg-el);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 12px;
-  overflow-x: auto;
-  white-space: pre;
-  max-height: 50vh;
-}
-
-/* ---------- Почасовой прогноз ---------- */
-.wxr { padding: 8px 14px; border-bottom: 1px solid var(--line); }
-.wxr:last-child { border-bottom: 0; }
-.wxr-top { display: flex; align-items: center; gap: 10px; }
-.wxr-top .chip { min-width: 96px; justify-content: center; }
-.wx-ic { color: var(--mut); flex: none; display: flex; }
-.wx-ic svg { width: 20px; height: 20px; }
-.wxr.night { background: rgba(0, 0, 0, 0.22); }
-.wxr.night .mono { color: var(--dim); }
-
-/* Окна (2.0): чипы дней с точкой-вердиктом, карточка полоски,
-   карточка выбранного часа, выделенный час в полном списке */
-/* Размеры чипов — из макета Windows.dc.html; семь чипов в 358 px всё равно
-   не встают, поэтому лишние переносятся на второй ряд, а не уезжают
-   за край со скрытой полосой прокрутки (ревью пакета 5) */
-.day-chips { display: flex; flex-wrap: wrap; gap: 5px; padding-bottom: 2px; }
-button.pill { cursor: pointer; }
-.pill.sel { border-color: var(--text); }
-.day-chip { padding: 5px 8px; font-size: 12px; gap: 5px; flex: none; }
-.day-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--card-2); border: 1px solid var(--line); flex: none; }
-.day-chip i.g { background: var(--ok); border-color: var(--ok); }
-.day-chip i.y { background: var(--warn); border-color: var(--warn); }
-.day-chip i.r { background: var(--bad); border-color: var(--bad); }
-.wx-strip-card { padding: 8px 14px 10px; }
-.wx-strip-sub { margin-top: 6px; }
-.wx-hour-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.wx-hour-top .grow { flex: 1; min-width: 0; }
-.load-line { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.load-line .gauge { display: block; }
-.wx-fold { margin-top: 14px; }
-.wxr.sel { box-shadow: inset 3px 0 0 var(--text); }
-.wxr.sel .mono { color: var(--text); }
-
-/* ---------- Флот: группы ---------- */
-.fleet-bar { display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch; }
-.grp-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 14px 0 6px;
-  font-weight: 600;
-  font-size: 15px;
-}
-.grp-head.grp-sub, .card.grp-sub, .grp-empty.grp-sub { margin-left: 16px; }
-.grp-head .grp-edit {
-  width: var(--seg); height: var(--seg);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--dim);
-  border-radius: 8px;
-}
-.grp-head .grp-edit svg { width: 18px; height: 18px; }
-.grp-empty { margin: 2px 0 8px; }
-.row .row-move {
-  width: var(--seg); min-height: var(--seg); flex: none;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--dim);
-  border-radius: 8px;
-}
-.row .row-move svg { width: 20px; height: 20px; }
-.chip-link { cursor: pointer; }
-.chip-link:active { opacity: 0.7; }
-
-/* Мини-карта выбора точки (OSM) */
-.site-map-box:not([hidden]) { margin-top: 12px; }
-.mp { margin-bottom: 10px; }
-/* Общий вид кнопок карты (иконка у поля, «Найти», зум) */
-.map-btn, .mp-search .mp-go, .mp-zoom button {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.map-btn { flex: none; width: 48px; color: var(--mut); }
-.map-btn svg { width: 22px; height: 22px; }
-.mp-search { display: flex; gap: 8px; margin-bottom: 8px; }
-.mp-search .mp-q { flex: 1; min-width: 0; }
-.mp-search .mp-go { padding: 0 14px; min-height: 44px; }
-.mp-found { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.windy-box { margin-top: 8px; }
-.mp-view {
-  position: relative;
-  height: 300px;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--bg-el);
-  touch-action: none;
-  cursor: crosshair;
-}
-.mp-layer { position: absolute; inset: 0; }
-.mp-pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  color: var(--bad);
-  pointer-events: none;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
-}
-.mp-pin svg { width: 30px; height: 30px; }
-.mp-bar { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
-.mp-bar .mp-hint { flex: 1; }
-.mp-bar a { color: var(--dim); }
-/* Зум — прямо на карте, справа, крупный */
-.mp-zoom {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 2;
-}
-.mp-zoom button {
-  width: 48px;
-  height: 48px;
-  color: var(--text);
-  font-size: 24px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-.mp-zoom button:active { background: var(--card-2); }
-
-/* Таблица в окне «Как считается» */
-.tbl-wrap { overflow-x: auto; }
-.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.tbl th, .tbl td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
-.tbl th { color: var(--mut); font-weight: 600; font-size: 12.5px; }
-.tbl td:first-child { color: var(--mut); }
-.tbl tr:last-child td { border-bottom: 0; }
-.tbl .wx-bad { color: var(--bad); white-space: nowrap; }
-.tbl .wx-warn { color: var(--warn); white-space: nowrap; }
-.gauge {
-  flex: 1;
-  min-width: 56px;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--card-2);
-  overflow: hidden;
-}
-.gauge i { display: block; height: 100%; border-radius: 4px; transition: width 0.24s var(--ease); }
-.wxr-sub { color: var(--mut); font-size: 12.5px; margin-top: 4px; }
-
-/* ---------- Модальные окна ---------- */
-dialog {
-  border: 0;
-  border-radius: 16px 16px 0 0;
-  background: var(--bg-el);
-  color: var(--text);
-  width: 100%;
-  max-width: 640px;
-  margin: auto auto 0;
-  padding: 0;
-  max-height: 92dvh;
-  /* Лист въезжает снизу 220 мс; уезжает (класс closing) за 160 мс —
-     узел убирает closeModal по transitionend. Свойства display/overlay
-     с allow-discrete нужны, чтобы вход анимировался из @starting-style. */
-  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease),
-    overlay 0.22s var(--ease) allow-discrete, display 0.22s var(--ease) allow-discrete;
-}
-dialog[open] { transform: translateY(0); opacity: 1; }
-@starting-style {
-  dialog[open] { transform: translateY(24px); opacity: 0; }
-}
-dialog.closing { transform: translateY(24px); opacity: 0; transition-duration: 0.16s; }
-@media (min-width: 700px) {
-  dialog { border-radius: 16px; margin: auto; }
-}
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-  transition: opacity 0.22s var(--ease), overlay 0.22s var(--ease) allow-discrete, display 0.22s var(--ease) allow-discrete;
-}
-dialog[open]::backdrop { opacity: 1; }
-@starting-style {
-  dialog[open]::backdrop { opacity: 0; }
-}
-dialog.closing::backdrop { opacity: 0; transition-duration: 0.16s; }
-.dlg-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px 4px;
-}
-.dlg-head h2 { font-size: 18px; flex: 1; }
-.dlg-close {
-  width: var(--seg); height: var(--seg);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--mut);
-  border-radius: 50%;
-}
-.dlg-close svg { width: 22px; height: 22px; }
-.dlg-body { padding: 10px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; }
-body.locked { overflow: hidden; }
-
-/* ---------- Разное ---------- */
-.muted { color: var(--mut); }
-.small { font-size: var(--font-d); }
-.spacer { height: 8px; }
-hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
-.right { margin-left: auto; }
-.nowrap { white-space: nowrap; }
-.center { text-align: center; }
-
-.result-normal { color: var(--ok); }
-.result-problem, .result-emergency { color: var(--warn); }
-.result-crash { color: var(--bad); }
-.result-maintenance { color: var(--maint); }
-
-/* ---------- Переходы между экранами (View Transitions) ----------
-   render() ставит html[data-vt]: forward — новый экран въезжает справа
-   на 24 px и проявляется, старый гаснет; back — зеркально; tab — только
-   прозрачность; update (render(true)) — корень не моргает, анимируются
-   лишь элементы с view-transition-name (клетка чек-листа). Без
-   поддержки API всё рисуется мгновенно. */
-::view-transition { pointer-events: none; }
-@keyframes vt-in-fwd { from { transform: translateX(24px); opacity: 0; } }
-@keyframes vt-in-back { from { transform: translateX(-24px); opacity: 0; } }
-@keyframes vt-out { to { opacity: 0; } }
-@keyframes vt-fade-in { from { opacity: 0; } }
-@keyframes ck-pop { from { transform: scale(0.9); opacity: 0.4; } }
-html[data-vt="forward"]::view-transition-new(root) { animation: vt-in-fwd 0.18s var(--ease); }
-html[data-vt="forward"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
-html[data-vt="back"]::view-transition-new(root) { animation: vt-in-back 0.18s var(--ease); }
-html[data-vt="back"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
-html[data-vt="tab"]::view-transition-new(root) { animation: vt-fade-in 0.14s var(--ease); }
-html[data-vt="tab"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
-html[data-vt="update"]::view-transition-old(root),
-html[data-vt="update"]::view-transition-new(root) { animation: none; }
-html[data-vt="update"]::view-transition-old(*) { animation: none; opacity: 0; }
-html[data-vt="update"]::view-transition-new(*) { animation: ck-pop 0.2s var(--ease); }
-/* Имена клеток нужны только точечному обновлению: при смене экрана
-   клетка едет вместе с корнем, а не отдельно от него */
-html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
-
-/* Универсальный * не выбирает псевдоэлементы, а transition не наследуется:
-   без ::before/::after анимация сегмента полоски не гасла (ревью пакета 5);
-   ::backdrop — тоже псевдоэлемент, и затемнение под окном продолжало
-   проявляться 0.22 с (финальное ревью 2.0) */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after, ::backdrop { transition: none !important; animation: none !important; }
-}
-
-/* ---------- Печать журнала ----------
-   Фон листа задаётся ЯВНО у тела. Тёмная тема базовая, у html фона нет,
-   поэтому фон body уходит на холст листа и красит его целиком: замер
-   2026-09-07 — в PDF заливка 16,19,24 во всю область листа, поверх белая
-   полоса ровно по высоте таблицы; светлая тема давала серый лист. Белый
-   только у html не спасает — коробка тела рисует свой фон поверх холста.
-   min-height снимается ради WebKit: он при печати считает vh от экранного
-   окна и выталкивает пустой лист (в Chromium этого нет).
-   Длинное слово без пробелов растягивало таблицу за край листа, и текст
-   молча обрезался. Перенос в ЛЮБОМ месте разрешён колонкам со свободным
-   текстом — борт, АКБ, локация, заметки: они ужимаются до буквы, и таблица
-   влезает в лист. Дать его ВСЕМ ячейкам нельзя: тогда и служебные колонки
-   сжимаются до минимума и режут слова посреди слога («Лока/ция», замер).
-   Поля страницы и заливку шапки не навязываем: и то и другое — выбор
-   владельца в диалоге печати. */
-#print-area { display: none; }
-@media print {
-  html, body { background: #fff; min-height: 0; }
-  body > *:not(#print-area) { display: none !important; }
-  #print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
-  #print-area h1 { font-size: 16pt; margin-bottom: 4pt; }
-  #print-area p { margin-bottom: 8pt; }
-  #print-area table { width: 100%; border-collapse: collapse; }
-  #print-area th, #print-area td {
-    border: 1pt solid #444;
-    padding: 3pt 5pt;
-    text-align: left;
-    vertical-align: top;
-    font-size: 10pt;
+    /* Сила эффектов: режимы меняют только эти числа */
+    --fx-glow: 1;       /* множитель свечения */
+    --fx-blur: 0px;     /* размытие стекла */
+    --card-alpha: 100%; /* непрозрачность карточек */
   }
-  /* Борт, АКБ, локация, заметки — пользовательский текст любой длины */
-  #print-area td:nth-child(3), #print-area td:nth-child(5),
-  #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
-  #print-area th { background: #eee; }
-  #print-area tr { break-inside: avoid; }
+
+  /* Широкая гамма: на дисплеях P3 (iPhone, Mac) неон ярче, без выхода
+     за sRGB на остальных. */
+  @supports (color: oklch(0.5 0.1 200)) {
+    @media (color-gamut: p3) {
+      :root {
+        --accent: oklch(0.84 0.15 205);
+        --ok: oklch(0.82 0.21 150);
+        --warn: oklch(0.86 0.16 85);
+        --bad: oklch(0.7 0.22 22);
+        --maint: oklch(0.76 0.17 52);
+      }
+    }
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #eef2f7;
+    --bg-2: #f7f9fc;
+    --surface: #ffffff;
+    --surface-2: #f2f5f9;
+    --surface-3: #e7ecf3;
+    --line: #d8dfe8;
+    --line-soft: rgba(30, 50, 80, 0.1);
+    --text: #0f1722;
+    --mut: #4d5a6a;
+    --dim: #7f8b9a;
+    --link: #0a64c8;
+
+    --accent: #0a93b5;
+    --accent-2: #4c5bd4;
+    --on-accent: #ffffff;
+
+    --ok: #12894b;
+    --warn: #8f6a06;
+    --maint: #b0530f;
+    --bad: #cc2f36;
+    --info: #1f63c7;
+    --unk: #6b7684;
+    --on-ok: #ffffff;
+
+    --ok-bg: rgba(18, 137, 75, 0.1);
+    --warn-bg: rgba(143, 106, 6, 0.1);
+    --maint-bg: rgba(176, 83, 15, 0.11);
+    --bad-bg: rgba(204, 47, 54, 0.09);
+    --info-bg: rgba(31, 99, 199, 0.09);
+    --unk-bg: rgba(107, 118, 132, 0.11);
+    --accent-bg: rgba(10, 147, 181, 0.1);
+
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px -16px rgba(20, 40, 70, 0.35);
+    --shadow-pop: 0 18px 44px -14px rgba(20, 40, 70, 0.35);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent 40%);
+  }
+
+  /* ---- «В перчатках»: крупнее всё, что трогают пальцем ---- */
+  :root[data-ui="gloves"] {
+    --tap: 60px;
+    --row: 70px;
+    --row-pad: 12px;
+    --btn: 62px;
+    --primary: 74px;
+    --seg: 56px;
+    --font: 18px;
+    --font-d: 15px;
+    --ck-box: 58px;
+    --tab-h: 76px;
+    --dock-gap: 0px;
+    --radius: 16px;
+    --fx-glow: 0;
+    /* Контраст выше: вторичный текст светлее, линии заметнее */
+    --mut: #b9c4d2;
+    --dim: #8e9aab;
+    --line: #34435a;
+  }
+  :root[data-ui="gloves"][data-theme="light"] {
+    --mut: #3a4655;
+    --dim: #5d6978;
+    --line: #c3ccd8;
+  }
+
+  /* ---- «Максимум»: стекло и свечение ---- */
+  :root[data-ui="max"] {
+    --fx-glow: 1.6;
+    --fx-blur: 16px;
+    --card-alpha: 74%;
+    --bg: #070b12;
+  }
+  :root[data-ui="max"][data-theme="light"] {
+    --bg: #e9eef6;
+    --card-alpha: 80%;
+  }
 }
 
-/* ---------- «Сегодня»: состояния дня ----------
-   Герой (борт на поле / полёт), карточка погоды из кэша с полоской
-   24 часов, строки-действия «Перед выездом» и «Разобраться». */
-.row .row-main {
-  display: flex; align-items: center; gap: 12px;
-  text-align: left;
-  min-height: var(--seg);
-  min-width: 0;
-}
-/* Кнопка внутри строки-контейнера (div.row) растягивается на всю высоту
-   строки, включая её отступы: иначе область касания — 43 px по тексту,
-   а не 56/64 строки (набор test:seeded, порог 44/52). Отступ — тот же
-   токен, что у .row: изменится один — подстроится и другой. */
-.row > button.grow {
-  align-self: stretch;
-  margin-top: calc(-1 * var(--row-pad)); margin-bottom: calc(-1 * var(--row-pad));
-  padding-top: var(--row-pad); padding-bottom: var(--row-pad);
-}
-.thumb.lg { width: 72px; height: 72px; border-radius: 14px; }
-.thumb.lg.ph svg { width: 34px; height: 34px; }
-.hero { padding: 16px; }
-.hero-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.hero-top .grow { flex: 1; min-width: 0; }
-.hero-name { display: block; font-size: 20px; font-weight: 700; line-height: 1.2; }
-/* Строки-пояснения (обучение, «Ещё», каталог) и списки в окнах переносятся:
-   там вторичная строка — текст, а не подпись к данным */
-.row .d.wrap, dialog .row .d { white-space: normal; }
-/* В героях вторичная строка переносится: там она несёт смысл, а не подпись */
-.hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
-.hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--ok); }
-.ico14 { display: inline-flex; }
-.ico14 svg { width: 14px; height: 14px; }
-.hero .btn { margin-top: 0; }
-.hero .btn + .btn { margin-top: 8px; }
-.hero-flight .timer { margin: 4px 0 14px; font-size: 52px; }
-/* Карточка погоды — целиком кнопка в окна */
-.wx-hero { display: block; width: 100%; text-align: left; padding: 12px 14px; }
-.wx-hero:active { background: var(--card-2); }
-.wx-hero-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.wx-hero-top .grow { flex: 1; min-width: 0; }
-.wx-hero .t { display: block; font-size: 17px; font-weight: 700; line-height: 1.25; }
-.wx-hero .t.ok { color: var(--ok); }
-.wx-hero .t.warn { color: var(--warn); }
-.wx-hero .t.muted { color: var(--mut); }
-.wx-hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
-.wx-hero .chev { color: var(--dim); flex: none; }
-.wx-hero .chev svg { width: 18px; height: 18px; }
-/* Полоска 24 часов: сегмент на час, ночь приглушена, выбранный час
-   обведён. Цвет сегмента — переменная --c: у <i> он на самом элементе,
-   у кнопок (.strip.tap на экране «Окна») — на ::before, чтобы цель
-   касания была высотой с клетку (--ck-box), а полоса — 16 px */
-.strip { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
-.strip > * { flex: 1 1 0; display: block; min-width: 0; background: var(--c, var(--card-2)); }
-.strip .g { --c: var(--ok); }
-.strip .y { --c: var(--warn); }
-.strip .r { --c: var(--bad); }
-.strip .n { opacity: 0.55; }
-.strip .now { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; opacity: 1; }
-.strip.tap { height: var(--ck-box); overflow: visible; border-radius: 0; }
-.strip.tap button { background: none; position: relative; padding: 0; border-radius: 0; cursor: pointer; }
-.strip.tap button::before {
-  content: "";
-  position: absolute; left: 0; right: 0;
-  top: calc(50% - 8px); height: 16px;
-  background: var(--c, var(--card-2));
-  transition: transform 0.12s var(--ease);
-}
-.strip.tap button:first-child::before { border-radius: 4px 0 0 4px; }
-.strip.tap button:last-child::before { border-radius: 0 4px 4px 0; }
-.strip.tap button:active::before { transform: scaleY(1.3); }
-.strip.tap .now { outline: none; }
-.strip.tap .now::before { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; }
-.strip.tap button:focus-visible { outline: none; }
-.strip.tap button:focus-visible::before { outline: 2px solid var(--link); outline-offset: 1px; border-radius: 3px; }
-.ticks {
-  display: flex; justify-content: space-between;
-  color: var(--dim); font-size: 11px; font-family: var(--mono);
-  margin-top: 4px;
-}
-.stat .v.warn { color: var(--warn); }
-/* Баннер копии: иконка, текст и кнопка в одну линию */
-.banner.backup { align-items: center; }
-.banner.backup > svg { margin-top: 0; }
-/* Чип-действие (заряд АКБ): статус тот же, но касание — как у малых
-   кнопок, растёт в режиме «В перчатках» через --seg */
-button.chip { cursor: pointer; min-height: var(--seg); padding: 0 12px; }
+/* == styles/01-base.css == */
+/* База: сброс, типографика, фон, фокус. */
 
-/* ---------- Карточка борта: герой и сегменты (2.0) ----------
-   Герой — превью 72 px, чип статуса с компактным селектом «авто/вручную»,
-   АКБ-пилюля, три плитки, полоска регламента, одна кнопка. */
-.seg.four button { font-size: 13px; padding: 0 2px; }
-/* На узких телефонах четыре подписи стоят вплотную — чуть мельче */
-@media (max-width: 399px) { .seg.four button { font-size: 12.5px; padding: 0 1px; } }
-.seg.model-tabs { margin: 4px 0 12px; }
-/* Строки героя: селекты — по ширине выбранного пункта (.sel-fit).
-   Рядом с превью 72 px остаётся ~270 px — там только «Готов · авто»;
-   строка АКБ с чипом заряда идёт ниже на всю ширину карточки. Не влезло
-   (длинное имя АКБ, «вручную: Обслуживание») — переносится, а не
-   режется: нативный select при ужатии обрезает текст без многоточия. */
-.hero-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
-.hero-line > .sel-fit { flex: none; max-width: 100%; }
-.hero-line > .chip { flex: none; }
-.hero-batt { margin: -4px 0 12px; }
-/* Компактный селект статуса: ширина по содержимому, стрелка как у пилюли */
-select.sel-sm {
-  width: auto;
-  min-height: var(--seg);
-  padding: 4px 26px 4px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--mut);
-  background: var(--card-2);
-  flex: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
-    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
-  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-.model-hero .hint { font-size: 12px; color: var(--dim); margin: -6px 0 10px; }
-.model-hero .stat-line { margin: 0; }
-.model-hero .stat { flex: 1 1 0; min-width: 0; padding: 8px 10px; }
-.model-hero .stat .v { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.model-hero .btn { margin-top: 12px; }
-/* Регламент: подпись — полоска; ниже — пройдено и кнопка «Осмотр» */
-.svc-line { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.svc-line .progress { flex: 1; margin: 0; }
-.svc-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--dim); font-size: 12px; }
-.svc-sub .grow { flex: 1; min-width: 0; }
-/* Паспорт: сетка 2 колонки «подпись / значение» */
-.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
-.kv div { display: flex; flex-direction: column; min-width: 0; }
-.kv .k { color: var(--mut); font-size: 12px; }
-.kv .v { font-size: 15px; overflow-wrap: anywhere; }
-.xs { font-size: 12px; }
-.dim { color: var(--dim); }
-/* Список флота: чип статуса не выдавливает имя — 40 % ширины и многоточие */
-.row > .chip { flex: 0 1 auto; min-width: 0; max-width: 40%; }
-.chip::before { flex: none; }
-.chip .cl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.fleet-row .row-main { min-width: 45%; }
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  img, svg { display: block; }
+  img { max-width: 100%; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  a { -webkit-tap-highlight-color: transparent; }
+  ul, ol { padding-left: 20px; }
 
-/* ---------- Чек-лист: пилюли, меню клетки, липкая панель (2.0) ---------- */
-/* Пилюли чек-листа помещаются в ширину экрана: без прокрутки вбок,
-   при нехватке места ужимаются обе (пропорционально ширине подписи) */
-.prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
-/* Кнопка карты — цель касания --tap (48 / 56), как у всех кнопок карты */
-.prep-pills .map-btn { width: var(--tap); min-height: var(--tap); border-radius: 999px; }
-/* Второй ряд — АКБ и чип заряда (как .hero-batt в герое борта). Перенос
-   обязателен: у .pill-row его нет, а нативный select при ужатии режет
-   текст без многоточия — длинная подпись уводит чип вниз, а не портит имя */
-.prep-batt { flex-wrap: wrap; }
-.prog-line { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
-.prog-line .progress { flex: 1; margin: 0; }
-/* Строка — контейнер двух кнопок: тап по строке (ok ↔ пусто) и по клетке
-   (меню трёх состояний, встроенное в строку переносом) */
-.ck { flex-wrap: wrap; }
-.ck .ck-main {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center;
-  text-align: left;
-  min-height: var(--ck-box);
-  padding: 0;
-}
-.ck .ck-main .grow { flex: 1; min-width: 0; }
-.ck .ck-main:active { opacity: 0.7; }
-.ck button.st { padding: 0; cursor: pointer; }
-.ck button.st:active { transform: scale(0.94); }
-/* Три кнопки в ряд даже на 360 px и в перчатках: кегль 13, узкие
-   отступы, подпись при нехватке места режется многоточием; высота —
-   как у клетки (--ck-box), которую меню заменяет */
-.ck-menu { flex-basis: 100%; display: flex; gap: 6px; padding: 8px 0 2px; }
-.ck-menu button {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  min-height: var(--ck-box);
-  padding: 0 4px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg-el);
-  font-size: 13px;
-}
-.ck-menu button svg { width: 18px; height: 18px; flex: none; }
-.ck-menu button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* На 360 px три подписи с иконками не помещаются («Пропуст…») —
-   подпись важнее: иконки прячем, цвет и текст остаются */
-@media (max-width: 379px) { .ck-menu button svg { display: none; } }
-.ck-menu button[data-state="ok"] { color: var(--ok); }
-.ck-menu button[data-state="fail"] { color: var(--bad); }
-.ck-menu button[data-state="skip"] { color: var(--mut); }
-.ck-menu button[aria-pressed="true"] { background: var(--card-2); border-color: currentColor; font-weight: 600; }
-/* Липкая панель действий: держится над нижней панелью, фон с градиентом
-   сверху, чтобы список просвечивал, но кнопки читались */
-.act-bar {
-  position: sticky;
-  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
-  margin: 8px -16px 0;
-  padding: 22px 16px 10px;
-  background: linear-gradient(to top, var(--bg) 86%, transparent);
-  z-index: 5;
-}
-.act-bar .banner { margin-bottom: 8px; padding: 8px 12px; font-size: 13px; align-items: center; }
-.act-bar .banner > svg { margin-top: 0; }
-.act-bar .btn + .btn { margin-top: 8px; }
-
-/* ---------- Экран полёта: кольцо, пилюли, индикатор (2.0) ---------- */
-.ring {
-  width: 220px; height: 220px;
-  margin: 10px auto 8px;
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-}
-.ring svg.r { position: absolute; inset: 0; width: 220px; height: 220px; transform: rotate(-90deg); }
-.ring .ring-track { fill: none; stroke: var(--card-2); stroke-width: 8; }
-.ring .ring-fill {
-  fill: none;
-  stroke: var(--ok);
-  stroke-width: 8;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear;
-}
-.ring.landed .ring-fill { stroke: var(--mut); }
-.ring-in { text-align: center; position: relative; padding: 0 16px; }
-.ring .timer { font-size: 44px; margin: 0; }
-.ring-sub { margin-top: 6px; }
-.pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0 16px; }
-.pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--seg);
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--card-2);
-  font-size: 14px;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.pill svg { width: 16px; height: 16px; color: var(--dim); flex: none; }
-.pill > span { overflow: hidden; text-overflow: ellipsis; }
-.wake-ind {
-  display: inline-flex; align-items: center; gap: 5px;
-  color: var(--mut); font-size: 12px;
-  white-space: nowrap; flex: none;
-}
-.wake-ind[hidden] { display: none; }
-.session-hint { text-align: center; margin-top: 14px; }
-
-/* ---------- «Сегодня»: две колонки (2.0) ----------
-   Разметка одна: .today-main (шапка, баннеры, блоки состояния) и
-   aside.today-side (условия, полёты дня, копия). На телефоне обёртки
-   прозрачны для раскладки (display: contents), #views — flex-колонка,
-   порядок задаёт order: шапка (0) → герой дня (1: борт на поле, полёт,
-   плитки разбора) → условия (2) → остальные блоки состояния (3) →
-   полёты дня и копия (4) → блоки после них, .late (5). Дома героя нет,
-   и условия встают сразу под шапкой; на поле и в полёте главная кнопка
-   дня («Взлёт», «Посадка») остаётся выше погоды — как в §3.1 (ревью
-   пакета 5). Поля между flex-элементами не схлопываются, поэтому
-   верхний отступ .h2 здесь 10 px (с нижним полем карточки — прежние 20). */
-@media (max-width: 899px) {
-  #views.two-col { display: flex; flex-direction: column; }
-  .today-main, .today-side { display: contents; }
-  .today-main > * { order: 3; }
-  .today-main > .today-top { order: 0; }
-  .today-main > .card.hero, .today-main > .stat-line { order: 1; }
-  .today-main > .late { order: 5; }
-  .today-side > * { order: 4; }
-  .today-side > .wx-slot { order: 2; }
-  .side-only { display: none; }
-  #views.two-col .today-main > .h2, #views.two-col .today-side > .h2 { margin-top: 10px; }
-  #views.two-col .today-main > .btn { margin-bottom: 10px; }
+  /* Без движения — по системной настройке. Универсальный * не выбирает
+     псевдоэлементы, а transition не наследуется, поэтому они перечислены;
+     ::backdrop — тоже псевдоэлемент. !important в первом слое сильнее
+     любого слоя ниже. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after, ::backdrop {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
 }
 
-/* ---------- Десктоп и планшет от 900 px (2.0) ----------
-   Панель вкладок — вертикальная рельса слева (88 px, иконка над
-   подписью, активная — на карточке); контент правее рельсы. «Сегодня» —
-   две колонки: основная и 360 px справа. Остальные экраны — одна
-   колонка 720 px: строка списка шириной в 1100 px не читается. */
-@media (min-width: 900px) {
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: var(--font)/1.45 var(--font-ui);
+    min-height: 100dvh;
+    overscroll-behavior-y: contain;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
+  p { text-wrap: pretty; }
+  a { color: var(--link); text-decoration: none; }
+  a:active { opacity: 0.7; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--mut); }
+  .dim { color: var(--dim); }
+  .small { font-size: var(--font-d); }
+  .xs { font-size: 12px; }
+  .spacer { height: 8px; }
+  .right { margin-left: auto; }
+  .nowrap { white-space: nowrap; }
+  .center { text-align: center; }
+  .grow { flex: 1; min-width: 0; }
+  hr.sep { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+  .ico14 { display: inline-flex; flex: none; }
+  .ico14 svg { width: 14px; height: 14px; }
+
+  .result-normal { color: var(--ok); }
+  .result-problem, .result-emergency { color: var(--warn); }
+  .result-crash { color: var(--bad); }
+  .result-maintenance { color: var(--maint); }
+}
+
+/* == styles/02-layout.css == */
+/* Каркас: колонка экранов, плавающая панель вкладок (рельса на
+   десктопе), шапка экрана, заголовки разделов, две колонки «Сегодня». */
+
+@layer layout {
+  #views {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 14px 16px calc(var(--tab-h) + var(--dock-gap) + 30px + env(safe-area-inset-bottom));
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+
+  /* ---------- Панель вкладок: плавающий док ---------- */
   #tabbar {
-    inset: 0 auto 0 0;
-    width: 88px;
+    position: fixed;
+    left: var(--dock-gap);
+    right: var(--dock-gap);
+    bottom: calc(var(--dock-gap) + env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: space-around;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--bg-2) 86%, transparent);
+    border: 1px solid var(--line-soft);
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    z-index: 20;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  #tabbar .tab {
+    position: relative;
+    flex: 1 1 0;
+    min-height: calc(var(--tab-h) - 10px);
+    display: flex;
     flex-direction: column;
-    justify-content: flex-start;
     align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    border-radius: 19px;
+    transition: color 0.2s var(--ease);
+  }
+  #tabbar .tab svg { width: 24px; height: 24px; position: relative; z-index: 1; transition: transform 0.25s var(--ease-spring); }
+  #tabbar .tab span { position: relative; z-index: 1; }
+  #tabbar .tab:active svg { transform: scale(0.88); }
+  #tabbar .tab[aria-current="page"] { color: var(--text); }
+  #tabbar .tab[aria-current="page"] svg { color: var(--accent); }
+  /* Подложка активной вкладки — отдельный элемент с view-transition-name:
+     при смене вкладки она переезжает к новой, а не мигает. */
+  #tabbar .tab-ind {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+    view-transition-name: tab-ind;
+  }
+  /* Точка «идёт полёт» у иконки «Полёт» — видна с любой вкладки */
+  #tabbar .tab .live {
+    position: absolute;
+    top: 7px;
+    right: calc(50% - 19px);
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 2px var(--bg-2);
+    z-index: 2;
+  }
+
+  /* ---------- Шапка экрана ---------- */
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 16px;
+    min-height: 44px;
+  }
+  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; }
+  .head .grow { flex: 1; min-width: 0; }
+  .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 3px; }
+  .back {
+    width: var(--seg); height: var(--seg);
+    margin-left: -8px;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mut);
+    border-radius: 50%;
+  }
+  .back svg { width: 24px; height: 24px; }
+  .back:active { background: var(--surface-2); }
+  .head .head-act {
+    color: var(--accent);
+    font-size: 15px; font-weight: 600;
+    min-height: var(--seg);
+    padding: 0 12px;
+    flex: none;
+    white-space: nowrap;
+    border-radius: 999px;
+    background: var(--accent-bg);
+  }
+  .head .head-act:active { transform: scale(0.97); }
+  .head .head-ic {
+    width: var(--seg); height: var(--seg);
+    margin-right: -6px;
+    padding: 0;
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mut);
+    border-radius: 50%;
+    background: none;
+  }
+  .head .head-ic svg { width: 23px; height: 23px; }
+  .head .head-ic[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
+  .head .head-help { color: var(--dim); }
+  .head .head-act + .head-help { margin-left: 2px; }
+
+  /* Состояние дня в подписи шапки «Сегодня» */
+  .state-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 1px 9px 1px 7px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 650;
+    vertical-align: 1px;
+    color: var(--c, var(--mut));
+    background: color-mix(in srgb, var(--c, var(--mut)) 14%, transparent);
+  }
+  .state-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .state-pill.field, .state-pill.flying { --c: var(--ok); }
+  .state-pill.debrief { --c: var(--info); }
+  .state-pill.home { --c: var(--accent); }
+
+  /* ---------- Заголовок раздела ---------- */
+  .h2 {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mut);
+    margin: 24px 2px 9px;
+  }
+  .h2::before {
+    content: "";
+    align-self: center;
+    width: 3px; height: 12px;
+    border-radius: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 calc(8px * var(--fx-glow)) var(--accent);
+    flex: none;
+  }
+  .h2 .cnt { color: var(--dim); font-weight: 550; letter-spacing: 0; text-transform: none; }
+  .h3 { font-weight: 650; margin: 14px 0 6px; }
+
+  /* ---------- «Сегодня»: две колонки ----------
+     Разметка одна: .today-main (шапка, баннеры, блоки состояния) и
+     aside.today-side (условия, полёты дня, копия). На телефоне обёртки
+     прозрачны для раскладки (display: contents), #views — flex-колонка,
+     порядок задаёт order: шапка (0) → герой дня (1) → условия (2) →
+     остальное (3) → полёты дня и копия (4) → блоки после них, .late (5). */
+  @media (max-width: 899px) {
+    #views.two-col { display: flex; flex-direction: column; }
+    .today-main, .today-side { display: contents; }
+    .today-main > * { order: 3; }
+    .today-main > .today-top { order: 0; }
+    .today-main > .card.hero, .today-main > .stat-line, .today-main > .ready-panel { order: 1; }
+    .today-main > .late { order: 5; }
+    .today-side > * { order: 4; }
+    .today-side > .wx-slot { order: 2; }
+    .side-only { display: none; }
+    #views.two-col .today-main > .h2, #views.two-col .today-side > .h2 { margin-top: 12px; }
+    #views.two-col .today-main > .btn { margin-bottom: 10px; }
+  }
+
+  /* ---------- Десктоп и планшет от 900 px ----------
+     Панель — вертикальная рельса слева; «Сегодня» — две колонки,
+     остальные экраны — одна колонка 760 px. */
+  @media (min-width: 900px) {
+    #tabbar {
+      inset: 12px auto 12px 12px;
+      width: 88px;
+      max-width: none;
+      margin: 0;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 6px;
+    }
+    #tabbar .tab { flex: none; width: 74px; min-height: 66px; }
+    #views { margin: 0 auto 0 100px; max-width: 1140px; padding: 24px 32px 32px; }
+    #views:not(.two-col) { max-width: 812px; }
+    #views.two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 372px;
+      gap: 28px;
+      align-items: start;
+    }
+    .today-main, .today-side { min-width: 0; }
+    .today-side > .wx-slot > .h2 { margin-top: 6px; }
+  }
+  @media (min-width: 1300px) {
+    #views { margin-left: auto; }
+  }
+}
+
+/* == styles/03-components.css == */
+/* Компоненты: карточки, строки, чипы, кнопки, формы, сегменты, пилюли,
+   меню, баннеры, шкалы, раскрывашки, окна. */
+
+@layer components {
+  /* ---------- Карточки ---------- */
+  .card {
+    position: relative;
+    background: var(--sheen), color-mix(in srgb, var(--surface) var(--card-alpha), transparent);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+  }
+  .card.flat { padding: 0; overflow: hidden; }
+
+  /* ---------- Строки списков ---------- */
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: var(--row);
+    padding: var(--row-pad) 14px;
+    text-align: left;
+    background: transparent;
+  }
+  /* Разделитель с отступом слева — как в системных списках. Линия —
+     фоновая картинка, а не псевдоэлемент: ::after занят подсветкой
+     следующего шага, ::before — полосой статуса. */
+  .row + .row, .ck + .ck, .wxr + .wxr {
+    background-image: linear-gradient(var(--line-soft), var(--line-soft));
+    background-size: calc(100% - 14px) 1px;
+    background-position: right top;
+    background-repeat: no-repeat;
+  }
+  button.row, a.row, .row .row-main { transition: background-color 0.15s var(--ease); }
+  button.row:active, a.row:active, .row .row-main:active { background-color: var(--surface-2); }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .t { display: block; font-size: var(--font); font-weight: 550; }
+  .row .d {
+    display: block;
+    color: var(--mut);
+    font-size: var(--font-d);
+    margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row .d.wrap, dialog .row .d { white-space: normal; }
+  .row .chev { color: var(--dim); flex: none; }
+  .row .chev svg { width: 18px; height: 18px; }
+  .row .row-ic {
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    color: var(--c, var(--mut));
+    background: color-mix(in srgb, var(--c, var(--mut)) 12%, transparent);
+  }
+  .row .row-ic svg { width: 21px; height: 21px; }
+  .row .row-main {
+    display: flex; align-items: center; gap: 12px;
+    text-align: left;
+    min-height: var(--seg);
+    min-width: 0;
+    border-radius: 12px;
+  }
+  /* Кнопка внутри строки-контейнера растягивается на всю высоту строки,
+     включая отступы: иначе область касания — строка текста, а не строка
+     списка (порог касания в test:seeded). */
+  .row > button.grow {
+    align-self: stretch;
+    margin-top: calc(-1 * var(--row-pad)); margin-bottom: calc(-1 * var(--row-pad));
+    padding-top: var(--row-pad); padding-bottom: var(--row-pad);
+  }
+  /* Полоса статуса слева у строки борта (data-st) */
+  .row[data-st]::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 12px; bottom: 12px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--st-c);
+    box-shadow: 0 0 calc(10px * var(--fx-glow)) var(--st-c);
+  }
+  .row[data-st="ready"] { --st-c: var(--ok); }
+  .row[data-st="check"] { --st-c: var(--warn); }
+  .row[data-st="maintenance"] { --st-c: var(--maint); }
+  .row[data-st="grounded"] { --st-c: var(--bad); }
+  .row[data-st="unknown"] { --st-c: var(--unk); }
+
+  .thumb {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    background: var(--surface-2);
+    object-fit: cover;
+    flex: none;
+    box-shadow: inset 0 0 0 1px var(--line-soft);
+  }
+  .thumb.ph { display: flex; align-items: center; justify-content: center; color: var(--dim); }
+  .thumb.ph svg { width: 27px; height: 27px; }
+  .thumb.lg { width: 76px; height: 76px; border-radius: 20px; }
+  .thumb.lg.ph svg { width: 36px; height: 36px; }
+  .thumb.tap { cursor: zoom-in; }
+  .thumb.tap:active { opacity: 0.75; }
+  .thumb-btn { flex: none; display: block; border-radius: 20px; cursor: zoom-in; }
+  .thumb-btn:active { opacity: 0.85; }
+
+  /* ---------- Чипы статусов ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex: none;
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 26%, transparent);
+  }
+  .chip::before {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+    box-shadow: 0 0 calc(8px * var(--fx-glow)) currentColor;
+  }
+  .chip .cl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .st-ready { --c: var(--ok); }
+  .st-check { --c: var(--warn); }
+  .st-maintenance { --c: var(--maint); }
+  .st-grounded { --c: var(--bad); }
+  .st-unknown { --c: var(--unk); }
+  .st-flown { --c: var(--info); }
+  .bt-ready { color: var(--ok); }
+  .bt-flown { color: var(--info); }
+  /* Чип-действие (заряд АКБ): касание — как у малых кнопок */
+  button.chip { cursor: pointer; min-height: var(--seg); padding: 0 14px; transition: transform 0.12s var(--ease); }
+  button.chip:active { transform: scale(0.95); }
+  .chip-link { cursor: pointer; }
+  .chip-link:active { opacity: 0.7; }
+  /* В строке чип не выдавливает имя: 40 % ширины и многоточие */
+  .row > .chip { flex: 0 1 auto; min-width: 0; max-width: 40%; }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--mut);
+    font-size: 11px;
+    font-weight: 600;
+    vertical-align: 2px;
+    letter-spacing: 0.02em;
+  }
+  /* online — информация, не тревога: синий, не жёлтый */
+  .badge.online { color: var(--info); border-color: color-mix(in srgb, var(--info) 55%, transparent); background: var(--info-bg); }
+
+  /* ---------- Кнопки ---------- */
+  .btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    min-height: var(--btn);
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    background: var(--sheen), var(--surface-2);
+    border: 1px solid var(--line);
+    font-size: var(--font);
+    font-weight: 650;
+    color: var(--text);
+    text-align: center;
+    transition: transform 0.1s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
+  }
+  .btn svg { width: 21px; height: 21px; flex: none; }
+  .btn:active { transform: scale(0.975); }
+  .btn[disabled] { opacity: 0.55; cursor: default; }
+  .btn-primary {
+    min-height: var(--primary);
+    font-size: calc(var(--font) + 1px);
+    font-weight: 750;
+    letter-spacing: 0.01em;
+    color: var(--on-ok);
+    border: 0;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%),
+      linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 70%, var(--accent)));
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.25) inset,
+      0 10px calc(26px * var(--fx-glow)) -10px color-mix(in srgb, var(--ok) 80%, transparent);
+  }
+  .btn-danger {
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 55%, transparent);
+    background: var(--bad-bg);
+  }
+  /* «Посадка» — единственная кнопка, которую жмут не глядя: крупнее главной */
+  .btn-land { min-height: calc(var(--primary) + 12px); font-size: 20px; }
+  .btn-sm {
+    width: auto;
+    min-height: var(--seg);
+    padding: 6px 15px;
+    font-size: 14.5px;
+    font-weight: 600;
+    display: inline-flex;
+    border-radius: 12px;
+    flex: none;
+  }
+  .btn-sm.btn-primary { min-height: var(--seg); font-size: 15px; }
+  .btn + .btn { margin-top: 9px; }
+  .row .btn + .btn, .banner .btn + .btn { margin-top: 0; }
+  .btn-line { display: flex; gap: 9px; flex-wrap: wrap; }
+  .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  .btn-line + .btn-line { margin-top: 9px; }
+  /* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
+  .ic-btn {
+    width: var(--seg); min-height: var(--seg); flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--dim);
+    border-radius: 12px;
+  }
+  .ic-btn svg { width: 20px; height: 20px; }
+  .ic-btn:active { background: var(--surface-2); }
+  .ic-btn.on { color: var(--warn); }
+  /* Текстовая кнопка-ссылка под главной — полной высоты касания */
+  .link-btn {
+    display: block; width: 100%; min-height: var(--seg);
+    color: var(--link); font-size: 14.5px; font-weight: 600; text-align: center;
+    margin-top: 4px;
+  }
+
+  /* ---------- Формы ---------- */
+  .field { margin-bottom: 13px; }
+  .field > label {
+    display: block;
+    font-size: var(--font-d);
+    font-weight: 600;
+    color: var(--mut);
+    margin: 0 2px 5px;
+  }
+  input[type="text"], input[type="number"], input[type="date"], input[type="time"],
+  input[type="search"], select, textarea {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 11px 13px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    color: var(--text);
+    font: inherit;
+    transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  textarea { min-height: 88px; resize: vertical; field-sizing: content; }
+  select {
+    appearance: none;
+    padding-right: 36px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+      linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+    background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  input[type="file"] { color: var(--mut); font-size: 14px; max-width: 100%; }
+  input[type="file"]::file-selector-button {
+    font: inherit; font-weight: 600;
+    min-height: var(--seg);
+    margin-right: 10px;
+    padding: 0 14px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  ::placeholder { color: var(--dim); opacity: 1; }
+  /* Чекбокс: цель касания — вся строка-подпись */
+  .check-row {
+    display: flex; gap: 12px; align-items: center;
+    min-height: var(--seg); padding: 4px 0;
+    color: var(--text); font-size: var(--font); cursor: pointer;
+  }
+  .check-row input[type="checkbox"] {
+    width: 24px; height: 24px; flex: none; margin: 0;
+    accent-color: var(--ok);
+  }
+  .field .hint, .hint { font-size: 12.5px; color: var(--dim); margin-top: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+
+  /* ---------- Сегменты ---------- */
+  .seg {
+    display: flex;
+    background: var(--bg-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 14px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .seg button {
+    flex: 1;
+    min-height: var(--seg);
+    border-radius: 11px;
+    color: var(--mut);
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  }
+  .seg button[aria-pressed="true"] {
+    background: var(--sheen), var(--surface-3);
+    color: var(--text);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 4px 14px -8px rgba(0, 0, 0, 0.7);
+  }
+  .seg.four button { font-size: 13px; padding: 0 2px; }
+  @media (max-width: 399px) { .seg.four button { font-size: 12.5px; padding: 0 1px; } }
+  /* Сегмент с иконками: класс борта в форме */
+  .seg-ic button {
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
     gap: 4px;
-    padding: 14px 0 0;
-    border-top: 0;
-    border-right: 1px solid var(--line);
+    min-height: 66px;
+    font-size: 11.5px; line-height: 1.2;
+    padding: 6px 2px;
   }
-  #tabbar .tab { flex: none; width: 72px; max-width: none; min-height: 64px; border-radius: 12px; }
-  #tabbar .tab[aria-current="page"] { background: var(--card); }
-  #views { margin: 0 auto 0 88px; max-width: 1120px; padding: 20px 28px 28px; }
-  #views:not(.two-col) { max-width: 776px; }
-  #views.two-col {
+  .seg-ic button svg { width: 25px; height: 25px; }
+  .seg-ic button[aria-pressed="true"] svg { color: var(--accent); filter: drop-shadow(0 0 calc(6px * var(--fx-glow)) var(--accent)); }
+
+  /* ---------- Пилюли и селекты-пилюли ---------- */
+  .pill-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 6px; scrollbar-width: none; }
+  .pill-row::-webkit-scrollbar { display: none; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    min-height: var(--seg);
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    font-size: 14px;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+  .pill svg { width: 16px; height: 16px; color: var(--dim); flex: none; }
+  .pill > span { overflow: hidden; text-overflow: ellipsis; }
+  button.pill { cursor: pointer; }
+  .pill.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  select.sel-pill {
+    width: auto;
+    max-width: 100%;
+    min-height: var(--seg);
+    padding: 6px 32px 6px 13px;
+    border-radius: 999px;
+    background-color: var(--surface-2);
+    font-size: 14px;
+    flex: none;
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  }
+  select.sel-pill.sel { border-color: var(--accent); }
+  /* Селект по ширине ВЫБРАННОГО пункта (pillSelect): невидимая копия
+     подписи (::after из data-v) задаёт ширину, селект лежит поверх
+     абсолютно — иначе нативный select растёт по самому длинному пункту. */
+  .sel-fit { display: inline-grid; position: relative; flex: 0 1 auto; min-width: 0; max-width: 100%; vertical-align: middle; }
+  .sel-fit::after {
+    content: attr(data-v);
+    visibility: hidden;
+    white-space: nowrap;
+    font-size: 14px;
+    padding: 6px 32px 6px 13px;
+    border: 1px solid transparent;
+    min-height: var(--seg);
+    min-width: 0;
+    overflow: hidden;
+  }
+  .sel-fit.sm::after { font-size: 13px; padding: 4px 28px 4px 11px; }
+  .sel-fit > select { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; max-width: none; }
+  select.sel-sm {
+    width: auto;
+    min-height: var(--seg);
+    padding: 4px 28px 4px 11px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--mut);
+    background-color: var(--surface-2);
+    flex: none;
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  }
+
+  /* ---------- Меню действий (popover) ---------- */
+  .menu {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 6px;
+    min-width: 210px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow-pop);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 25;
+  }
+  .menu[hidden] { display: none; }
+  .menu button {
+    display: flex; align-items: center; gap: 11px;
+    min-height: var(--tap);
+    padding: 0 12px;
+    border-radius: 11px;
+    font-size: 15px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .menu button svg { width: 20px; height: 20px; color: var(--mut); flex: none; }
+  .menu button:active { background: var(--surface-2); }
+  .menu button[disabled] { color: var(--dim); cursor: default; }
+  .menu[popover]:popover-open {
+    display: flex;
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.16s var(--ease), transform 0.16s var(--ease),
+      overlay 0.16s var(--ease) allow-discrete, display 0.16s var(--ease) allow-discrete;
+  }
+  @starting-style {
+    .menu[popover]:popover-open { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  }
+  .menu[popover]::backdrop { background: transparent; }
+  .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .menu-grid[popover]:popover-open { display: grid; }
+  .menu-grid button { justify-content: center; padding: 0 8px; font-variant-numeric: tabular-nums; }
+  .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
+  .menu-grid button[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
+
+  /* ---------- Баннеры ---------- */
+  .banner {
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    border: 1px solid var(--line-soft);
+    background: color-mix(in srgb, var(--surface) var(--card-alpha), transparent);
+    color: var(--mut);
+  }
+  .banner > svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+  .banner > .grow { flex: 1 1 160px; }
+  /* Две кнопки в баннере — отдельной строкой под текстом, рядом друг с другом */
+  .banner:has(> .btn + .btn) > .grow { flex-basis: 100%; }
+  .banner.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok); background: var(--ok-bg); }
+  .banner.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); background: var(--warn-bg); }
+  .banner.backup { align-items: center; }
+  .banner.backup > svg { margin-top: 0; }
+  .banner .btn-sm { color: var(--text); }
+
+  .empty { text-align: center; color: var(--mut); padding: 40px 16px; }
+  .empty svg { width: 52px; height: 52px; color: var(--dim); margin: 0 auto 12px; opacity: 0.8; }
+  .empty p { margin-bottom: 16px; }
+  .empty .btn-sm { margin: 0 auto; }
+
+  /* ---------- Шкалы, плитки, пары «ключ — значение» ---------- */
+  .progress {
+    height: 7px;
+    border-radius: 4px;
+    background: var(--surface-3);
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .progress i {
+    display: block; height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 70%, var(--accent)), var(--ok));
+    box-shadow: 0 0 calc(10px * var(--fx-glow)) color-mix(in srgb, var(--ok) 70%, transparent);
+    transition: width 0.3s var(--ease);
+  }
+  .gauge {
+    display: block;
+    flex: 1;
+    min-width: 56px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .gauge i { display: block; height: 100%; border-radius: 4px; transition: width 0.3s var(--ease); }
+  .stat-line { display: flex; gap: 9px; flex-wrap: wrap; margin: 10px 0; }
+  .stat {
+    flex: 1 1 92px;
+    background: var(--sheen), color-mix(in srgb, var(--surface) var(--card-alpha), transparent);
+    border: 1px solid var(--line-soft);
+    border-radius: 15px;
+    padding: 11px 13px;
+    box-shadow: var(--shadow);
+  }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat .v.warn { color: var(--warn); }
+  .stat .k { color: var(--mut); font-size: 12px; margin-top: 2px; }
+  .stat-line.four .stat { flex: 1 1 130px; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  .kv div { display: flex; flex-direction: column; min-width: 0; }
+  .kv .k { color: var(--mut); font-size: 12px; }
+  .kv .v { font-size: 15px; font-weight: 550; overflow-wrap: anywhere; }
+
+  /* ---------- Раскрывашки ---------- */
+  details.fold { border-top: 1px solid var(--line-soft); }
+  details.fold summary {
+    list-style: none;
+    display: flex; align-items: center; gap: 8px;
+    min-height: 54px;
+    padding: 8px 2px;
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 650;
+  }
+  details.fold summary::-webkit-details-marker { display: none; }
+  details.fold summary::after {
+    content: "";
+    margin-left: auto;
+    width: 8px; height: 8px;
+    border-right: 2px solid var(--dim);
+    border-bottom: 2px solid var(--dim);
+    transform: rotate(45deg);
+    transition: transform 0.2s var(--ease);
+  }
+  details.fold[open] summary::after { transform: rotate(-135deg); }
+  /* Длинные списки (каталог, история) не раскладываются, пока не видны */
+  details.fold .fold-body { padding: 0 2px 14px; content-visibility: auto; contain-intrinsic-size: auto 400px; }
+  /* Журнал длиннее 20 строк: карточки дней раскладываются по мере
+     прокрутки, заглушка — по числу строк (--n) */
+  .card.flat.cv {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(((var(--font) + var(--font-d)) * 1.45 + 22px) * var(--n, 3) - 1px);
+  }
+
+  /* ---------- Код и сравнение ---------- */
+  .diff, .pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .diff { padding: 10px 0; }
+  .diff div { padding: 0 12px; }
+  .diff .add { background: var(--ok-bg); color: var(--ok); }
+  .diff .del { background: var(--bad-bg); color: var(--bad); }
+  .pre { padding: 10px 12px; max-height: 50vh; }
+
+  /* Таблица в окне «Как считается» */
+  .tbl-wrap { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tbl th, .tbl td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line-soft); }
+  .tbl th { color: var(--mut); font-weight: 650; font-size: 12.5px; }
+  .tbl td:first-child { color: var(--mut); }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl .wx-bad { color: var(--bad); white-space: nowrap; }
+  .tbl .wx-warn { color: var(--warn); white-space: nowrap; }
+
+  /* ---------- Модальные окна: лист снизу ---------- */
+  dialog {
+    border: 1px solid var(--line-soft);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    background: var(--sheen), var(--bg-2);
+    color: var(--text);
+    width: 100%;
+    max-width: 660px;
+    margin: auto auto 0;
+    padding: 0;
+    max-height: 92dvh;
+    box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.7);
+    /* Лист въезжает снизу; уезжает (класс closing) — узел убирает
+       closeModal по transitionend. display/overlay с allow-discrete
+       нужны, чтобы вход анимировался из @starting-style. */
+    transition: transform 0.28s var(--ease), opacity 0.28s var(--ease),
+      overlay 0.28s var(--ease) allow-discrete, display 0.28s var(--ease) allow-discrete;
+  }
+  dialog[open] { transform: translateY(0); opacity: 1; }
+  @starting-style {
+    dialog[open] { transform: translateY(40px); opacity: 0; }
+  }
+  dialog.closing { transform: translateY(40px); opacity: 0; transition-duration: 0.16s; }
+  /* Ручка листа */
+  dialog::before {
+    content: "";
+    display: block;
+    width: 40px; height: 5px;
+    margin: 8px auto 0;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  @media (min-width: 700px) {
+    dialog { border-radius: 24px; margin: auto; border-bottom: 1px solid var(--line-soft); }
+    dialog::before { display: none; }
+  }
+  dialog::backdrop {
+    background: rgba(2, 6, 12, 0.6);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    transition: opacity 0.28s var(--ease), overlay 0.28s var(--ease) allow-discrete, display 0.28s var(--ease) allow-discrete;
+  }
+  dialog[open]::backdrop { opacity: 1; }
+  @starting-style {
+    dialog[open]::backdrop { opacity: 0; }
+  }
+  dialog.closing::backdrop { opacity: 0; transition-duration: 0.16s; }
+  .dlg-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px 4px 20px; }
+  .dlg-head h2 { font-size: 19px; font-weight: 750; flex: 1; }
+  .dlg-close {
+    width: var(--seg); height: var(--seg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mut);
+    border-radius: 50%;
+    background: var(--surface-2);
+  }
+  .dlg-close svg { width: 20px; height: 20px; }
+  .dlg-body { padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; }
+  body.locked { overflow: hidden; }
+}
+
+/* == styles/04-screens.css == */
+/* Экраны: «Сегодня», погода, чек-лист, полёт (HUD), борт, флот,
+   журнал и статистика, «Ещё», окна фото и карты, приветствие. */
+
+@layer screens {
+  /* ================= «Сегодня» ================= */
+
+  /* Панель готовности: три шкалы-кольца — флот, АКБ, погода */
+  .ready-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 24px;
-    align-items: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 10px;
   }
-  .today-main, .today-side { min-width: 0; }
-  .today-side > .wx-slot > .h2 { margin-top: 6px; }
-  /* Липкая панель чек-листа: нижней панели нет — держится у края окна */
-  .act-bar { bottom: 0; margin-left: -28px; margin-right: -28px; padding-left: 28px; padding-right: 28px; }
+  .gauge-tile {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 12px 6px 11px;
+    min-height: var(--seg);
+    border-radius: var(--radius);
+    background: var(--sheen), color-mix(in srgb, var(--surface) var(--card-alpha), transparent);
+    border: 1px solid var(--line-soft);
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: transform 0.12s var(--ease);
+  }
+  .gauge-tile:active { transform: scale(0.97); }
+  .gauge-ring {
+    --c: var(--ok);
+    position: relative;
+    width: 62px; height: 62px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    transition: --p 0.9s var(--ease);
+  }
+  @starting-style { .gauge-ring { --p: 0; } }
+  .gauge-ring::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--surface-3) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+    filter: drop-shadow(0 0 calc(5px * var(--fx-glow)) color-mix(in srgb, var(--c) 70%, transparent));
+  }
+  .gauge-ring b { font-family: var(--mono); font-size: 15px; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .gauge-ring svg { width: 26px; height: 26px; color: var(--c); }
+  .gauge-tile .gt-t { font-size: 13px; font-weight: 700; margin-top: 3px; }
+  .gauge-tile .gt-d { font-size: 11.5px; color: var(--mut); line-height: 1.25; }
+
+  /* Шаги «Начала работы»: прогресс и строки */
+  .onb-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 6px; }
+  .onb-head .t { font-weight: 750; font-size: 16px; }
+  .onb-head .d { color: var(--mut); font-size: var(--font-d); }
+  .onb-head .progress { margin: 8px 0 2px; }
+  .row.done { opacity: 0.55; }
+  .row.done .t { text-decoration: line-through; }
+  .row.done .row-ic { --c: var(--ok); }
+
+  /* Герой дня: борт на поле, идущий полёт, карточка борта */
+  .hero { padding: 16px; }
+  .hero-top { display: flex; align-items: center; gap: 14px; margin-bottom: 15px; }
+  .hero-top .grow { flex: 1; min-width: 0; }
+  .hero-name { display: block; font-size: 21px; font-weight: 750; line-height: 1.2; letter-spacing: -0.015em; }
+  .hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
+  .hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--ok); }
+  .hero .btn { margin-top: 0; }
+  .hero .btn + .btn { margin-top: 9px; }
+  .hero-kicker {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11.5px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--c, var(--accent));
+    margin-bottom: 10px;
+  }
+  .hero-kicker::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 calc(10px * var(--fx-glow)) currentColor;
+  }
+  .hero-flight { --c: var(--ok); }
+  .hero-flight .timer { margin: 2px 0 14px; font-size: 56px; }
+  .hero-flight .kick-land { --c: var(--mut); }
+
+  /* Карточка погоды — целиком кнопка в «Окна» */
+  .wx-hero { display: block; width: 100%; text-align: left; padding: 13px 15px; }
+  .wx-hero:active { background-color: var(--surface-2); }
+  .wx-hero-top { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+  .wx-hero-top .grow { flex: 1; min-width: 0; }
+  .wx-hero .row-ic {
+    flex: none; display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 12px;
+    color: var(--info); background: var(--info-bg);
+  }
+  .wx-hero .row-ic svg { width: 21px; height: 21px; }
+  .wx-hero .t { display: block; font-size: 17px; font-weight: 750; line-height: 1.25; }
+  .wx-hero .t.ok { color: var(--ok); }
+  .wx-hero .t.warn { color: var(--warn); }
+  .wx-hero .t.muted { color: var(--mut); }
+  .wx-hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; }
+  .wx-hero .chev { color: var(--dim); flex: none; }
+  .wx-hero .chev svg { width: 18px; height: 18px; }
+
+  /* Полоска 24 часов: сегмент на час, ночь приглушена, выбранный час
+     обведён. Цвет — переменная --c: у <i> на самом элементе, у кнопок
+     (.strip.tap на экране «Окна») — на ::before: цель касания высотой
+     с клетку, а полоса — 16 px. */
+  .strip { display: flex; gap: 2px; height: 16px; border-radius: 5px; overflow: hidden; }
+  .strip > * { flex: 1 1 0; display: block; min-width: 0; background: var(--c, var(--surface-3)); }
+  .strip .g { --c: var(--ok); }
+  .strip .y { --c: var(--warn); }
+  .strip .r { --c: var(--bad); }
+  .strip .n { opacity: 0.5; }
+  .strip .now { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; opacity: 1; box-shadow: 0 0 calc(12px * var(--fx-glow)) var(--text); }
+  .strip.tap { height: var(--ck-box); overflow: visible; border-radius: 0; }
+  .strip.tap button { background: none; position: relative; padding: 0; border-radius: 0; cursor: pointer; }
+  .strip.tap button::before {
+    content: "";
+    position: absolute; left: 0; right: 0;
+    top: calc(50% - 9px); height: 18px;
+    background: var(--c, var(--surface-3));
+    transition: transform 0.12s var(--ease);
+  }
+  .strip.tap button:first-child::before { border-radius: 5px 0 0 5px; }
+  .strip.tap button:last-child::before { border-radius: 0 5px 5px 0; }
+  .strip.tap button:active::before { transform: scaleY(1.35); }
+  .strip.tap .now { outline: none; box-shadow: none; }
+  .strip.tap .now::before {
+    outline: 2px solid var(--text); outline-offset: -2px; border-radius: 4px;
+    transform: scaleY(1.45);
+    box-shadow: 0 0 calc(14px * var(--fx-glow)) var(--c);
+  }
+  .strip.tap button:focus-visible { outline: none; }
+  .strip.tap button:focus-visible::before { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+  .ticks {
+    display: flex; justify-content: space-between;
+    color: var(--dim); font-size: 11px; font-family: var(--mono);
+    margin-top: 5px;
+  }
+
+  /* ================= Окна для полётов ================= */
+  .day-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
+  .day-chip { padding: 5px 10px; font-size: 12.5px; gap: 6px; flex: none; }
+  .day-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-3); flex: none; }
+  .day-chip i.g { background: var(--ok); box-shadow: 0 0 calc(6px * var(--fx-glow)) var(--ok); }
+  .day-chip i.y { background: var(--warn); box-shadow: 0 0 calc(6px * var(--fx-glow)) var(--warn); }
+  .day-chip i.r { background: var(--bad); box-shadow: 0 0 calc(6px * var(--fx-glow)) var(--bad); }
+  .wx-strip-card { padding: 8px 15px 12px; }
+  .wx-strip-sub { margin-top: 7px; }
+  .wx-hour-top { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+  .wx-hour-top .grow { flex: 1; min-width: 0; }
+  .wx-ic { color: var(--mut); flex: none; display: flex; }
+  .wx-ic svg { width: 22px; height: 22px; }
+  .wx-hour .wx-ic svg { width: 30px; height: 30px; color: var(--info); }
+  .load-line { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
+  .wx-fold { margin-top: 14px; }
+  .wxr { padding: 9px 14px; }
+  .wxr-top { display: flex; align-items: center; gap: 10px; }
+  .wxr-top .chip { min-width: 100px; justify-content: center; }
+  .wxr-sub { color: var(--mut); font-size: 12.5px; margin-top: 4px; }
+  .wxr.night { background-color: rgba(0, 0, 0, 0.18); }
+  :root[data-theme="light"] .wxr.night { background-color: rgba(20, 40, 80, 0.05); }
+  .wxr.night .mono { color: var(--dim); }
+  .wxr.sel { box-shadow: inset 3px 0 0 var(--accent); }
+  .wxr.sel .mono { color: var(--text); }
+  .windy-box { margin-top: 8px; }
+  .wx-alt { display: inline-flex; align-items: center; gap: 6px; }
+  .wx-alt svg { width: 16px; height: 16px; transform: rotate(90deg); color: var(--mut); }
+
+  /* ================= Чек-лист ================= */
+  .prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
+  .prep-pills .map-btn { width: var(--tap); min-height: var(--tap); border-radius: 999px; }
+  .prep-batt { flex-wrap: wrap; }
+  .prog-line { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+  .prog-line .progress { flex: 1; margin: 0; }
+  .prog-hint { margin-bottom: 9px; }
+  .ck {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 9px 12px 9px 14px;
+    min-height: var(--row);
+    transition: background-color 0.2s var(--ease);
+  }
+  .ck .grow { flex: 1; min-width: 0; }
+  .ck .t { display: block; font-size: var(--font); font-weight: 550; }
+  .ck .d { display: block; color: var(--mut); font-size: calc(var(--font-d) - 0.5px); }
+  .ck .ck-main {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center;
+    text-align: left;
+    min-height: var(--ck-box);
+    padding: 0;
+  }
+  .ck .ck-main .grow { flex: 1; min-width: 0; }
+  .ck .ck-main:active { opacity: 0.7; }
+  .ck .st {
+    flex: none;
+    width: var(--ck-box); height: var(--ck-box);
+    border-radius: 13px;
+    border: 1.5px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim);
+    background: var(--bg-2);
+    transition: background 0.18s var(--ease), border-color 0.18s var(--ease), color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+  }
+  .ck .st svg { width: 23px; height: 23px; }
+  .ck button.st { padding: 0; cursor: pointer; }
+  .ck button.st:active { transform: scale(0.92); }
+  .ck[data-state="ok"] .st {
+    color: var(--on-ok); border-color: var(--ok);
+    background: linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 75%, var(--accent)));
+    box-shadow: 0 0 calc(14px * var(--fx-glow)) -2px var(--ok);
+  }
+  .ck[data-state="ok"] .t { color: var(--mut); }
+  .ck[data-state="skip"] .st { color: var(--unk); background: var(--unk-bg); }
+  .ck[data-state="skip"] .t { color: var(--dim); text-decoration: line-through; }
+  .ck[data-state="fail"] { background-color: var(--bad-bg); }
+  .ck[data-state="fail"] .st { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); box-shadow: 0 0 calc(14px * var(--fx-glow)) -2px var(--bad); }
+  /* Меню трёх состояний: встроено в строку переносом */
+  .ck-menu { flex-basis: 100%; display: flex; gap: 6px; padding: 8px 0 2px; }
+  .ck-menu button {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    min-height: var(--ck-box);
+    padding: 0 4px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    font-size: 13.5px; font-weight: 600;
+  }
+  .ck-menu button svg { width: 18px; height: 18px; flex: none; }
+  .ck-menu button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 379px) { .ck-menu button svg { display: none; } }
+  .ck-menu button[data-state="ok"] { color: var(--ok); }
+  .ck-menu button[data-state="fail"] { color: var(--bad); }
+  .ck-menu button[data-state="skip"] { color: var(--mut); }
+  .ck-menu button[aria-pressed="true"] { background: var(--surface-3); border-color: currentColor; font-weight: 750; }
+  /* Липкая панель действий над панелью вкладок */
+  .act-bar {
+    position: sticky;
+    bottom: calc(var(--tab-h) + var(--dock-gap) + env(safe-area-inset-bottom));
+    margin: 10px -16px 0;
+    padding: 24px 16px 12px;
+    background: linear-gradient(to top, var(--bg) 78%, color-mix(in srgb, var(--bg) 0%, transparent));
+    z-index: 5;
+  }
+  .act-bar .banner { margin-bottom: 8px; padding: 9px 12px; font-size: 13.5px; align-items: center; }
+  .act-bar .banner > svg { margin-top: 0; }
+  .act-bar .btn + .btn { margin-top: 8px; }
+  @media (min-width: 900px) {
+    .act-bar { bottom: 0; margin-left: -32px; margin-right: -32px; padding-left: 32px; padding-right: 32px; }
+  }
+
+  /* ================= Полёт: HUD ================= */
+  .mono-lg, .timer {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .timer {
+    font-size: 58px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: -0.02em;
+    margin: 18px 0;
+    line-height: 1;
+  }
+  @keyframes colon-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .timer .colon { animation: colon-blink 1s ease-in-out infinite; }
+  .timer.landed { color: var(--mut); }
+  .timer.landed .colon { animation: none; }
+  .air-state {
+    display: flex; justify-content: center; margin: 2px 0 4px;
+  }
+  .air-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 13px 5px 11px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--c, var(--ok));
+    background: color-mix(in srgb, var(--c, var(--ok)) 13%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, var(--ok)) 30%, transparent);
+  }
+  .air-pill::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 calc(10px * var(--fx-glow)) currentColor;
+  }
+  .air-pill.landed { --c: var(--mut); }
+  .air-pill.alarm { --c: var(--warn); }
+  .ring {
+    --size: min(76vw, 292px);
+    --c: var(--ok);
+    width: var(--size); height: var(--size);
+    margin: 10px auto 10px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ring svg.r { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+  .ring .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+  .ring .ring-ticks { fill: none; stroke: var(--line); stroke-width: 6; stroke-dasharray: 1.2 9.48; opacity: 0.9; }
+  .ring .ring-fill {
+    fill: none;
+    stroke: var(--c);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.4s var(--ease);
+    filter: drop-shadow(0 0 calc(8px * var(--fx-glow)) color-mix(in srgb, var(--c) 80%, transparent));
+  }
+  .ring.landed { --c: var(--mut); }
+  .ring.over { --c: var(--warn); }
+  .ring-in { text-align: center; position: relative; padding: 0 16px; }
+  .ring .timer { font-size: clamp(44px, 14vw, 60px); margin: 0; }
+  .ring-sub { margin-top: 8px; }
+  .pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 16px; }
+  .wake-ind {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--mut); font-size: 12px;
+    white-space: nowrap; flex: none;
+  }
+  .wake-ind[hidden] { display: none; }
+  .session-hint { text-align: center; margin-top: 14px; }
+  .alarm-btn[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
+  .alarm-btn[aria-pressed="true"] svg { color: var(--warn); }
+
+  /* ================= Карточка борта ================= */
+  .seg.model-tabs { margin: 4px 0 13px; }
+  .hero-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .hero-line > .sel-fit { flex: none; max-width: 100%; }
+  .hero-line > .chip { flex: none; }
+  .hero-batt { margin: -4px 0 13px; }
+  .model-hero .hint { font-size: 12.5px; color: var(--dim); margin: -6px 0 10px; }
+  .model-hero .stat-line { margin: 0; }
+  .model-hero .stat { flex: 1 1 0; min-width: 0; padding: 9px 11px; background: var(--bg-2); box-shadow: none; }
+  .model-hero .stat .v { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .model-hero .btn { margin-top: 13px; }
+  .svc-line { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
+  .svc-line .progress { flex: 1; margin: 0; }
+  .svc-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--dim); font-size: 12px; }
+  .svc-sub .grow { flex: 1; min-width: 0; }
+
+  /* ================= Флот ================= */
+  .fleet-bar { display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch; }
+  .fleet-bar select { flex: 1; min-height: var(--seg); }
+  .fleet-row .row-main { min-width: 45%; }
+  .grp-head {
+    display: flex; align-items: center; gap: 8px;
+    margin: 16px 2px 7px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .grp-head.grp-sub, .card.grp-sub, .grp-empty.grp-sub { margin-left: 16px; }
+  .grp-head .grp-edit, .row .row-move {
+    width: var(--seg); min-height: var(--seg); height: var(--seg);
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim);
+    border-radius: 12px;
+  }
+  .grp-head .grp-edit svg { width: 18px; height: 18px; }
+  .row .row-move svg { width: 20px; height: 20px; }
+  .grp-empty { margin: 2px 2px 8px; }
+
+  /* ================= Журнал и статистика ================= */
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .bar-row .n {
+    flex: 0 0 92px;
+    color: var(--mut);
+    font-size: var(--font-d);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bar-track {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 9px;
+    border-radius: 5px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .bar-track i {
+    display: block; height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    box-shadow: 0 0 calc(10px * var(--fx-glow)) color-mix(in srgb, var(--accent) 60%, transparent);
+    transition: width 0.3s var(--ease);
+  }
+  .bar-row .v {
+    flex: 0 0 auto;
+    min-width: 78px;
+    text-align: right;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
+  .heat {
+    display: grid;
+    grid-template-rows: repeat(7, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 4px;
+  }
+  .heat i {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: var(--surface-3);
+  }
+  .heat i[data-l="1"] { background: color-mix(in srgb, var(--ok) 35%, var(--surface-3)); }
+  .heat i[data-l="2"] { background: color-mix(in srgb, var(--ok) 60%, var(--surface-3)); }
+  .heat i[data-l="3"] { background: var(--ok); box-shadow: 0 0 calc(8px * var(--fx-glow)) color-mix(in srgb, var(--ok) 60%, transparent); }
+  .heat i.today { outline: 1.5px solid var(--text); outline-offset: 1px; }
+  .heat i.future { background: transparent; }
+  .heat-legend { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--dim); font-size: 11.5px; }
+  .heat-legend .sw { display: inline-flex; gap: 3px; align-items: center; }
+  .heat-legend .sw i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3); display: inline-block; }
+
+  /* ================= «Ещё»: выбор режима интерфейса ================= */
+  .mode-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .mode-card {
+    display: flex; flex-direction: column; align-items: stretch; gap: 7px;
+    padding: 8px 8px 10px;
+    min-height: var(--seg);
+    border-radius: 15px;
+    border: 1.5px solid var(--line);
+    background: var(--bg-2);
+    text-align: center;
+    font-size: 13px; font-weight: 650;
+    color: var(--mut);
+    transition: border-color 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+  .mode-card[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--accent) inset, 0 0 calc(18px * var(--fx-glow)) -6px var(--accent);
+  }
+  .mode-card small { display: block; font-size: 11px; font-weight: 500; color: var(--dim); line-height: 1.25; }
+  /* Мини-превью режима: схематичный экран */
+  .mode-prev {
+    height: 64px;
+    border-radius: 10px;
+    padding: 7px;
+    display: flex; flex-direction: column; gap: 5px;
+    background: var(--bg);
+    border: 1px solid var(--line-soft);
+    overflow: hidden;
+  }
+  .mode-prev i { display: block; height: 9px; border-radius: 3px; background: var(--surface-3); }
+  .mode-prev i:nth-child(2) { width: 70%; }
+  .mode-prev b { display: block; height: 18px; margin-top: auto; border-radius: 6px; background: var(--ok); }
+  .mode-prev.gloves { gap: 7px; }
+  .mode-prev.gloves i { height: 13px; }
+  .mode-prev.gloves b { height: 24px; border-radius: 5px; }
+  .mode-prev.max {
+    background:
+      radial-gradient(60% 60% at 20% 0%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%),
+      radial-gradient(60% 60% at 100% 100%, color-mix(in srgb, var(--accent-2) 45%, transparent), transparent 70%),
+      var(--bg);
+  }
+  .mode-prev.max i { background: color-mix(in srgb, var(--text) 16%, transparent); }
+  .mode-prev.max b { box-shadow: 0 0 12px var(--ok), 0 0 0 1.5px var(--accent); }
+
+  /* ================= Мини-карта (OSM) ================= */
+  .site-map-box:not([hidden]) { margin-top: 12px; }
+  .mp { margin-bottom: 10px; }
+  .map-btn, .mp-search .mp-go, .mp-zoom button {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .map-btn { flex: none; width: var(--tap); min-height: var(--tap); color: var(--mut); }
+  .map-btn svg { width: 22px; height: 22px; }
+  .mp-search { display: flex; gap: 8px; margin-bottom: 8px; }
+  .mp-search .mp-q { flex: 1; min-width: 0; }
+  .mp-search .mp-go { padding: 0 15px; min-height: var(--tap); font-weight: 600; }
+  .mp-found { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-view {
+    position: relative;
+    height: 300px;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .mp-layer { position: absolute; inset: 0; }
+  .mp-pin {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: var(--bad);
+    pointer-events: none;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  }
+  .mp-pin svg { width: 32px; height: 32px; }
+  .mp-bar { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+  .mp-bar .mp-hint { flex: 1; }
+  .mp-bar a { color: var(--dim); }
+  .mp-zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 2; }
+  .mp-zoom button { width: 48px; height: 48px; color: var(--text); font-size: 24px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+  .mp-zoom button:active { background: var(--surface-3); }
+
+  /* ================= Слоты картинок (assets/art) =================
+     Правила с самими файлами вставляет сборка (слой art) — только для
+     существующих. Здесь — как слот выглядит, когда картинка есть. */
+  .thumb.ph[data-art] { background: var(--art-img, none) center / cover no-repeat, var(--surface-2); }
+  .welcome-art {
+    display: none;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 3 / 2;
+    margin: -4px auto 10px;
+    background: var(--art-img, none) center / contain no-repeat;
+  }
+  .empty-art { display: flex; justify-content: center; }
+
+  /* ================= Приветствие и инструкция ================= */
+  .welcome { text-align: center; padding: 6px 4px 4px; }
+  .welcome-ic {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 76px; height: 76px;
+    border-radius: 50%;
+    color: var(--accent);
+    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 22%, transparent), var(--surface-2) 70%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 calc(30px * var(--fx-glow)) -6px var(--accent);
+    margin-bottom: 16px;
+  }
+  .welcome-ic svg { width: 36px; height: 36px; }
+  .welcome h3 { font-size: 21px; font-weight: 750; margin-bottom: 8px; }
+  .welcome p { color: var(--mut); font-size: 15px; line-height: 1.45; margin-bottom: 16px; min-height: 4.4em; }
+  .dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; }
+  .dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--line); transition: width 0.25s var(--ease), background 0.25s var(--ease); }
+  .dots i.on { width: 22px; background: var(--accent); box-shadow: 0 0 calc(8px * var(--fx-glow)) var(--accent); }
+  .help-intro { margin: -4px 2px 12px; }
+  .help details.fold { scroll-margin-top: 8px; }
+  .help details.fold:last-child { border-bottom: 1px solid var(--line-soft); }
+  .help .fold-body p, .help .fold-body ul { font-size: 15px; line-height: 1.55; margin-bottom: 10px; }
+  .help .fold-body li { margin-bottom: 6px; }
+  .help .fold-body .banner { margin-top: 4px; }
+  .help .fold-body .card.flat { margin-bottom: 10px; }
+
+  /* ================= Фото во весь экран ================= */
+  dialog.photo {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+    background: #000;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  dialog.photo::before { display: none; }
+  @media (min-width: 700px) { dialog.photo { margin: 0; border-radius: 0; } }
+  dialog.photo .dlg-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+  dialog.photo .dlg-close { color: #fff; background: rgba(255, 255, 255, 0.12); }
+  dialog.photo .dlg-body {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    padding: 0 0 calc(8px + env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+  .pv { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pv-view {
+    flex: 1; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    touch-action: none;
+    cursor: grab;
+  }
+  /* width/height: auto — рамка картинки совпадает со снимком: на этом
+     держится ограничение панорамы в pvApply. */
+  .pv-img {
+    width: auto; height: auto;
+    max-width: 100%; max-height: 100%;
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
+  }
+  .pv-bar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; }
+  .pv-scale { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; color: #aab; }
+  .pv-cap { text-align: center; padding: 0 16px 6px; margin: 0; }
+  dialog.photo .btn { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.18); color: #fff; }
 }
 
-/* ---------- Приветствие и инструкция ---------- */
-/* Кнопка «?» в шапке — правее действия, приглушённее его */
-.head .head-help { color: var(--dim); }
-.head .head-act + .head-help { margin-left: -2px; }
-.welcome { text-align: center; padding: 6px 4px 4px; }
-.welcome-ic {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 64px; height: 64px;
-  border-radius: 50%;
-  background: var(--card-2);
-  color: var(--ok);
-  margin-bottom: 14px;
-}
-.welcome-ic svg { width: 32px; height: 32px; }
-.welcome h3 { font-size: 20px; margin-bottom: 8px; }
-.welcome p { color: var(--mut); font-size: 15px; line-height: 1.45; margin-bottom: 16px; min-height: 4.4em; }
-.dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; }
-.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: background 0.15s; }
-.dots i.on { background: var(--ok); }
-.help-intro { margin: -4px 0 12px; }
-.help details.fold { scroll-margin-top: 8px; }
-.help details.fold:last-child { border-bottom: 1px solid var(--line); }
-.help .fold-body p, .help .fold-body ul { font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
-.help .fold-body ul { padding-left: 20px; }
-.help .fold-body li { margin-bottom: 6px; }
-.help .fold-body .h3 { font-weight: 600; margin: 14px 0 6px; }
-.help .fold-body .banner { margin-top: 4px; }
-.help .fold-body .card.flat { margin-bottom: 10px; }
+/* == styles/05-effects.css == */
+/* Эффекты: фон (картинка из assets/art + процедурная аврора), подсветка
+   следующего шага, живые рамки важных объектов, переходы экранов.
 
-/* ---------- Просмотр фото во весь экран ----------
-   Тот же dialog, что у остальных окон (Esc, тап по фону, body.locked и
-   снятие узла по transitionend уже работают), но лист развёрнут на весь
-   экран: фото рассматривают, а не читают под ним подпись. Фон чёрный
-   в обеих темах — так снимок виден честно. */
-dialog.photo {
-  width: 100%;
-  max-width: none;
-  height: 100dvh;
-  max-height: 100dvh;
-  margin: 0;
-  border-radius: 0;
-  background: #000;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-}
-@media (min-width: 700px) { dialog.photo { margin: 0; border-radius: 0; } }
-/* Шапка окна впервые дотягивается до выреза экрана. */
-dialog.photo .dlg-head { padding-top: calc(14px + env(safe-area-inset-top)); }
-dialog.photo .dlg-close { color: #fff; }
-dialog.photo .dlg-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0 0 calc(8px + env(safe-area-inset-bottom));
-  overflow: hidden; /* прокрутки нет: снимок двигаем сами */
-}
-.pv { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.pv-view {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  touch-action: none; /* жесты разбираем сами, иначе браузер уводит их в прокрутку */
-  cursor: grab;
-}
-/* width/height: auto — рамка картинки СОВПАДАЕТ с самим снимком (а не
-   с коробкой, как при object-fit): на этом держится ограничение
-   панорамы в pvApply. */
-.pv-img {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  transform-origin: center center;
-  user-select: none;
-  -webkit-user-drag: none;
-  will-change: transform;
-}
-.pv-bar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; }
-.pv-scale { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; color: var(--mut); }
-.pv-cap { text-align: center; padding: 0 16px 6px; margin: 0; }
-.thumb.tap { cursor: zoom-in; }
-.thumb.tap:active { opacity: 0.75; }
-.thumb-btn { flex: none; display: block; border-radius: 14px; cursor: zoom-in; }
-.thumb-btn:active { opacity: 0.85; }
+   Анимации свечения синхронизированы: сборка экрана пересоздаёт узлы,
+   и без общей фазы бегущая рамка прыгала бы в начало при каждой
+   перерисовке. paint() ставит --glow-phase = −(время mod период) —
+   новые узлы стартуют с той же точки, где были старые. */
 
-/* Меню-сетка значений (высота полёта): тридцать значений видны разом —
-   список из тридцати строк пришлось бы прокручивать вслепую, в перчатках
-   особенно. max-height — страховка на низкий экран: прокрутка внутри
-   меню, страница под ним не едет. */
-/* dvh, а не vh: в мобильном Safari с адресной строкой 100vh больше
-   видимой области, и низ длинного меню уезжал за экран (кламп позиции
-   в toggleMenu считает по window.innerHeight). */
-.menu { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
-.menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
-.menu-grid[popover]:popover-open { display: grid; } /* .menu[popover]:popover-open ставит flex */
-.menu-grid button { justify-content: center; padding: 0 8px; }
-.menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
-.menu-grid button[aria-checked="true"] { border: 1px solid var(--text); }
-.wx-alt { display: inline-flex; align-items: center; gap: 6px; }
-.wx-alt svg { width: 16px; height: 16px; transform: rotate(90deg); color: var(--mut); }
+@layer effects {
+  /* ---------- Фон ----------
+     html::before — картинка фона (assets/art/bg-*.webp; сборка объявляет
+     --art-bg-* только для существующих файлов, иначе слой пуст);
+     body::before — процедурное свечение (в «Максимуме» — аврора);
+     body::after — приборная сетка («Максимум»). Все слои fixed и ниже
+     интерфейса; анимируется только transform — это работа компоновщика,
+     не перерисовка. */
+  :root {
+    --art-bg: var(--art-bg-dark, none);
+    --art-opacity: 0.55;
+  }
+  :root[data-theme="light"] { --art-bg: var(--art-bg-light, none); }
+  @media (min-width: 900px) {
+    :root { --art-bg: var(--art-bg-dark-wide, var(--art-bg-dark, none)); }
+    :root[data-theme="light"] { --art-bg: var(--art-bg-light-wide, var(--art-bg-light, none)); }
+  }
+  html::before, body::before, body::after {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+  }
+  html::before {
+    inset: 0;
+    background: var(--art-bg) center / cover no-repeat;
+    opacity: var(--art-opacity);
+  }
+  body::before {
+    inset: 0;
+    background:
+      radial-gradient(90% 45% at 50% -8%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 70%),
+      radial-gradient(70% 40% at 100% 110%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%);
+  }
+  body::after { display: none; }
+
+  @keyframes aurora {
+    0% { transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1); }
+    50% { transform: translate3d(3%, 2%, 0) rotate(8deg) scale(1.08); }
+    100% { transform: translate3d(-2%, 4%, 0) rotate(-6deg) scale(1.03); }
+  }
+
+  /* ---------- Следующий шаг: бегущая рамка + мягкий пульс ----------
+     data-next ставит paint() на ОДИН элемент экрана (nextStep()). */
+  @keyframes glow-spin { to { --glow-a: 360deg; } }
+  @keyframes next-pulse {
+    0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 calc(10px * var(--fx-glow)) -4px var(--accent); }
+    50% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 calc(26px * var(--fx-glow)) -2px var(--accent); }
+  }
+  [data-next] {
+    position: relative;
+    animation: next-pulse var(--glow-period) ease-in-out infinite;
+    animation-delay: var(--glow-phase, 0s);
+  }
+  [data-next]::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    padding: 2px;
+    pointer-events: none;
+    background: conic-gradient(from var(--glow-a),
+      transparent 0deg 230deg,
+      color-mix(in srgb, var(--accent) 60%, transparent) 290deg,
+      #fff 330deg,
+      var(--accent) 345deg,
+      transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    animation: glow-spin var(--glow-period) linear infinite;
+    animation-delay: var(--glow-phase, 0s);
+  }
+  /* Внутри карточки-списка рамка рисуется внутрь: карточка обрезает всё,
+     что выходит за её край. */
+  .card.flat [data-next] { animation-name: next-pulse-in; }
+  .card.flat [data-next]::after { inset: 0; }
+  @keyframes next-pulse-in {
+    0%, 100% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), inset 0 0 calc(18px * var(--fx-glow)) -8px var(--accent); }
+    50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), inset 0 0 calc(28px * var(--fx-glow)) -6px var(--accent); }
+  }
+  /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
+  .btn-primary[data-next] { animation-name: next-pulse-primary; }
+  @keyframes next-pulse-primary {
+    0%, 100% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), 0 10px calc(26px * var(--fx-glow)) -10px var(--ok); }
+    50% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent), 0 10px calc(40px * var(--fx-glow)) -6px var(--ok); }
+  }
+  /* Без движения: рамка сплошная, без бега */
+  @media (prefers-reduced-motion: reduce) {
+    [data-next]::after { background: var(--accent); }
+  }
+
+  /* ---------- Важные объекты: градиентная рамка героя ---------- */
+  .card.hero, .hud-card {
+    border-color: transparent;
+    background:
+      var(--sheen) padding-box,
+      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
+      linear-gradient(140deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--line-soft) 38%, var(--line-soft) 62%, color-mix(in srgb, var(--accent-2) 45%, transparent)) border-box;
+  }
+  .hero-flight {
+    background:
+      var(--sheen) padding-box,
+      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
+      linear-gradient(140deg, color-mix(in srgb, var(--ok) 60%, transparent), var(--line-soft) 40%, var(--line-soft) 60%, color-mix(in srgb, var(--accent) 45%, transparent)) border-box;
+  }
+
+  /* «Идёт полёт» — точка на вкладке и в шапке дышит */
+  @keyframes live-pulse {
+    0% { box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 2px color-mix(in srgb, var(--ok) 60%, transparent); }
+    70% { box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 10px transparent; }
+    100% { box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 10px transparent; }
+  }
+  #tabbar .tab .live { animation: live-pulse 1.8s ease-out infinite; }
+  @keyframes dot-breathe { 50% { opacity: 0.45; } }
+  .air-pill:not(.landed)::before, .state-pill.flying::before { animation: dot-breathe 1.4s ease-in-out infinite; }
+
+  /* Превышение обычной длительности: кольцо полёта пульсирует */
+  @keyframes ring-alarm { 50% { filter: drop-shadow(0 0 calc(16px * var(--fx-glow) + 4px) var(--warn)); } }
+  .ring.over .ring-fill { animation: ring-alarm 1.2s ease-in-out infinite; }
+
+  /* ---------- Переходы между экранами (View Transitions) ----------
+     render() ставит html[data-vt]: forward — новый экран въезжает справа,
+     back — зеркально, tab — только прозрачность, update (render(true)) —
+     корень не моргает, анимируются лишь элементы с view-transition-name
+     (клетка чек-листа). Подложка активной вкладки (tab-ind) и фото борта
+     (ac-*) переезжают на новое место сами — это морф общего элемента. */
+  ::view-transition { pointer-events: none; }
+  ::view-transition-group(*) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
+  @keyframes vt-in-fwd { from { transform: translateX(28px); opacity: 0; } }
+  @keyframes vt-in-back { from { transform: translateX(-28px); opacity: 0; } }
+  @keyframes vt-out { to { opacity: 0; } }
+  @keyframes vt-fade-in { from { opacity: 0; } }
+  @keyframes ck-pop { from { transform: scale(0.82); opacity: 0.3; } }
+  html[data-vt="forward"]::view-transition-new(root) { animation: vt-in-fwd 0.22s var(--ease); }
+  html[data-vt="forward"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+  html[data-vt="back"]::view-transition-new(root) { animation: vt-in-back 0.22s var(--ease); }
+  html[data-vt="back"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+  html[data-vt="tab"]::view-transition-new(root) { animation: vt-fade-in 0.16s var(--ease); }
+  html[data-vt="tab"]::view-transition-old(root) { animation: vt-out 0.14s var(--ease) forwards; }
+  html[data-vt="update"]::view-transition-old(root),
+  html[data-vt="update"]::view-transition-new(root) { animation: none; }
+  html[data-vt="update"]::view-transition-old(*) { animation: none; opacity: 0; }
+  html[data-vt="update"]::view-transition-new(*) { animation: ck-pop 0.24s var(--ease-spring); }
+  html[data-vt="update"]::view-transition-new(tab-ind),
+  html[data-vt="update"]::view-transition-group(tab-ind) { animation: none; }
+  html[data-vt="update"]::view-transition-old(tab-ind) { display: none; }
+  /* Имена клеток нужны только точечному обновлению: при смене экрана
+     клетка едет вместе с корнем, а не отдельно от него */
+  html:not([data-vt="update"]) .ck .st { view-transition-name: none !important; }
+}
+
+/* == styles/06-modes.css == */
+/* Режимы интерфейса. Токены размеров и силы эффектов — в 00-tokens.css;
+   здесь только то, что меняет вид, а не числа. */
+
+@layer modes {
+  /* ================= «В перчатках»: минимум =================
+     Только главное и крупно: без фона, стекла, свечения и анимаций
+     рамок; вторичные блоки (.opt) скрыты; панель вкладок — сплошная
+     полоса у нижнего края; следующий шаг — толстая статичная обводка. */
+  :root[data-ui="gloves"] {
+    --art-opacity: 0;
+  }
+  :root[data-ui="gloves"]::before,
+  :root[data-ui="gloves"] body::before,
+  :root[data-ui="gloves"] body::after { display: none; }
+  :root[data-ui="gloves"] .opt { display: none !important; }
+  :root[data-ui="gloves"] .card,
+  :root[data-ui="gloves"] .stat,
+  :root[data-ui="gloves"] .gauge-tile,
+  :root[data-ui="gloves"] .banner { background: var(--surface); box-shadow: none; border-color: var(--line); }
+  :root[data-ui="gloves"] .card.hero,
+  :root[data-ui="gloves"] .hud-card { background: var(--surface); border: 2px solid var(--line); }
+  :root[data-ui="gloves"] .hero-flight { border-color: var(--ok); }
+  :root[data-ui="gloves"] #tabbar {
+    left: 0; right: 0; bottom: 0;
+    max-width: none;
+    border-radius: 0;
+    border: 0;
+    border-top: 2px solid var(--line);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    background: var(--bg-2);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  :root[data-ui="gloves"] #tabbar .tab { font-size: 13px; border-radius: 12px; }
+  :root[data-ui="gloves"] #tabbar .tab svg { width: 28px; height: 28px; }
+  :root[data-ui="gloves"] #tabbar .tab-ind { background: var(--surface-3); box-shadow: inset 0 -3px 0 var(--accent); }
+  :root[data-ui="gloves"] .head h1 { font-size: 29px; }
+  :root[data-ui="gloves"] .h2 { font-size: 14px; }
+  :root[data-ui="gloves"] .h2::before { box-shadow: none; width: 4px; height: 14px; }
+  :root[data-ui="gloves"] .chip { font-size: 14px; }
+  :root[data-ui="gloves"] .chip::before, :root[data-ui="gloves"] .row[data-st]::before { box-shadow: none; }
+  :root[data-ui="gloves"] .row[data-st]::before { width: 5px; }
+  :root[data-ui="gloves"] .btn-primary { background: var(--ok); box-shadow: none; }
+  :root[data-ui="gloves"] .check-row input[type="checkbox"] { width: 30px; height: 30px; }
+  :root[data-ui="gloves"] .timer { font-size: 64px; }
+  :root[data-ui="gloves"] .ring { --size: min(80vw, 300px); }
+  :root[data-ui="gloves"] .ring .ring-fill { filter: none; stroke-width: 14; }
+  :root[data-ui="gloves"] .ring .ring-track { stroke-width: 14; }
+  :root[data-ui="gloves"] .ring .ring-ticks { display: none; }
+  :root[data-ui="gloves"] .ck .st { border-width: 2px; }
+  :root[data-ui="gloves"] .ck .st svg { width: 28px; height: 28px; }
+  :root[data-ui="gloves"] .strip:not(.tap) { height: 20px; }
+  :root[data-ui="gloves"] .menu, :root[data-ui="gloves"] dialog { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-2); }
+  :root[data-ui="gloves"] dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, 0.7); }
+  /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
+  :root[data-ui="gloves"] [data-next] { animation: none; box-shadow: none; outline: 3px solid var(--accent); outline-offset: 3px; }
+  :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; }
+  :root[data-ui="gloves"] [data-next]::after { display: none; }
+
+  /* ================= «Максимум»: стекло, аврора, неон ================= */
+  :root[data-ui="max"] { --art-opacity: 1; }
+  :root[data-ui="max"] body::before {
+    inset: -30%;
+    background:
+      radial-gradient(28% 22% at 22% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
+      radial-gradient(26% 22% at 82% 26%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%),
+      radial-gradient(34% 26% at 62% 82%, color-mix(in srgb, var(--ok) 20%, transparent), transparent 70%),
+      radial-gradient(22% 18% at 18% 78%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+    animation: aurora 38s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  :root[data-ui="max"][data-theme="light"] body::before { opacity: 0.55; }
+  :root[data-ui="max"] body::after {
+    display: block;
+    inset: 0;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
+    mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
+  }
+  /* Стекло: только крупные поверхности — у каждого backdrop-filter своя
+     цена на телефоне, у десятков строк списка его нет. */
+  :root[data-ui="max"] .card.hero,
+  :root[data-ui="max"] .hud-card,
+  :root[data-ui="max"] .wx-hero,
+  :root[data-ui="max"] .ready-panel .gauge-tile,
+  :root[data-ui="max"] dialog {
+    -webkit-backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
+    backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
+  }
+  :root[data-ui="max"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 82%, transparent); }
+  /* Живая рамка героя: градиент бежит по кругу */
+  :root[data-ui="max"] .card.hero,
+  :root[data-ui="max"] .hud-card {
+    background:
+      var(--sheen) padding-box,
+      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
+      conic-gradient(from var(--glow-a), color-mix(in srgb, var(--accent) 80%, transparent), color-mix(in srgb, var(--accent-2) 55%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 55%, transparent) 85%, color-mix(in srgb, var(--accent) 80%, transparent)) border-box;
+    animation: glow-spin 9s linear infinite;
+    animation-delay: var(--glow-phase-slow, 0s);
+    box-shadow: var(--shadow), 0 0 40px -18px var(--accent);
+  }
+  :root[data-ui="max"] .head h1 {
+    background: linear-gradient(100deg, var(--text) 55%, color-mix(in srgb, var(--accent) 80%, var(--text)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  :root[data-ui="max"] .timer:not(.landed) { text-shadow: 0 0 22px color-mix(in srgb, var(--c, var(--ok)) 55%, transparent); }
+  :root[data-ui="max"] .btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 0 0 1px color-mix(in srgb, var(--ok) 60%, transparent), 0 12px 38px -10px var(--ok); }
+  :root[data-ui="max"] #tabbar { background: color-mix(in srgb, var(--bg-2) 62%, transparent); box-shadow: var(--shadow-pop), 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent) inset; }
+  :root[data-ui="max"] #tabbar .tab[aria-current="page"] svg { filter: drop-shadow(0 0 6px var(--accent)); }
+  /* Карточки проявляются при прокрутке — на том, что умеет
+     animation-timeline (без поддержки всё просто видно сразу). */
+  @supports (animation-timeline: view()) {
+    @keyframes reveal { from { opacity: 0; transform: translateY(18px) scale(0.985); } }
+    :root[data-ui="max"] #views .card:not(.hero),
+    :root[data-ui="max"] #views .stat {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
+}
+
+/* == styles/07-print.css == */
+/* Печать журнала.
+   Фон листа задаётся ЯВНО у тела: тёмная тема базовая, у html фона нет,
+   и фон body уходит на холст листа (замер 2026-09-07: заливка во всю
+   область листа). Белый только у html не спасает. min-height снимается
+   ради WebKit: он при печати считает vh от окна и выталкивает пустой лист.
+   Перенос в ЛЮБОМ месте — только колонкам со свободным текстом (борт,
+   АКБ, локация, заметки): длинное слово растягивало таблицу за край.
+   Всем ячейкам его давать нельзя — служебные колонки режут слова посреди
+   слога. Поля страницы и заливку шапки не навязываем: это выбор
+   владельца в диалоге печати. Фоновые слои (картинка, аврора, сетка)
+   на лист не попадают. */
+
+@layer print {
+  #print-area { display: none; }
+  @media print {
+    html, body { background: #fff; min-height: 0; }
+    html::before, body::before, body::after { display: none !important; }
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block; color: #000; background: #fff; font-size: 12pt; }
+    #print-area h1 { font-size: 16pt; margin-bottom: 4pt; }
+    #print-area p { margin-bottom: 8pt; }
+    #print-area table { width: 100%; border-collapse: collapse; }
+    #print-area th, #print-area td {
+      border: 1pt solid #444;
+      padding: 3pt 5pt;
+      text-align: left;
+      vertical-align: top;
+      font-size: 10pt;
+    }
+    #print-area td:nth-child(3), #print-area td:nth-child(5),
+    #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
+    #print-area th { background: #eee; }
+    #print-area tr { break-inside: avoid; }
+  }
+}
 
 </style>
+  <!-- Картинки из assets/art: сборка вставляет правила только для
+       существующих файлов и только в PWA (офлайн-файл без них). -->
+  
 </head>
 <body>
   <main id="views" aria-live="polite"></main>
@@ -3244,14 +3898,26 @@ function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return n
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
-// Тема и режим «В перчатках» — только UI-предпочтения в localStorage.
-// rcp.theme: light|dark, отсутствует — как в системе; rcp.gloves: '1'.
+// Тема и режим интерфейса — только UI-предпочтения в localStorage.
+// rcp.theme: light|dark, отсутствует — как в системе.
+// rcp.ui: gloves|max, отсутствует — «Стандарт». До 3.0 режим «В перчатках»
+// хранился в rcp.gloves='1' — переводится на новый ключ при первом чтении.
 // Тот же расчёт продублирован инлайн-скриптом в index.html, чтобы первая
 // отрисовка не мигала; здесь — источник для настроек и смены темы системы.
-const THEME_COLOR = { dark: '#14181e', light: '#f2f3f5' };
+const THEME_COLOR = { dark: '#0b1017', light: '#eef2f7' };
+const UI_MODES = ['gloves', 'standard', 'max'];
 function themePref() {
   const t = lsGet('rcp.theme');
   return t === 'light' || t === 'dark' ? t : 'system';
+}
+function uiMode() {
+  let u = lsGet('rcp.ui');
+  if (!u && lsGet('rcp.gloves') === '1') {
+    u = 'gloves';
+    lsSet('rcp.ui', u);
+    lsDel('rcp.gloves');
+  }
+  return UI_MODES.includes(u) ? u : 'standard';
 }
 function applyTheme() {
   let t = themePref();
@@ -3260,8 +3926,7 @@ function applyTheme() {
   }
   const root = document.documentElement;
   root.dataset.theme = t;
-  if (lsGet('rcp.gloves') === '1') root.dataset.gloves = '';
-  else delete root.dataset.gloves;
+  root.dataset.ui = uiMode();
   const meta = $('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLOR[t];
 }
@@ -3879,8 +4544,11 @@ function rowBtn(attrs, inner, icon) {
   return `<button class="row" ${attrs}>${i}${inner}<span class="chev">${ICONS.chev}</span></button>`;
 }
 
-function emptyState(text, btnAct, btnLabel) {
-  return `<div class="empty">${ICONS.plane}<p>${text}</p>
+// Пустое состояние. art — ключ слота картинки (assets/art/empty-<art>.svg):
+// есть файл — вместо иконки неоновый рисунок, нет — иконка самолёта.
+function emptyState(text, btnAct, btnLabel, art) {
+  const key = ['fleet', 'journal', 'batteries', 'sites', 'packing'].includes(art) ? art : 'generic';
+  return `<div class="empty"><span class="empty-art" data-art="empty-${key}" aria-hidden="true">${ICONS.plane}</span><p>${text}</p>
     ${btnAct ? `<button class="btn btn-sm" data-act="${btnAct}">${btnLabel}</button>` : ''}</div>`;
 }
 
@@ -3986,7 +4654,10 @@ function confirmModal(text, act, dataAttrs, btnLabel) {
 function aircraftThumb(a, lg) {
   const u = photoURL(a);
   const cls = lg ? 'thumb lg' : 'thumb';
-  if (!u) return `<span class="${cls} ph">${ICONS[a.type] || ICONS.plane}</span>`;
+  // Без фото — заглушка по типу: картинка assets/art/type-<тип>.webp,
+  // если она есть в сборке, иначе иконка типа. Тип нормализован в NORM.
+  const type = TYPES[a.type] ? a.type : 'other';
+  if (!u) return `<span class="${cls} ph" data-art="type-${type}">${ICONS[type] || ICONS.plane}</span>`;
   const img = `<img class="${cls}" src="${u}" alt="Фото борта: ${esc(a.name)}">`;
   return lg
     ? `<button class="thumb-btn" data-photo="aircraft" data-id="${esc(a.id)}" data-cap="${esc(a.name)}"
@@ -4468,7 +5139,7 @@ function fleetRow(a) {
 function viewFleet() {
   let h = pageHead('Флот', { act: 'add-model', actLabel: 'Добавить', help: 'fleet' }) + fleetSeg('fleet');
   if (!S.aircraft.length) {
-    return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт');
+    return h + emptyState('Пока нет ни одного борта.', 'add-model', 'Добавить борт', 'fleet');
   }
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
@@ -4921,7 +5592,7 @@ function viewFlight() {
       <button class="btn-sm btn right" data-nav="#/prep">Продолжить</button></div>`;
   }
   if (!S.aircraft.length && !activeSessions().length) {
-    return h + emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт');
+    return h + emptyState('Сначала добавьте борт во «Флоте».', 'add-model', 'Добавить борт', 'fleet');
   }
   h += `<button class="btn btn-primary" data-act="start-prep">Начать полёт</button>`;
 
@@ -4967,7 +5638,7 @@ function viewPrep() {
   // Шаг 1 — выбрать модель.
   if (!UI.prep) {
     let h = pageHead('Подготовка', { back: '#/flight', sub: 'Выберите борт', help: 'flight' });
-    if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт');
+    if (!S.aircraft.length) return h + emptyState('Нет бортов.', 'add-model', 'Добавить борт', 'fleet');
     h += '<div class="card flat">';
     h += S.aircraft.map((a) => rowBtn(`data-act="prep-model" data-id="${a.id}"`,
       `${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
@@ -5266,7 +5937,7 @@ function viewJournal() {
     <button data-act="journal-tab" data-tab="log" aria-pressed="${tab === 'log'}">Полёты</button>
     <button data-act="journal-tab" data-tab="stats" aria-pressed="${tab === 'stats'}">Статистика</button>
   </div>`;
-  if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт');
+  if (!total.length) return h + emptyState('Полётов пока не было.', 'start-prep', 'Начать полёт', 'journal');
   const fid = journalFilterId();
   if (S.aircraft.length > 1) {
     h += `<div class="pill-row">${pillSelect('journalAircraft',
@@ -5274,7 +5945,7 @@ function viewJournal() {
       fid, `class="sel-pill${fid ? ' sel' : ''}" data-change="journal-aircraft" aria-label="Фильтр по борту"`)}</div>`;
   }
   const done = journalDone();
-  if (!done.length) return h + emptyState('У этого борта полётов пока не было.');
+  if (!done.length) return h + emptyState('У этого борта полётов пока не было.', '', '', 'journal');
   return h + (tab === 'stats' ? journalStatsHtml(done) : journalLogHtml(done));
 }
 
@@ -5496,7 +6167,7 @@ function exportStatsCsv() {
 function viewPacking() {
   // Своей вкладки у сборов нет (2.0): «Назад» ведёт на «Сегодня» — и из «Ещё» тоже.
   let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор', help: 'packing' });
-  if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор');
+  if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор', 'packing');
   h += '<div class="card flat">';
   h += S.packing.map((p) => {
     const done = p.items.filter((i) => i.done).length;
@@ -6402,11 +7073,14 @@ function viewMore() {
     ${[['system', 'Как в системе'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(([v, l]) =>
       `<button data-act="theme-set" data-theme="${v}" aria-pressed="${themeNow === v}">${l}</button>`).join('')}
   </div>`);
-  const gloves = lsGet('rcp.gloves') === '1';
-  h += field('Размер элементов', `<div class="seg">
-    <button data-act="gloves-set" data-gloves="0" aria-pressed="${!gloves}">Обычный</button>
-    <button data-act="gloves-set" data-gloves="1" aria-pressed="${gloves}">В перчатках</button>
-  </div>`, 'Крупнее кнопки и строки — для поля');
+  const mode = uiMode();
+  const modeCard = (m, label, note) => `<button class="mode-card" data-act="ui-set" data-ui="${m}" aria-pressed="${mode === m}">
+      <span class="mode-prev ${m}" aria-hidden="true"><i></i><i></i><b></b></span>${label}<small>${note}</small></button>`;
+  h += field('Интерфейс', `<div class="mode-pick" role="group" aria-label="Режим интерфейса">
+    ${modeCard('gloves', 'В перчатках', 'крупно, только главное')}
+    ${modeCard('standard', 'Стандарт', 'чисто, мягкая подсветка')}
+    ${modeCard('max', 'Максимум', 'стекло, неон, живой фон')}
+  </div>`, 'Подсветка всегда ведёт к следующему шагу. «Максимум» тратит чуть больше батареи');
   h += `<form data-form="pilot">` + field('Имя пилота / позывной',
     `<input type="text" name="pilot" value="${esc(S.settings.pilot || '')}" placeholder="необязательно">`) +
     `<button class="btn btn-sm" type="submit">Сохранить</button></form>`;
@@ -6511,7 +7185,7 @@ function mapLinks(s) {
 
 function viewSites() {
   let h = pageHead('Локации', { back: '#/more', act: 'add-site', actLabel: 'Добавить', help: 'sites' });
-  if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию');
+  if (!S.sites.length) return h + emptyState('Запомните места, где летаете: поле, парк, склон.', 'add-site', 'Добавить локацию', 'sites');
   h += '<div class="card flat">';
   h += S.sites.map((s) => `<div class="row">
     <button class="grow" data-act="edit-site" data-id="${s.id}" style="text-align:left;min-height:var(--seg)">
@@ -6560,7 +7234,7 @@ function battSortCmp() {
 
 function viewBatteries() {
   let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить' }) + fleetSeg('batteries');
-  if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ');
+  if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ', 'batteries');
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
     ${selectHtml('battSort', [['name', 'По названию'], ['charge', 'По заряду'], ['chem', 'По химии'], ['cycles', 'По циклам']],
@@ -6712,6 +7386,7 @@ function welcomeBodyHtml(i) {
   const s = steps[i];
   const last = i === steps.length - 1;
   return `<div class="welcome">
+    <span class="welcome-art" data-art="welcome-${i + 1}" aria-hidden="true"></span>
     <span class="welcome-ic">${ICONS[s.key] || ICONS.help}</span>
     <h3>${esc(s.title)}</h3>
     <p>${esc(s.text)}</p>
@@ -7465,9 +8140,11 @@ const ACTIONS = {
     applyTheme();
     render(true);
   },
-  'gloves-set': (el) => {
-    if (el.dataset.gloves === '1') lsSet('rcp.gloves', '1');
-    else lsDel('rcp.gloves');
+  // Режим интерфейса: «В перчатках» · «Стандарт» · «Максимум».
+  'ui-set': (el) => {
+    const m = el.dataset.ui;
+    if (!UI_MODES.includes(m)) return;
+    if (m === 'standard') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
     applyTheme();
     render(true);
   },

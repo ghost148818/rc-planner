@@ -9,14 +9,16 @@
     "build": "node build.js",
     "guide": "node docs/gen-guide.js",
     "test:data": "node test/checks.js",
+    "test:art": "node test/art.js",
     "test:audit": "node test/audit.js",
     "test:single": "node test/single.js",
     "test:pwa": "node test/pwa.js",
     "test:visual": "node test/visual.js",
     "test:seeded": "node test/seeded.js",
-    "test": "npm run test:data && npm run test:audit && npm run test:single && npm run test:pwa && npm run test:visual && npm run test:seeded",
+    "test": "npm run test:data && npm run test:art && npm run test:audit && npm run test:single && npm run test:pwa && npm run test:visual && npm run test:seeded",
     "release": "npm run build && npm test",
-    "setup": "npm install && npx playwright install chromium"
+    "setup": "npm install && npx playwright install chromium",
+    "art:check": "node test/art.js"
   },
   "devDependencies": {
     "playwright": "^1.56.0",

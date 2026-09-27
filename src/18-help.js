@@ -45,6 +45,7 @@ function welcomeBodyHtml(i) {
   const s = steps[i];
   const last = i === steps.length - 1;
   return `<div class="welcome">
+    <span class="welcome-art" data-art="welcome-${i + 1}" aria-hidden="true"></span>
     <span class="welcome-ic">${ICONS[s.key] || ICONS.help}</span>
     <h3>${esc(s.title)}</h3>
     <p>${esc(s.text)}</p>
