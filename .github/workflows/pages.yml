@@ -1,0 +1,36 @@
+# Выкладка на GitHub Pages: публикуется готовая сборка из public/
+# (та же папка, что у GitVerse Pages). Сборку в CI не повторяем:
+# public/ коммитится вместе с исходниками после npm run build.
+# Включить один раз: Settings → Pages → Source: GitHub Actions.
+# Для ветки, отличной от main: Settings → Environments → github-pages →
+# Deployment branches — добавить правило для этой ветки.
+name: Pages
+
+on:
+  push:
+    branches: [main, 'velrafpv/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4
