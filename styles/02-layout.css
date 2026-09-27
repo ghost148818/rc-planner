@@ -81,7 +81,13 @@
     margin: 4px 0 16px;
     min-height: 44px;
   }
-  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; }
+  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; text-wrap: balance; }
+  /* «Изменить» на узком экране — иконкой: длинное имя борта не жмётся в три строки */
+  @media (max-width: 599px) {
+    .head .head-act[data-act="edit-model"] { width: var(--seg); height: var(--seg); padding: 0; border-radius: 50%; }
+    .head .head-act[data-act="edit-model"] .head-act-t { display: none; }
+    .head .head-act[data-act="edit-model"] .head-act-ic { display: flex; }
+  }
   .head .grow { flex: 1; min-width: 0; }
   .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 3px; }
   .back {
@@ -134,9 +140,11 @@
     background: color-mix(in srgb, var(--c, var(--mut)) 14%, transparent);
   }
   .state-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-  .state-pill.field, .state-pill.flying { --c: var(--ok); }
-  .state-pill.debrief { --c: var(--info); }
-  .state-pill.home { --c: var(--accent); }
+  /* Модификаторы с префиксом sp-: голый .field совпадал с полем формы */
+  .state-pill.sp-field, .state-pill.sp-flying { --c: var(--ok); }
+  .state-pill.sp-debrief { --c: var(--info); }
+  .state-pill.sp-home { --c: var(--accent); }
+  :root[data-theme="light"] .state-pill { color: color-mix(in srgb, var(--c, var(--mut)) 80%, var(--text)); }
 
   /* ---------- Заголовок раздела ---------- */
   .h2 {
@@ -202,8 +210,9 @@
     #views:not(.two-col) { max-width: 812px; margin-left: max(112px, calc((100vw - 812px + 100px) / 2)); }
     #tabbar .tab { font-size: 12px; color: var(--mut); }
     /* Широкие кнопки в колонке 750 px выглядят растянутыми — ограничены */
-    #views > .btn, #views > .btn-line, .today-main > .btn { max-width: 460px; }
-    .ring ~ .btn, .ring ~ .session-hint, .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 460px; }
+    #views > .btn, #views > .btn-line { max-width: 460px; }
+    .ring ~ .btn, .ring ~ .session-hint { margin-left: auto; margin-right: auto; max-width: 460px; }
+    .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 560px; }
     #views.two-col {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 372px;

@@ -40,11 +40,11 @@ function openModelForm(a, presetId, saved, cloneId) {
       'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${numVal(a.maxWind)}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
-      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 3000')}
+      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до&nbsp;3000&nbsp;м')}
     </div>
     <div class="grid2">
       ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
-      ${field('Осмотр каждые, минут налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
+      ${field('Осмотр каждые, мин налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
     </div>
     <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
       Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>

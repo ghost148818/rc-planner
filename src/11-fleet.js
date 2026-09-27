@@ -41,7 +41,7 @@ function fleetRow(a) {
   return `<div class="row fleet-row" data-st="${statusOf(a)}">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
+      <span class="d">${[TYPES[a.type] || '', b ? battTag(b) : '', a.manufacturer ? esc(a.manufacturer) : ''].filter(Boolean).join('&nbsp;· ')}</span></span></button>
     ${chip(statusOf(a), a.id, true)}
     <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
   </div>`;
@@ -174,8 +174,8 @@ function armedFleet() { return S.aircraft.filter((a) => armedBattery(a)); }
 // Подпись аккумулятора, светящаяся состоянием заряда: зелёная — заряжен,
 // синяя — после полёта (разряжен). Один вид на бортах и в списке АКБ.
 function battTag(b, text) {
-  const cls = b.charge === 'ready' ? 'bt-ready' : b.charge === 'flown' ? 'bt-flown' : '';
-  return `<span class="${cls}">${esc(text != null ? text : b.label)}</span>`;
+  const cls = b.charge === 'ready' ? ' bt-ready' : b.charge === 'flown' ? ' bt-flown' : '';
+  return `<span class="bt${cls}">${esc(text != null ? text : b.label)}</span>`;
 }
 const CHARGE_LABEL = { ready: 'заряжен', flown: 'после полёта' };
 

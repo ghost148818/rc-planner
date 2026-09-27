@@ -38,7 +38,7 @@
   button.row, a.row, .row .row-main { transition: background-color 0.15s var(--ease); }
   button.row:active, a.row:active, .row .row-main:active { background-color: var(--surface-2); }
   .row .grow { flex: 1; min-width: 0; }
-  .row .t { display: block; font-size: var(--font); font-weight: 550; }
+  .row .t { display: block; font-size: var(--font); font-weight: 550; overflow-wrap: break-word; text-wrap: pretty; }
   .row .d {
     display: block;
     color: var(--mut);
@@ -47,6 +47,13 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .row .d.wrap, dialog .row .d { white-space: normal; }
+  /* Строка с чипом или кнопкой справа (класс stack): на узком экране
+     действие уходит под текст, а не выдавливает его в три слова */
+  @media (max-width: 480px) {
+    div.row.stack { flex-wrap: wrap; row-gap: 8px; }
+    div.row.stack > .grow { flex: 1 1 58%; }
+    div.row.stack > .grow + * { margin-left: auto; }
+  }
   .row .chev { color: var(--dim); flex: none; }
   .row .chev svg { width: 18px; height: 18px; }
   .row .row-ic {
@@ -149,7 +156,7 @@
   /* Чип-кнопка (заряд) не режется: подпись у неё без многоточия */
   .row > button.chip { flex: none; max-width: none; }
   /* «заряд?» — то, на что пилоту надо нажать: янтарный, а не серый */
-  button.chip.st-unknown[data-act="batt-charge"] { --c: var(--warn); }
+  button.chip.st-unknown[data-act="batt-charge"] { --c: var(--warn); background: var(--warn-bg); }
 
   .badge {
     display: inline-block;
@@ -164,6 +171,8 @@
   }
   /* online — информация, не тревога: синий, не жёлтый */
   .badge.online { color: var(--info); border-color: color-mix(in srgb, var(--info) 55%, transparent); background: var(--info-bg); }
+  .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: var(--warn-bg); }
+  .badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: var(--bad-bg); }
 
   /* ---------- Кнопки ---------- */
   .btn {
@@ -182,6 +191,7 @@
     font-weight: 650;
     color: var(--text);
     text-align: center;
+    text-wrap: balance;
     transition: transform 0.1s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
   }
   .btn svg { width: 21px; height: 21px; flex: none; }
@@ -222,7 +232,9 @@
   .btn + .btn { margin-top: 9px; }
   .row .btn + .btn, .banner .btn + .btn { margin-top: 0; }
   .btn-line { display: flex; gap: 9px; flex-wrap: wrap; }
-  .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  /* width: auto обязателен: иначе width: 100% у .btn становится основой
+     flex и кнопки никогда не встают в одну строку */
+  .btn-line .btn { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; margin-top: 0; }
   /* Малая кнопка рядом с полем ввода («Добавить» в сборах) — по содержимому */
   .btn-line > input + .btn-sm { flex: 0 0 auto; }
   .btn-line + .btn-line { margin-top: 9px; }
@@ -235,7 +247,7 @@
   }
   .ic-btn svg { width: 20px; height: 20px; }
   .ic-btn:active { background: var(--surface-2); }
-  .ic-btn.on { color: var(--warn); }
+  .ic-btn.on { color: var(--star); }
   /* Текстовая кнопка-ссылка под главной — полной высоты касания */
   .link-btn {
     display: block; width: 100%; min-height: var(--seg);
@@ -298,13 +310,32 @@
     min-height: var(--seg); padding: 4px 0;
     color: var(--text); font-size: var(--font); cursor: pointer;
   }
+  /* Своя клетка вместо системной: одна на обе темы и все режимы */
   .check-row input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
     width: 24px; height: 24px; flex: none; margin: 0;
-    accent-color: var(--ok);
+    display: grid; place-content: center;
+    border-radius: 7px;
+    border: 1.5px solid var(--dim);
+    background: var(--bg);
+    cursor: pointer;
+    transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
   }
+  .check-row input[type="checkbox"]::after {
+    content: "";
+    width: 6px; height: 12px;
+    margin-top: -2px;
+    border: solid var(--on-ok);
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+  }
+  .check-row input[type="checkbox"]:checked { background: var(--ok); border-color: var(--ok); }
+  .check-row input[type="checkbox"]:checked::after { opacity: 1; }
   .field > label:empty { display: none; }
   .field .hint, .hint { font-size: 12.5px; color: var(--dim); margin-top: 4px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+  .card > .field:last-child { margin-bottom: 0; }
 
   /* ---------- Сегменты ---------- */
   .seg {
@@ -329,8 +360,9 @@
     color: var(--text);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 4px 14px -8px rgba(0, 0, 0, 0.7);
   }
-  .seg.four button { font-size: 13px; padding: 0 2px; }
-  @media (max-width: 399px) { .seg.four button { font-size: 12.5px; padding: 0 1px; } }
+  :root[data-theme="light"] .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 0 0 1px var(--line), var(--shadow); }
+  .seg.four button { font-size: 13px; padding: 0 5px; }
+  @media (max-width: 399px) { .seg.four button { font-size: 12.5px; } }
   /* Сегмент с иконками: класс борта в форме */
   .seg-ic button {
     display: flex; align-items: center; justify-content: center; flex-direction: column;
@@ -359,7 +391,8 @@
   .pill svg { width: 16px; height: 16px; color: var(--dim); flex: none; }
   .pill > span { overflow: hidden; text-overflow: ellipsis; }
   button.pill { cursor: pointer; }
-  .pill.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  /* Выбранное — заливкой, а не свечением: свечение у следующего шага */
+  .pill.sel { border-color: var(--accent); background: var(--accent-bg); }
   select.sel-pill {
     width: auto;
     max-width: 100%;
@@ -371,7 +404,7 @@
     flex: none;
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
   }
-  select.sel-pill.sel { border-color: var(--accent); }
+  select.sel-pill.sel { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background-color: var(--accent-bg); }
   /* Селект по ширине ВЫБРАННОГО пункта (pillSelect): невидимая копия
      подписи (::after из data-v) задаёт ширину, селект лежит поверх
      абсолютно — иначе нативный select растёт по самому длинному пункту. */
@@ -412,7 +445,7 @@
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+    background: var(--bg-2);
     -webkit-backdrop-filter: blur(20px) saturate(1.4);
     backdrop-filter: blur(20px) saturate(1.4);
     color: var(--text);
@@ -451,7 +484,7 @@
   .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .menu-grid[popover]:popover-open { display: grid; }
   .menu-grid button { justify-content: center; padding: 0 8px; font-variant-numeric: tabular-nums; }
-  .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
+  .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; padding: 0 14px; }
   .menu-grid button[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
 
   /* ---------- Баннеры ---------- */
@@ -472,6 +505,9 @@
   .banner > .grow { flex: 1 1 160px; }
   /* Две кнопки в баннере — отдельной строкой под текстом, рядом друг с другом */
   .banner:has(> .btn + .btn) > .grow { flex-basis: 100%; }
+  /* …а текст остаётся рядом с иконкой, кнопки — вплотную */
+  .banner:has(> svg):has(> .btn + .btn) > .grow { flex-basis: calc(100% - 31px); }
+  .banner .btn.right + .btn.right { margin-left: 0; }
   .banner.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok); background: var(--ok-bg); }
   .banner.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); background: var(--warn-bg); }
   .banner.backup { align-items: center; }
@@ -485,12 +521,14 @@
 
   /* ---------- Шкалы, плитки, пары «ключ — значение» ---------- */
   .progress {
+    display: block;
     height: 7px;
     border-radius: 4px;
     background: var(--surface-3);
     overflow: hidden;
     margin: 8px 0 4px;
   }
+  :root[data-theme="light"] .progress { background: color-mix(in srgb, var(--text) 10%, transparent); }
   .progress i {
     display: block; height: 100%;
     border-radius: 4px;
@@ -519,7 +557,7 @@
   }
   .stat .v { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
   .stat .v.warn { color: var(--warn); }
-  .stat .k { color: var(--mut); font-size: 12px; margin-top: 2px; }
+  .stat .k { color: var(--mut); font-size: calc(var(--font-d) - 1px); margin-top: 2px; }
   .stat-line.four .stat { flex: 1 1 130px; }
   .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
   .kv div { display: flex; flex-direction: column; min-width: 0; }

@@ -481,7 +481,11 @@ function wxHourCardHtml(day, hr, lim) {
   const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
   const desc = [wxDesc(hr), hr.temp != null ? wxNum(hr.temp) + '°' : ''].filter(Boolean).join(' · ');
   const marks = (hr.stop ? [hr.stop] : hr.diff.why).join(' · ');
-  return `<div class="h2">${String(hr.hh).padStart(2, '0')}:00 <span class="cnt">выбранный час</span></div>
+  // Час ±1 кнопками — видны только в перчатках (.wx-step): там клетка
+  // полоски ~13 px, другого способа выбрать час нет.
+  const step = (h, label, ic, off) => `<button type="button" class="ic-btn" data-act="weather-hour" data-h="${h}" aria-label="${label}"${off ? ' disabled' : ''}>${ICONS[ic]}</button>`;
+  return `<div class="h2">${String(hr.hh).padStart(2, '0')}:00 <span class="cnt">выбранный час</span>
+    <span class="wx-step">${step(hr.hh - 1, 'Предыдущий час', 'back', hr.hh === 0)}${step(hr.hh + 1, 'Следующий час', 'chev', hr.hh === 23)}</span></div>
     <div class="card wx-hour">
       <div class="wx-hour-top">
         <span class="wx-ic">${ICONS[wxIcon(hr)]}</span>
@@ -546,12 +550,12 @@ function wxAttentionHtml(day, lim) {
   const rows = spans.slice(0, 5).map((s) => {
     const time = `${String(s.from).padStart(2, '0')}:00–${String(s.to + 1).padStart(2, '0')}:00`;
     const sub = s.key.startsWith('warn:возможны') || s.key === 'bad:осадки' || s.key === 'bad:дождь'
-      ? `вероятность ${s.pp} %${s.prec > 0 ? ` · до ${wxMm(s.prec)} мм` : ''}`
-      : `ветер до ${wxNum(s.w)} м/с · порывы до ${wxNum(s.g)}`;
+      ? `вероятность&nbsp;${s.pp}&nbsp;%${s.prec > 0 ? ` · до&nbsp;${wxMm(s.prec)}&nbsp;мм` : ''}`
+      : `ветер до&nbsp;${wxNum(s.w)}&nbsp;м/с · порывы до&nbsp;${wxNum(s.g)}`;
     const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
     return `<button class="row" data-act="weather-hour" data-h="${s.from}">
       <span class="row-ic">${ICONS[s.icon]}</span>
-      <span class="grow"><span class="t"><span class="mono">${time}</span> · ${s.text}</span><span class="d wrap">${sub}</span></span>
+      <span class="grow"><span class="t">${s.text}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
       <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>
     </button>`;
   }).join('');
@@ -740,6 +744,7 @@ function viewWeather() {
     <div class="menu menu-grid" popover="manual" id="wx-alt-menu" role="menu" aria-label="Высота полёта" hidden>
       <button class="menu-head" role="menuitemradio" data-act="wx-alt-set" data-alt=""
         aria-checked="${!altPick}">По карточке борта · ${lim.altOwn} м</button>
+      <div class="menu-cap xs muted" style="grid-column:1/-1;padding:4px 12px 0">Высота над землёй, м</div>
       ${Array.from({ length: WX_ALT_MAX / WX_ALT_STEP }, (_, i) => (i + 1) * WX_ALT_STEP)
         .map((m) => `<button role="menuitemradio" data-act="wx-alt-set" data-alt="${m}"
           aria-checked="${altPick === m}">${m}</button>`).join('')}

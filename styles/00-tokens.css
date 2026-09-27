@@ -19,6 +19,9 @@
 @property --glow-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
 @property --aurora-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+/* Яркость блика-кометы следующего шага в «Максимуме»: гаснет к концу
+   трёх кругов, чтобы замершая комета не оставляла белое пятно. */
+@property --glow-k { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
 
 @layer tokens {
   :root {
@@ -33,7 +36,7 @@
     --line-soft: rgba(120, 150, 190, 0.14);
     --text: #eaf0f7;
     --mut: #9eabbb;
-    --dim: #6c7a8c;
+    --dim: #7f8ea2;
     --link: #6cc7ff;
 
     /* Акцент — «приборный» циан: фокус, следующий шаг, активная вкладка */
@@ -57,6 +60,12 @@
     --info-bg: rgba(110, 168, 255, 0.14);
     --unk-bg: rgba(137, 149, 165, 0.15);
     --accent-bg: rgba(63, 214, 240, 0.12);
+    --star: var(--warn);
+    /* Неон без привязки к теме: пятна авроры «Максимума» в светлой теме —
+       пастель из тех же оттенков, а не серый из тёмного акцента */
+    --neon-1: #3fd6f0;
+    --neon-2: #7c8cff;
+    --neon-3: #3ddc84;
 
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -18px rgba(0, 0, 0, 0.8);
     --shadow-pop: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
@@ -134,7 +143,8 @@
     --on-ok: #ffffff;
 
     --ok-bg: rgba(12, 122, 64, 0.1);
-    --warn-bg: rgba(122, 90, 0, 0.1);
+    --warn-bg: rgba(214, 150, 0, 0.14);
+    --star: #c28400;
     --maint-bg: rgba(152, 69, 10, 0.1);
     --bad-bg: rgba(179, 38, 45, 0.09);
     --info-bg: rgba(31, 99, 199, 0.09);

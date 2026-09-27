@@ -84,10 +84,15 @@ function svcState(a) {
 // Тексты регламента живут рядом с расчётом — иначе формулировки на
 // «Сегодня», в карточке и в чек-листе разъедутся между собой.
 // Показываем только настроенные счётчики: пустой пользователю не нужен.
+// Число и единица — через неразрывный пробел (NB): «12 / мин» не рвутся
+// по строкам в узких ячейках. fmtDur глобально не трогаем — её текст
+// идёт и в CSV.
+const NB = '\u00a0';
+const nbDur = (m) => fmtDur(m).replace(/ /g, NB);
 function svcSinceText(sv) {
   const parts = [];
-  if (sv.every) parts.push(`${sv.flights} ${plural(sv.flights, 'полёт', 'полёта', 'полётов')}`);
-  if (sv.everyMin) parts.push(`${fmtDur(sv.minutes)} налёта`);
+  if (sv.every) parts.push(`${sv.flights}${NB}${plural(sv.flights, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${nbDur(sv.minutes)} налёта`);
   return parts.join(' и ');
 }
 // «каждые» согласуется с числом: при единице нужна другая форма,
@@ -96,20 +101,20 @@ function svcEveryText(sv) {
   const parts = [];
   if (sv.every) {
     parts.push(sv.every === 1 ? 'каждый полёт'
-      : `каждые ${sv.every} ${plural(sv.every, 'полёт', 'полёта', 'полётов')}`);
+      : `каждые ${sv.every}${NB}${plural(sv.every, 'полёт', 'полёта', 'полётов')}`);
   }
   if (sv.everyMin) {
     parts.push(sv.everyMin === 60 ? 'каждый час налёта'
       : sv.everyMin === 1 ? 'каждую минуту налёта'
-      : `каждые ${fmtDur(sv.everyMin)} налёта`);
+      : `каждые ${nbDur(sv.everyMin)} налёта`);
   }
   return parts.join(' или ');
 }
 // «Сколько осталось» — по каждому счётчику; наступит тот, что раньше.
 function svcLeftText(sv) {
   const parts = [];
-  if (sv.every) parts.push(`${sv.left} ${plural(sv.left, 'полёт', 'полёта', 'полётов')}`);
-  if (sv.everyMin) parts.push(`${fmtDur(sv.leftMin)} налёта`);
+  if (sv.every) parts.push(`${sv.left}${NB}${plural(sv.left, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${nbDur(sv.leftMin)} налёта`);
   return parts.join(' или ');
 }
 

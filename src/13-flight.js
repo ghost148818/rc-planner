@@ -24,7 +24,7 @@ function viewFlight() {
     h += '<div class="h2">Готовы к вылету</div><div class="card flat">';
     h += prepared.map((a) => `<div class="row">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">чек-лист пройден в ${fmtTime(a.prepared.at)}</span></span>
+      <span class="d">чек-лист пройден в&nbsp;${fmtTime(a.prepared.at)}</span></span>
       ${chargeKnown(armedBattery(a))
         ? `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>`
         : chargeChip(armedBattery(a))}
@@ -49,7 +49,7 @@ function viewFlight() {
   }
   h += '<div class="card flat" style="margin-top:10px">' +
     rowBtn('data-nav="#/journal"', `<span class="grow"><span class="t">Журнал полётов</span>
-      <span class="d wrap">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать, CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
+      <span class="d wrap">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать,&nbsp;CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
     '</div>';
   return h;
 }
@@ -86,7 +86,7 @@ function viewPrep() {
 
   const kept = UI.prep.runId && preparedFresh(a);
   let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
-    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · подготовлен в ' + fmtTime(a.prepared.at) : '') });
+    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · <span class="nowrap">подготовлен в ' + fmtTime(a.prepared.at) + '</span>' : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -157,11 +157,14 @@ function viewPrep() {
     if (chargeKnown(pbat)) {
       h += `<button class="btn btn-primary" data-act="start-flight">${ICONS.takeoff}Начать полёт</button>`;
     } else {
-      h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
+      h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд АКБ&nbsp;— появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
     }
     h += `<button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
   }
-  h += `<button class="btn" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button></div>`;
+  h += '</div>';
+  // Отмена — вне липкой панели: панель держит только то, что ведёт
+  // к вылету, и не занимает пол-экрана на телефоне.
+  h += `<button class="btn prep-cancel" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button>`;
   return h;
 }
 
@@ -353,11 +356,11 @@ function viewSession() {
   if (s.landedAt) {
     h += `<button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
       <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
-      <p class="small muted session-hint">Посадка зафиксирована, таймер остановлен. «Продолжить полёт» снова запустит его.</p>`;
+      <p class="small muted session-hint opt">Посадка зафиксирована, таймер остановлен. «Продолжить&nbsp;полёт» снова запустит его.</p>`;
   } else {
     h += `<button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">${ICONS.landing}Посадка</button>
       <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
-      <p class="small muted session-hint">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже. Можно свернуть приложение — время не потеряется.</p>`;
+      <p class="small muted session-hint opt">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже. Можно свернуть приложение — время не потеряется.</p>`;
   }
 
   // Полёты за сегодня — как на вкладке «Полёт»
@@ -401,7 +404,9 @@ function sessionDetailHtml(s) {
 // Список полётов, сгруппированный по датам: заголовок дня с числом
 // полётов и налётом. Используется в журнале и на вкладке «Полёт».
 // noDayHead — без заголовков дней (вызывающий рисует свой, «Сегодня»).
-function logGroupedHtml(list, totalsFrom, noDayHead) {
+// Строки — внутри дня (время вместо даты); rowOpts — доп. параметры
+// sessionRow (noName в карточке борта).
+function logGroupedHtml(list, totalsFrom, noDayHead, rowOpts) {
   // totalsFrom: полный журнал для честных итогов дня, когда list обрезан
   const full = totalsFrom || list;
   // Длинный журнал (> 20 строк): карточки дней раскладываются лениво
@@ -427,7 +432,7 @@ function logGroupedHtml(list, totalsFrom, noDayHead) {
       h += `<div class="card flat${lazy}"${lazy ? ` style="--n:${rowsOf.get(cur)}"` : ''}>`;
       open = true;
     }
-    h += sessionRow(sess);
+    h += sessionRow(sess, Object.assign({ inDay: true }, rowOpts));
   }
   if (open) h += '</div>';
   return h;

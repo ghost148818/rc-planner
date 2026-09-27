@@ -23,7 +23,7 @@ function todayAircraftRow(a, right) {
   return `<div class="row">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">${TYPES[a.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
+      <span class="d wrap">${TYPES[a.type] || ''}${b ? ' · <span class="nowrap">' + battTag(b) + '</span>' + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
     ${right}
   </div>`;
 }
@@ -85,7 +85,7 @@ function backupBannerHtml() {
   const days = backupAgeDays();
   return `<div class="banner backup">${ICONS.backup}<span class="grow">${days == null
     ? 'Резервной копии ещё не было'
-    : `Резервная копия — ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span>
+    : `Резервная копия&nbsp;— ${days}&nbsp;${plural(days, 'день', 'дня', 'дней')} назад`}</span>
     <button class="btn-sm btn" data-act="export-all">Сохранить</button></div>`;
 }
 
@@ -124,7 +124,7 @@ function onboardingSteps() {
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  let h = pageHead('Сегодня', { sub: `${date} <span class="state-pill ${state}">${TODAY_HINT[state]}</span>`, help: 'today' });
+  let h = pageHead('Сегодня', { sub: `${date} <span class="state-pill sp-${state}">${TODAY_HINT[state]}</span>`, help: 'today' });
 
   if (UI.updateReady) {
     h += `<div class="banner ok">Доступно обновление приложения.
@@ -148,7 +148,7 @@ function viewToday() {
     // «Обучение заново» — тот же путь, что при первом запуске: пройденные
     // шаги зачёркиваются, блок исчезает, когда не осталось ни одного.
     const doneN = steps.length - todo;
-    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat onb">
+    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} <span class="cnt">· осталось ${todo} из ${steps.length}</span></div><div class="card flat onb">
       <div class="onb-head"><span class="grow"><span class="t">Шаг ${doneN + 1} из ${steps.length}</span>
         <span class="d">подсветка ведёт к следующему действию</span>
         <span class="progress"><i style="width:${Math.round(doneN / steps.length * 100)}%"></i></span></span></div>`;
@@ -156,7 +156,7 @@ function viewToday() {
       ? `<div class="row done"><span class="row-ic">${ICONS.check}</span>
          <span class="grow"><span class="t">${t}</span></span></div>`
       : rowBtn(attrs + ` data-onb="${i}"`, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
-    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`);
+    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`, 'close');
     h += '</div>';
   }
 
@@ -207,7 +207,7 @@ function readyPanelHtml() {
       <span class="gt-t">${title}</span><span class="gt-d">${sub}</span></button>`;
   return `<div class="ready-panel opt">
     ${tile('#/fleet', pct(readyN, S.aircraft.length), 'var(--ok)', `<b>${readyN}/${S.aircraft.length}</b>`,
-      'Флот', 'готовы к вылету', `Флот: готовы ${readyN} из ${S.aircraft.length}`)}
+      'Флот', 'готовы к&nbsp;вылету', `Флот: готовы ${readyN} из ${S.aircraft.length}`)}
     ${tile('#/batteries', pct(charged, batts.length), 'var(--accent)', `<b>${charged}/${batts.length}</b>`,
       'АКБ', 'заряжены', `Аккумуляторы: заряжены ${charged} из ${batts.length}`)}
     ${tile('#/weather', wx.p, wx.c, wx.v, 'Погода', wx.t, 'Погода сейчас: ' + wx.t)}
@@ -283,10 +283,10 @@ function todayHome(onboarding) {
       </div>`).join('');
     h += flown.map((b) => {
       const cyc = Math.round(+b.cycles) || 0; // из копии — не обязательно число
-      return `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+      return `<div class="row stack"><span class="row-ic">${ICONS.bolt}</span>
         <button class="grow row-main" data-act="edit-batt" data-id="${b.id}"><span class="grow">
           <span class="t">Зарядить: ${esc(b.label)}</span>
-          <span class="d">после полёта · ${cyc} ${plural(cyc, 'цикл', 'цикла', 'циклов')}</span></span></button>
+          <span class="d">${cyc}&nbsp;${plural(cyc, 'цикл', 'цикла', 'циклов')}</span></span></button>
         <button class="chip st-flown" data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL.flown}</button>
       </div>`;
     }).join('');
@@ -320,18 +320,18 @@ function todayField() {
   const b = armedBattery(hero);
   const site = S.sites.find((s) => s.id === hero.prepared.siteId);
   let h = `<div class="card hero">
-    <div class="hero-kicker">${chargeKnown(b) ? 'Готов к вылету' : 'Почти готов'}${ready.length > 1 ? ` · ещё ${ready.length - 1}` : ''}</div>
+    <div class="hero-kicker${chargeKnown(b) ? '' : ' kick-warn'}">${chargeKnown(b) ? 'Готов к вылету' : 'Почти готов'}${ready.length > 1 ? ` · ещё ${ready.length - 1}` : ''}</div>
     <div class="hero-top">
       ${aircraftThumb(hero, true)}
       <span class="grow">
         <span class="hero-name">${esc(hero.name)}</span>
-        <span class="d">${TYPES[hero.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span>
-        <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в ${fmtTime(hero.prepared.at)}${site ? ' · ' + esc(site.name) : ''}</span>
+        <span class="d">${TYPES[hero.type] || ''}${b ? '&nbsp;· ' + battTag(b) + (CHARGE_LABEL[b.charge] ? '&nbsp;· ' + CHARGE_LABEL[b.charge] : '') : ''}</span>
+        <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в&nbsp;${fmtTime(hero.prepared.at)}${site ? '&nbsp;· ' + esc(site.name) : ''}</span>
       </span>
     </div>
     ${chargeKnown(b)
       ? `<button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>`
-      : `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Взлёт».</span>${chargeChip(b)}</div>`}
+      : `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд АКБ&nbsp;— появится «Взлёт».</span>${chargeChip(b)}</div>`}
   </div>`;
   const rest = armedFleet().filter((a) => a.id !== hero.id);
   h += todayFleetBlock('Остальные борта', rest, String(rest.length));
@@ -403,10 +403,10 @@ function todayDebrief() {
   }
   const flown = S.batteries.filter((b) => b.charge === 'flown' && b.status !== 'retired');
   if (flown.length) {
-    rows += `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+    rows += `<div class="row stack"><span class="row-ic">${ICONS.bolt}</span>
       <button class="grow row-main" data-nav="#/batteries"><span class="grow">
-        <span class="t">${flown.length === 1 ? 'Зарядить: ' + esc(flown[0].label) : `Зарядить ${flown.length} ${plural(flown.length, 'аккумулятор', 'аккумулятора', 'аккумуляторов')}`}</span>
-        <span class="d">${flown.length === 1 ? 'после полёта' : flown.map((b) => esc(b.label)).join(' · ')}</span></span></button>
+        <span class="t">${flown.length === 1 ? 'Зарядить: ' + esc(flown[0].label) : `Зарядить ${flown.length}&nbsp;АКБ`}</span>
+        <span class="d wrap">${flown.length === 1 ? 'после полёта' : flown.map((b) => esc(b.label)).join(' · ')}</span></span></button>
       ${flown.length === 1
         ? `<button class="chip st-flown" data-act="batt-charge" data-id="${flown[0].id}">${CHARGE_LABEL.flown}</button>`
         : `<button class="btn btn-sm" data-act="batts-charged-all">Все заряжены</button>`}
@@ -415,10 +415,10 @@ function todayDebrief() {
   const since = flightsSinceBackup();
   if (since || backupDue()) {
     const days = backupAgeDays();
-    rows += `<div class="row"><span class="row-ic">${ICONS.backup}</span>
+    rows += `<div class="row stack"><span class="row-ic">${ICONS.backup}</span>
       <button class="grow row-main" data-nav="#/backup"><span class="grow">
-        <span class="t">Сохранить резервную копию</span>
-        <span class="d wrap">${since ? `${since} ${plural(since, 'полёт', 'полёта', 'полётов')} с последней копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
+        <span class="t">Резервная копия</span>
+        <span class="d wrap">${since ? `${since}&nbsp;${plural(since, 'полёт', 'полёта', 'полётов')} без копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days}&nbsp;${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
       <button class="btn btn-sm" data-act="export-all">Сохранить</button>
     </div>`;
   }
@@ -438,9 +438,15 @@ function todayDebrief() {
   return { main: h, side: todaySide(wxHeroOrRow(armedFleet()[0]), today, '') };
 }
 
-function sessionRow(s) {
+// Строка полёта. o.inDay — строка под заголовком дня: вместо даты время
+// взлёта, итог — только если не «Нормальный»; o.noName — внутри карточки
+// борта, имя борта уже в шапке.
+function sessionRow(s, o = {}) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
+  const res = `<span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span>`;
+  const when = o.inDay ? (+s.start > 0 ? fmtTime(+s.start) : '') : fmtDate(s.date);
+  const tail = o.inDay && (!s.result || s.result === 'normal') ? '' : ' · ' + res;
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
-    `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
-     <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span></span></span>`);
+    `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span>${o.noName ? '' : ' ' + esc(a ? a.name : 'Борт удалён')}</span>
+     <span class="d">${when ? when + ' · ' : ''}${fmtDur(s.durationMin)}${tail}</span></span>`);
 }

@@ -98,7 +98,9 @@ function printLog() {
 // наружу ничего не уходит. Полоски — доля от максимума в списке.
 function statBars(rows) {
   const max = rows.reduce((n, r) => Math.max(n, r.v), 0) || 1;
-  return '<div class="card">' + rows.map((r) => `<div class="bar-row">
+  // .bars — общая сетка карточки (subgrid): полоски всех строк кончаются
+  // на одной вертикали. res — ключ итога (только из RESULTS) для цвета.
+  return '<div class="card bars">' + rows.map((r) => `<div class="bar-row"${r.res ? ` data-res="${r.res}"` : ''}>
     <span class="n">${esc(r.k)}</span>
     <span class="bar-track"><i style="width:${Math.max(2, Math.round(r.v / max * 100))}%"></i></span>
     <span class="v">${esc(r.label)}</span></div>`).join('') + '</div>';
@@ -175,7 +177,7 @@ function statSections(done) {
   // Итоги: считаем доли честно, «рейтинга» не рисуем.
   out.push({ key: 'results', title: 'Чем заканчивались', rows: Object.keys(RESULTS).map((k) => {
     const n = done.filter((s) => (s.result || 'normal') === k).length;
-    return { k: RESULTS[k], v: n, label: String(n), n };
+    return { k: RESULTS[k], v: n, label: String(n), n, res: k };
   }).filter((r) => r.v) });
 
   // Аккумуляторы: циклы = износ, изношенные сверху.
@@ -214,7 +216,7 @@ function heatHtml(done) {
   }
   return `<div class="h2 opt">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
     <div class="card opt"><div class="heat" role="img" aria-label="Календарь полётов за ${HEAT_WEEKS} недель: ${days} ${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}">${cells}</div>
-    <div class="heat-legend"><span>пн — вс по столбцам, неделя за неделей</span>
+    <div class="heat-legend"><span>столбец — неделя, пн сверху</span>
       <span class="sw">меньше <i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i> больше</span></div></div>`;
 }
 

@@ -80,6 +80,8 @@
      что выходит за её край. */
   .card.flat [data-next] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
   .card.flat [data-next]::after { inset: 0; }
+  .card.flat > .row[data-next] { border-radius: calc(var(--radius) - 3px); box-shadow: inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
+  .card.flat > .row[data-next]::after { inset: 3px; border-radius: calc(var(--radius) - 3px); }
   /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
   .btn-primary[data-next] {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent),
@@ -113,7 +115,7 @@
   }
   #tabbar .tab .live { animation: live-pulse 1.8s ease-out infinite; }
   @keyframes dot-breathe { 50% { opacity: 0.45; } }
-  .air-pill:not(.landed)::before, .state-pill.flying::before { animation: dot-breathe 1.4s ease-in-out infinite; }
+  .air-pill:not(.landed)::before, .state-pill.sp-flying::before { animation: dot-breathe 1.4s ease-in-out infinite; }
 
   /* Превышение обычной длительности: кольцо полёта пульсирует */
   @keyframes ring-alarm { 50% { filter: drop-shadow(0 0 calc(16px * var(--fx-glow) + 4px) var(--warn)); } }

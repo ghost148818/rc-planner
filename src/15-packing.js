@@ -8,7 +8,8 @@ function viewPacking() {
   let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор', help: 'packing' });
   if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор', 'packing');
   h += '<div class="card flat">';
-  h += S.packing.map((p) => {
+  // По алфавиту: порядок записей в базе случаен для пилота
+  h += S.packing.slice().sort((x, y) => String(x.name || '').localeCompare(String(y.name || ''), 'ru')).map((p) => {
     const done = p.items.filter((i) => i.done).length;
     return rowBtn(`data-nav="#/pack/${p.id}"`,
       `<span class="grow"><span class="t">${esc(p.name)}</span>
@@ -26,11 +27,13 @@ function viewPack() {
   h += `<div class="progress"><i style="width:${p.items.length ? Math.round(done / p.items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${done} из ${p.items.length}</div>`;
   h += '<div class="card flat">';
+  // Удаление пункта — слева, подальше от клетки: большой палец привык
+  // к клетке у правого края (как в чек-листе), а удаляет пункт сразу.
   h += p.items.map((it, i) => `<div class="ck" data-ck="${i}" data-state="${it.done ? 'ok' : ''}">
+      <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
       <button class="ck-main" data-act="pack-toggle" data-i="${i}">
         <span class="grow"><span class="t">${esc(it.t)}</span></span></button>
       <button class="st" data-act="pack-toggle" data-i="${i}"${UI.packLastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''} aria-label="${it.done ? 'Собрано' : 'Не собрано'}">${it.done ? ICONS.check : ''}</button>
-      <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
     </div>`).join('');
   h += '</div>';
   h += `<form data-form="pack-item" class="btn-line" style="margin-bottom:8px">

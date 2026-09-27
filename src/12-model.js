@@ -86,7 +86,7 @@ function svcLineHtml(a, svc) {
       <span class="small nowrap" style="color:var(--${svc.due ? 'maint' : 'mut'})">${svc.due ? 'Пора осмотреть' : `До осмотра ${svcLeftText(svc)}`}</span>
       <span class="progress"><i style="width:${pct}%${svc.due ? ';background:var(--maint)' : ''}"></i></span>
     </div>
-    <div class="svc-sub"><span class="grow">пройдено ${svcSinceText(svc)} · регламент ${svcEveryText(svc)}</span>
+    <div class="svc-sub"><span class="grow opt">пройдено ${svcSinceText(svc)} · регламент ${svcEveryText(svc)}</span>
       ${svc.due ? `<button class="btn btn-sm" data-act="add-maint" data-id="${a.id}" data-kind="inspection" data-title="Осмотр по регламенту">Осмотр</button>` : ''}
     </div>`;
 }
@@ -145,8 +145,8 @@ function modelOverviewHtml(a) {
   }
   if (a.wingspan) kv.push(['Размах', `${esc(a.wingspan)} мм`]);
   const own = wxOwnWind(a);
-  kv.push(['Ветер · высота', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с · до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
-  if (svc) kv.push(['Регламент', svcEveryText(svc)]);
+  kv.push(['Ветер', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с`]);
+  kv.push(['Высота', `до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
   if (alarmMs(a)) kv.push(['Сигнал таймера', fmtClock(alarmMs(a))]);
   h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>
     `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div></div>`;
@@ -157,7 +157,7 @@ function modelOverviewHtml(a) {
   h += `<div class="h2">Компоненты${filled.length ? ` <span class="cnt">${filled.length}</span>` : ''}</div><div class="card flat">`;
   h += filled.map(([key, label]) => compRow(a, key, label, comps[key])).join('');
   h += rowBtn('data-act="model-tab" data-tab="components"',
-    `<span class="grow"><span class="t muted">${filled.length ? 'Все компоненты' : 'Добавить компонент'}</span></span>`, 'plus');
+    `<span class="grow"><span class="t" style="color:var(--${filled.length ? 'accent' : 'mut'})">${filled.length ? 'Все компоненты' : 'Добавить компонент'}</span></span>`, filled.length ? '' : 'plus');
   h += '</div>';
 
   // Открытые работы
@@ -202,7 +202,7 @@ function modelComponentsHtml(a) {
   const comps = a.components || {};
   return '<div class="card flat">' + compSlots(a).map(([key, label]) =>
     key === 'battery' ? compBatteryRow(a) : compRow(a, key, label, comps[key])).join('') +
-    '</div><p class="small muted" style="margin-top:8px">Состав зависит от типа борта: у самолёта и крыла есть «Трубка Пито» и «ПАК». У компонента есть поле «Версия прошивки» — она видна в «Обзоре».</p>';
+    '</div><p class="small muted opt" style="margin-top:8px">Состав зависит от типа борта: у самолёта и крыла есть «Трубка Пито» и «ПАК». У&nbsp;компонента есть поле «Версия прошивки»&nbsp;— она видна в «Обзоре».</p>';
 }
 
 // Обслуживание: открытые работы, «Добавить запись», история закрытых.
@@ -210,11 +210,9 @@ function modelMaintHtml(a) {
   const maint = maintOf(a);
   const openM = maint.filter((m) => !m.done);
   const doneM = maint.filter((m) => m.done);
-  let h = '<div class="card flat">';
-  h += openM.length ? maintOpenRows(openM)
-    : '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
-  h += '</div>';
-  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">Добавить запись обслуживания</button>`;
+  let h = openM.length ? `<div class="card flat">${maintOpenRows(openM)}</div>`
+    : '<p class="small muted" style="margin:0 2px 10px">Открытых работ нет</p>';
+  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">${ICONS.plus}Добавить запись</button>`;
   if (doneM.length) {
     h += `<div class="h2">История <span class="cnt">${doneM.length}</span></div><div class="card flat">`;
     h += doneM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
@@ -231,5 +229,5 @@ function modelHistoryHtml(a, flights) {
     return `<div class="empty">${ICONS.flight}<p>Полётов у этого борта ещё не было.</p>
       <button class="btn btn-sm" data-act="start-prep" data-id="${a.id}">Чек-лист и полёт</button></div>`;
   }
-  return logGroupedHtml(flights) + `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
+  return logGroupedHtml(flights, null, false, { noName: true }) + `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
 }

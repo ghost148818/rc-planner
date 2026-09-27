@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-1xFvSbWKLC5GyFfZK78IrkeOQ2VdbSZRgKlvcf7b2vA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-3hcw8akuNtwuHEtiOFAqZf8yrSgxVQyMrfGngAu4lrs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="7e2d29c35e-single">
+  <meta name="build" content="d606b5c68a-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -54,6 +54,9 @@
 @property --glow-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
 @property --aurora-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+/* Яркость блика-кометы следующего шага в «Максимуме»: гаснет к концу
+   трёх кругов, чтобы замершая комета не оставляла белое пятно. */
+@property --glow-k { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
 
 @layer tokens {
   :root {
@@ -68,7 +71,7 @@
     --line-soft: rgba(120, 150, 190, 0.14);
     --text: #eaf0f7;
     --mut: #9eabbb;
-    --dim: #6c7a8c;
+    --dim: #7f8ea2;
     --link: #6cc7ff;
 
     /* Акцент — «приборный» циан: фокус, следующий шаг, активная вкладка */
@@ -92,6 +95,12 @@
     --info-bg: rgba(110, 168, 255, 0.14);
     --unk-bg: rgba(137, 149, 165, 0.15);
     --accent-bg: rgba(63, 214, 240, 0.12);
+    --star: var(--warn);
+    /* Неон без привязки к теме: пятна авроры «Максимума» в светлой теме —
+       пастель из тех же оттенков, а не серый из тёмного акцента */
+    --neon-1: #3fd6f0;
+    --neon-2: #7c8cff;
+    --neon-3: #3ddc84;
 
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -18px rgba(0, 0, 0, 0.8);
     --shadow-pop: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
@@ -169,7 +178,8 @@
     --on-ok: #ffffff;
 
     --ok-bg: rgba(12, 122, 64, 0.1);
-    --warn-bg: rgba(122, 90, 0, 0.1);
+    --warn-bg: rgba(214, 150, 0, 0.14);
+    --star: #c28400;
     --maint-bg: rgba(152, 69, 10, 0.1);
     --bad-bg: rgba(179, 38, 45, 0.09);
     --info-bg: rgba(31, 99, 199, 0.09);
@@ -255,7 +265,7 @@
     text-rendering: optimizeLegibility;
   }
   h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
-  p { text-wrap: pretty; }
+  p, li, .banner, .hint, .row .d.wrap { text-wrap: pretty; }
   a { color: var(--link); text-decoration: none; }
   a:active { opacity: 0.7; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
@@ -365,7 +375,13 @@
     margin: 4px 0 16px;
     min-height: 44px;
   }
-  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; }
+  .head h1 { font-size: 27px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; text-wrap: balance; }
+  /* «Изменить» на узком экране — иконкой: длинное имя борта не жмётся в три строки */
+  @media (max-width: 599px) {
+    .head .head-act[data-act="edit-model"] { width: var(--seg); height: var(--seg); padding: 0; border-radius: 50%; }
+    .head .head-act[data-act="edit-model"] .head-act-t { display: none; }
+    .head .head-act[data-act="edit-model"] .head-act-ic { display: flex; }
+  }
   .head .grow { flex: 1; min-width: 0; }
   .head .sub { color: var(--mut); font-size: var(--font-d); margin-top: 3px; }
   .back {
@@ -418,9 +434,11 @@
     background: color-mix(in srgb, var(--c, var(--mut)) 14%, transparent);
   }
   .state-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-  .state-pill.field, .state-pill.flying { --c: var(--ok); }
-  .state-pill.debrief { --c: var(--info); }
-  .state-pill.home { --c: var(--accent); }
+  /* Модификаторы с префиксом sp-: голый .field совпадал с полем формы */
+  .state-pill.sp-field, .state-pill.sp-flying { --c: var(--ok); }
+  .state-pill.sp-debrief { --c: var(--info); }
+  .state-pill.sp-home { --c: var(--accent); }
+  :root[data-theme="light"] .state-pill { color: color-mix(in srgb, var(--c, var(--mut)) 80%, var(--text)); }
 
   /* ---------- Заголовок раздела ---------- */
   .h2 {
@@ -486,8 +504,9 @@
     #views:not(.two-col) { max-width: 812px; margin-left: max(112px, calc((100vw - 812px + 100px) / 2)); }
     #tabbar .tab { font-size: 12px; color: var(--mut); }
     /* Широкие кнопки в колонке 750 px выглядят растянутыми — ограничены */
-    #views > .btn, #views > .btn-line, .today-main > .btn { max-width: 460px; }
-    .ring ~ .btn, .ring ~ .session-hint, .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 460px; }
+    #views > .btn, #views > .btn-line { max-width: 460px; }
+    .ring ~ .btn, .ring ~ .session-hint { margin-left: auto; margin-right: auto; max-width: 460px; }
+    .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 560px; }
     #views.two-col {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 372px;
@@ -543,7 +562,7 @@
   button.row, a.row, .row .row-main { transition: background-color 0.15s var(--ease); }
   button.row:active, a.row:active, .row .row-main:active { background-color: var(--surface-2); }
   .row .grow { flex: 1; min-width: 0; }
-  .row .t { display: block; font-size: var(--font); font-weight: 550; }
+  .row .t { display: block; font-size: var(--font); font-weight: 550; overflow-wrap: break-word; text-wrap: pretty; }
   .row .d {
     display: block;
     color: var(--mut);
@@ -552,6 +571,13 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .row .d.wrap, dialog .row .d { white-space: normal; }
+  /* Строка с чипом или кнопкой справа (класс stack): на узком экране
+     действие уходит под текст, а не выдавливает его в три слова */
+  @media (max-width: 480px) {
+    div.row.stack { flex-wrap: wrap; row-gap: 8px; }
+    div.row.stack > .grow { flex: 1 1 58%; }
+    div.row.stack > .grow + * { margin-left: auto; }
+  }
   .row .chev { color: var(--dim); flex: none; }
   .row .chev svg { width: 18px; height: 18px; }
   .row .row-ic {
@@ -654,7 +680,7 @@
   /* Чип-кнопка (заряд) не режется: подпись у неё без многоточия */
   .row > button.chip { flex: none; max-width: none; }
   /* «заряд?» — то, на что пилоту надо нажать: янтарный, а не серый */
-  button.chip.st-unknown[data-act="batt-charge"] { --c: var(--warn); }
+  button.chip.st-unknown[data-act="batt-charge"] { --c: var(--warn); background: var(--warn-bg); }
 
   .badge {
     display: inline-block;
@@ -669,6 +695,8 @@
   }
   /* online — информация, не тревога: синий, не жёлтый */
   .badge.online { color: var(--info); border-color: color-mix(in srgb, var(--info) 55%, transparent); background: var(--info-bg); }
+  .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: var(--warn-bg); }
+  .badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: var(--bad-bg); }
 
   /* ---------- Кнопки ---------- */
   .btn {
@@ -687,6 +715,7 @@
     font-weight: 650;
     color: var(--text);
     text-align: center;
+    text-wrap: balance;
     transition: transform 0.1s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
   }
   .btn svg { width: 21px; height: 21px; flex: none; }
@@ -727,7 +756,9 @@
   .btn + .btn { margin-top: 9px; }
   .row .btn + .btn, .banner .btn + .btn { margin-top: 0; }
   .btn-line { display: flex; gap: 9px; flex-wrap: wrap; }
-  .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  /* width: auto обязателен: иначе width: 100% у .btn становится основой
+     flex и кнопки никогда не встают в одну строку */
+  .btn-line .btn { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; margin-top: 0; }
   /* Малая кнопка рядом с полем ввода («Добавить» в сборах) — по содержимому */
   .btn-line > input + .btn-sm { flex: 0 0 auto; }
   .btn-line + .btn-line { margin-top: 9px; }
@@ -740,7 +771,7 @@
   }
   .ic-btn svg { width: 20px; height: 20px; }
   .ic-btn:active { background: var(--surface-2); }
-  .ic-btn.on { color: var(--warn); }
+  .ic-btn.on { color: var(--star); }
   /* Текстовая кнопка-ссылка под главной — полной высоты касания */
   .link-btn {
     display: block; width: 100%; min-height: var(--seg);
@@ -803,13 +834,32 @@
     min-height: var(--seg); padding: 4px 0;
     color: var(--text); font-size: var(--font); cursor: pointer;
   }
+  /* Своя клетка вместо системной: одна на обе темы и все режимы */
   .check-row input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
     width: 24px; height: 24px; flex: none; margin: 0;
-    accent-color: var(--ok);
+    display: grid; place-content: center;
+    border-radius: 7px;
+    border: 1.5px solid var(--dim);
+    background: var(--bg);
+    cursor: pointer;
+    transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
   }
+  .check-row input[type="checkbox"]::after {
+    content: "";
+    width: 6px; height: 12px;
+    margin-top: -2px;
+    border: solid var(--on-ok);
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+  }
+  .check-row input[type="checkbox"]:checked { background: var(--ok); border-color: var(--ok); }
+  .check-row input[type="checkbox"]:checked::after { opacity: 1; }
   .field > label:empty { display: none; }
   .field .hint, .hint { font-size: 12.5px; color: var(--dim); margin-top: 4px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+  .card > .field:last-child { margin-bottom: 0; }
 
   /* ---------- Сегменты ---------- */
   .seg {
@@ -834,8 +884,9 @@
     color: var(--text);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 4px 14px -8px rgba(0, 0, 0, 0.7);
   }
-  .seg.four button { font-size: 13px; padding: 0 2px; }
-  @media (max-width: 399px) { .seg.four button { font-size: 12.5px; padding: 0 1px; } }
+  :root[data-theme="light"] .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 0 0 1px var(--line), var(--shadow); }
+  .seg.four button { font-size: 13px; padding: 0 5px; }
+  @media (max-width: 399px) { .seg.four button { font-size: 12.5px; } }
   /* Сегмент с иконками: класс борта в форме */
   .seg-ic button {
     display: flex; align-items: center; justify-content: center; flex-direction: column;
@@ -864,7 +915,8 @@
   .pill svg { width: 16px; height: 16px; color: var(--dim); flex: none; }
   .pill > span { overflow: hidden; text-overflow: ellipsis; }
   button.pill { cursor: pointer; }
-  .pill.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  /* Выбранное — заливкой, а не свечением: свечение у следующего шага */
+  .pill.sel { border-color: var(--accent); background: var(--accent-bg); }
   select.sel-pill {
     width: auto;
     max-width: 100%;
@@ -876,7 +928,7 @@
     flex: none;
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
   }
-  select.sel-pill.sel { border-color: var(--accent); }
+  select.sel-pill.sel { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background-color: var(--accent-bg); }
   /* Селект по ширине ВЫБРАННОГО пункта (pillSelect): невидимая копия
      подписи (::after из data-v) задаёт ширину, селект лежит поверх
      абсолютно — иначе нативный select растёт по самому длинному пункту. */
@@ -917,7 +969,7 @@
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+    background: var(--bg-2);
     -webkit-backdrop-filter: blur(20px) saturate(1.4);
     backdrop-filter: blur(20px) saturate(1.4);
     color: var(--text);
@@ -956,7 +1008,7 @@
   .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .menu-grid[popover]:popover-open { display: grid; }
   .menu-grid button { justify-content: center; padding: 0 8px; font-variant-numeric: tabular-nums; }
-  .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; }
+  .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; padding: 0 14px; }
   .menu-grid button[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
 
   /* ---------- Баннеры ---------- */
@@ -977,6 +1029,9 @@
   .banner > .grow { flex: 1 1 160px; }
   /* Две кнопки в баннере — отдельной строкой под текстом, рядом друг с другом */
   .banner:has(> .btn + .btn) > .grow { flex-basis: 100%; }
+  /* …а текст остаётся рядом с иконкой, кнопки — вплотную */
+  .banner:has(> svg):has(> .btn + .btn) > .grow { flex-basis: calc(100% - 31px); }
+  .banner .btn.right + .btn.right { margin-left: 0; }
   .banner.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); color: var(--ok); background: var(--ok-bg); }
   .banner.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); background: var(--warn-bg); }
   .banner.backup { align-items: center; }
@@ -990,12 +1045,14 @@
 
   /* ---------- Шкалы, плитки, пары «ключ — значение» ---------- */
   .progress {
+    display: block;
     height: 7px;
     border-radius: 4px;
     background: var(--surface-3);
     overflow: hidden;
     margin: 8px 0 4px;
   }
+  :root[data-theme="light"] .progress { background: color-mix(in srgb, var(--text) 10%, transparent); }
   .progress i {
     display: block; height: 100%;
     border-radius: 4px;
@@ -1024,7 +1081,7 @@
   }
   .stat .v { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
   .stat .v.warn { color: var(--warn); }
-  .stat .k { color: var(--mut); font-size: 12px; margin-top: 2px; }
+  .stat .k { color: var(--mut); font-size: calc(var(--font-d) - 1px); margin-top: 2px; }
   .stat-line.four .stat { flex: 1 1 130px; }
   .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
   .kv div { display: flex; flex-direction: column; min-width: 0; }
@@ -1220,7 +1277,11 @@
   .hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--ok); }
   .hero .btn { margin-top: 0; }
   .banner.nocharge { align-items: center; }
+  .banner.nocharge > .chip { margin-left: auto; }
+  .banner.nocharge > .grow, .banner.backup > .grow { text-wrap: balance; }
+  .hero > .banner:last-child { margin-bottom: 0; }
   .hero .btn + .btn { margin-top: 9px; }
+  .hero [data-next] + .btn { margin-top: 14px; }
   .hero-kicker {
     display: inline-flex; align-items: center; gap: 7px;
     font-size: 11.5px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase;
@@ -1232,6 +1293,7 @@
     background: currentColor;
     box-shadow: 0 0 calc(10px * var(--fx-glow)) currentColor;
   }
+  .hero-kicker.kick-warn { --c: var(--warn); }
   .hero-flight { --c: var(--ok); }
   .hero-flight .timer { margin: 2px 0 14px; font-size: 56px; }
   .hero-flight .kick-land { --c: var(--mut); }
@@ -1266,6 +1328,7 @@
   .strip .r { --c: var(--bad); }
   .strip .n { opacity: 0.5; }
   .strip .now { outline: 2px solid var(--text); outline-offset: -2px; border-radius: 3px; opacity: 1; box-shadow: 0 0 calc(12px * var(--fx-glow)) var(--text); }
+  :root[data-theme="light"] .strip .now { box-shadow: none; }
   .strip.tap { height: var(--ck-box); overflow: visible; border-radius: 0; }
   .strip.tap button { background: none; position: relative; padding: 0; border-radius: 0; cursor: pointer; }
   .strip.tap button::before {
@@ -1320,10 +1383,15 @@
   .windy-box { margin-top: 8px; }
   .wx-alt { display: inline-flex; align-items: center; gap: 6px; }
   .wx-alt svg { width: 16px; height: 16px; transform: rotate(90deg); color: var(--mut); }
+  /* Час ±1 кнопками — только в перчатках, где полоска слишком мелкая */
+  .wx-step { display: none; }
+  /* Меню высоты: 30 значений в пять колонок — не закрывает свою кнопку */
+  #wx-alt-menu { grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(360px, calc(100vw - 16px)); }
 
   /* ================= Чек-лист ================= */
   .prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
-  .prep-pills .map-btn { width: var(--tap); min-height: var(--tap); border-radius: 999px; }
+  .prep-pills .map-btn { width: var(--seg); min-height: var(--seg); border-radius: 999px; }
+  .prep-cancel { margin-top: 10px; }
   .prep-batt { flex-wrap: wrap; }
   .prog-line { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
   .prog-line .progress { flex: 1; margin: 0; }
@@ -1407,10 +1475,11 @@
   .act-bar .btn + .btn { margin-top: 8px; }
   @media (min-width: 900px) {
     .act-bar {
-      bottom: 0; margin-left: -32px; margin-right: -32px; padding-left: 32px; padding-right: 32px;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;
+      bottom: 0; margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0;
+      display: flex; flex-wrap: wrap; gap: 8px;
     }
-    .act-bar .banner { grid-column: 1 / -1; margin-bottom: 0; }
+    .act-bar .banner { flex: 1 0 100%; margin-bottom: 0; }
+    .act-bar .btn { flex: 1 1 auto; width: auto; white-space: nowrap; }
     .act-bar .btn + .btn { margin-top: 0; }
   }
 
@@ -1460,6 +1529,7 @@
   }
   .ring svg.r { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
   .ring .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+  :root[data-theme="light"] .ring .ring-track { stroke: var(--line); }
   .ring .ring-ticks { fill: none; stroke: var(--line); stroke-width: 7; opacity: 0.9; }
   .ring .ring-fill {
     fill: none;
@@ -1474,7 +1544,8 @@
   .ring-in { text-align: center; position: relative; padding: 0 16px; }
   .ring .timer { font-size: clamp(44px, 14vw, 60px); margin: 0; }
   .ring-sub { margin-top: 8px; }
-  .pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 16px; }
+  /* margin-block, не сокращение: боковые auto центрируют ряд на десктопе (02-layout) */
+  .pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-block: 8px 16px; }
   .wake-ind {
     display: inline-flex; align-items: center; gap: 5px;
     color: var(--mut); font-size: 12px;
@@ -1484,6 +1555,8 @@
   .session-hint { text-align: center; margin-top: 14px; }
   .alarm-btn[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
   .alarm-btn[aria-pressed="true"] svg { color: var(--warn); }
+  /* Треугольник — у пилюли есть меню */
+  .alarm-btn::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; margin-left: 2px; translate: 0 2px; }
 
   /* ================= Карточка борта ================= */
   .seg.model-tabs { margin: 4px 0 13px; }
@@ -1496,15 +1569,19 @@
   .model-hero .stat { flex: 1 1 0; min-width: 0; padding: 9px 11px; background: var(--bg-2); box-shadow: none; }
   .model-hero .stat .v { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .model-hero .btn { margin-top: 13px; }
+  .model-hero select.sel-sm { border-radius: 999px; }
   .svc-line { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
   .svc-line .progress { flex: 1; margin: 0; }
-  .svc-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--dim); font-size: 12px; }
+  .svc-sub { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--mut); font-size: 12px; text-wrap: pretty; }
   .svc-sub .grow { flex: 1; min-width: 0; }
 
   /* ================= Флот ================= */
   .fleet-bar { display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch; }
   .fleet-bar select { flex: 1; min-height: var(--seg); }
   .fleet-row .row-main { min-width: 45%; }
+  /* Подпись борта и АКБ — до двух строк: главное в начале, остальное
+     обрезается, а не уходит за край одной строки */
+  .fleet-row .d, .batt-row .d { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .grp-head {
     display: flex; align-items: center; gap: 8px;
     margin: 16px 2px 7px;
@@ -1526,6 +1603,9 @@
   /* ================= Журнал и статистика ================= */
   /* Подпись — дорожка — значение: одна сетка на все строки, дорожки
      начинаются и кончаются на одной вертикали. */
+  .bars { display: grid; grid-template-columns: minmax(84px, 34%) minmax(40px, 1fr) auto; column-gap: 10px; }
+  .bars > * { grid-column: 1 / -1; }
+  .bars > .bar-row { grid-template-columns: subgrid; }
   .bar-row {
     display: grid;
     grid-template-columns: minmax(84px, 34%) minmax(40px, 1fr) auto;
@@ -1536,8 +1616,13 @@
   .bar-row .n {
     color: var(--mut);
     font-size: var(--font-d);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
+  .bar-row[data-res="crash"] .bar-track i { background: var(--bad); box-shadow: none; }
+  .bar-row[data-res="problem"] .bar-track i, .bar-row[data-res="emergency"] .bar-track i { background: var(--warn); box-shadow: none; }
+  .bar-row[data-res="maintenance"] .bar-track i { background: var(--maint); box-shadow: none; }
   .bar-track {
     flex: 1 1 auto;
     min-width: 0;
@@ -1563,6 +1648,7 @@
   /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
   .heat {
     max-width: 460px;
+    margin-inline: auto;
     display: grid;
     grid-template-rows: repeat(7, 1fr);
     grid-auto-flow: column;
@@ -1579,7 +1665,7 @@
   .heat i[data-l="3"] { background: var(--ok); box-shadow: 0 0 calc(8px * var(--fx-glow)) color-mix(in srgb, var(--ok) 60%, transparent); }
   .heat i.today { outline: 1.5px solid var(--text); outline-offset: 1px; }
   .heat i.future { background: transparent; }
-  .heat-legend { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--dim); font-size: 11.5px; }
+  .heat-legend { display: flex; align-items: center; justify-content: space-between; gap: 8px; max-width: 460px; margin: 8px auto 0; color: var(--dim); font-size: 11.5px; }
   .heat-legend .sw { display: inline-flex; gap: 3px; align-items: center; }
   .heat-legend .sw i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3); display: inline-block; aspect-ratio: auto; }
   .heat-legend .sw i[data-l="1"] { background: color-mix(in srgb, var(--ok) 35%, var(--surface-3)); }
@@ -1600,12 +1686,14 @@
     color: var(--mut);
     transition: border-color 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
   }
+  /* Выбор — заливкой без ореола: ореол означает «следующий шаг» */
   .mode-card[aria-pressed="true"] {
     border-color: var(--accent);
     color: var(--text);
-    box-shadow: 0 0 0 1px var(--accent) inset, 0 0 calc(18px * var(--fx-glow)) -6px var(--accent);
+    background: var(--accent-bg);
+    box-shadow: 0 0 0 1px var(--accent) inset;
   }
-  .mode-card small { display: block; font-size: 11px; font-weight: 500; color: var(--dim); line-height: 1.25; }
+  .mode-card small { display: block; font-size: 11px; font-weight: 500; color: var(--dim); line-height: 1.25; text-wrap: balance; }
   /* Мини-превью режима: схематичный экран */
   .mode-prev {
     height: 64px;
@@ -1628,6 +1716,7 @@
       radial-gradient(60% 60% at 100% 100%, color-mix(in srgb, var(--accent-2) 45%, transparent), transparent 70%),
       var(--bg);
   }
+  :root[data-theme="light"] .mode-prev:not(.max) i { background: color-mix(in srgb, var(--text) 14%, transparent); }
   .mode-prev.max i { background: color-mix(in srgb, var(--text) 16%, transparent); }
   .mode-prev.max b { box-shadow: 0 0 12px var(--ok), 0 0 0 1.5px var(--accent); }
 
@@ -1686,8 +1775,17 @@
   }
   .empty-art { display: flex; justify-content: center; }
 
+  /* Каталог инструментов: на телефоне звезда и «Открыть» — под текстом */
+  @media (max-width: 699px) {
+    .tool-row { flex-wrap: wrap; row-gap: 8px; }
+    .tool-row > .grow { flex-basis: 100%; }
+    .tool-row > .ic-btn { margin-left: auto; }
+  }
+  .ck > [data-act="pack-del-item"] { margin-left: -8px; }
+
   /* ================= Приветствие и инструкция ================= */
-  .welcome { text-align: center; padding: 6px 4px 4px; }
+  /* div: у окна приветствия тот же класс welcome */
+  div.welcome { text-align: center; padding: 6px 4px 4px; }
   .welcome-ic {
     position: relative;
     display: inline-flex; align-items: center; justify-content: center;
@@ -1707,6 +1805,8 @@
   .help-intro { margin: -4px 2px 12px; }
   .help details.fold { scroll-margin-top: 8px; }
   .help details.fold:last-child { border-bottom: 1px solid var(--line-soft); }
+  .help details.fold summary { font-size: calc(var(--font) + 2px); font-weight: 750; }
+  .help .fold-body .h3 { font-size: 15px; font-weight: 700; margin: 18px 0 6px; }
   .help .fold-body p, .help .fold-body ul { font-size: 15px; line-height: 1.55; margin-bottom: 10px; }
   .help .fold-body li { margin-bottom: 6px; }
   .help .fold-body .banner { margin-top: 4px; }
@@ -1756,7 +1856,8 @@
   }
   .pv-bar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; }
   .pv-scale { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; color: #aab; }
-  .pv-cap { text-align: center; padding: 0 16px 6px; margin: 0; }
+  .pv-cap { text-align: center; padding: 10px 16px 6px; margin: 0; }
+  dialog.photo .pv-cap { color: rgba(255, 255, 255, 0.72); }
   dialog.photo .btn { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.18); color: #fff; }
 }
 
@@ -1843,6 +1944,8 @@
      что выходит за её край. */
   .card.flat [data-next] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
   .card.flat [data-next]::after { inset: 0; }
+  .card.flat > .row[data-next] { border-radius: calc(var(--radius) - 3px); box-shadow: inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
+  .card.flat > .row[data-next]::after { inset: 3px; border-radius: calc(var(--radius) - 3px); }
   /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
   .btn-primary[data-next] {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent),
@@ -1876,7 +1979,7 @@
   }
   #tabbar .tab .live { animation: live-pulse 1.8s ease-out infinite; }
   @keyframes dot-breathe { 50% { opacity: 0.45; } }
-  .air-pill:not(.landed)::before, .state-pill.flying::before { animation: dot-breathe 1.4s ease-in-out infinite; }
+  .air-pill:not(.landed)::before, .state-pill.sp-flying::before { animation: dot-breathe 1.4s ease-in-out infinite; }
 
   /* Превышение обычной длительности: кольцо полёта пульсирует */
   @keyframes ring-alarm { 50% { filter: drop-shadow(0 0 calc(16px * var(--fx-glow) + 4px) var(--warn)); } }
@@ -1933,6 +2036,10 @@
   :root[data-ui="gloves"] .stat,
   :root[data-ui="gloves"] .gauge-tile,
   :root[data-ui="gloves"] .banner { background: var(--surface); box-shadow: none; border-color: var(--line); }
+  /* …но предупреждение остаётся предупреждением: цвет и толстая рамка */
+  :root[data-ui="gloves"] .banner.warn { background: var(--warn-bg); border: 2px solid var(--warn); }
+  :root[data-ui="gloves"] .banner.ok { background: var(--ok-bg); border: 2px solid var(--ok); }
+  :root[data-ui="gloves"] .act-bar .banner { font-size: var(--font-d); padding: 12px 14px; }
   :root[data-ui="gloves"] .card.hero { background: var(--surface); border: 2px solid var(--line); }
   :root[data-ui="gloves"] .hero-flight { border-color: var(--ok); }
   :root[data-ui="gloves"] #tabbar {
@@ -1949,7 +2056,8 @@
   }
   :root[data-ui="gloves"] #tabbar .tab { font-size: 13px; border-radius: 12px; }
   :root[data-ui="gloves"] #tabbar .tab svg { width: 28px; height: 28px; }
-  :root[data-ui="gloves"] #tabbar .tab-ind { background: var(--surface-3); box-shadow: inset 0 -3px 0 var(--accent); }
+  /* Полоска — фоном, не inset-тенью: тень повторяла скругление и рисовала дугу */
+  :root[data-ui="gloves"] #tabbar .tab-ind { box-shadow: none; background: linear-gradient(var(--accent) 0 0) bottom / 100% 4px no-repeat, var(--surface-3); }
   :root[data-ui="gloves"] .head h1 { font-size: 29px; }
   :root[data-ui="gloves"] .h2 { font-size: 14px; }
   :root[data-ui="gloves"] .h2::before { box-shadow: none; width: 4px; height: 14px; }
@@ -1957,7 +2065,8 @@
   :root[data-ui="gloves"] .chip::before, :root[data-ui="gloves"] .row[data-st]::before { box-shadow: none; }
   :root[data-ui="gloves"] .row[data-st]::before { width: 5px; }
   :root[data-ui="gloves"] .btn-primary { background: var(--ok); box-shadow: none; }
-  :root[data-ui="gloves"] .check-row input[type="checkbox"] { width: 30px; height: 30px; }
+  :root[data-ui="gloves"] .check-row input[type="checkbox"] { width: 30px; height: 30px; border-width: 2px; border-radius: 9px; }
+  :root[data-ui="gloves"] .check-row input[type="checkbox"]::after { width: 8px; height: 15px; border-width: 0 3px 3px 0; }
   :root[data-ui="gloves"] .timer { font-size: 64px; }
   :root[data-ui="gloves"] .ring { --size: min(80vw, 300px); }
   :root[data-ui="gloves"] .ring .ring-fill { filter: none; stroke-width: 14; }
@@ -1978,7 +2087,13 @@
   :root[data-ui="gloves"] div.row > .grow { flex: 1 1 58%; }
   :root[data-ui="gloves"] div.row > .grow + * { margin-left: auto; }
   :root[data-ui="gloves"] div.tool-row > .grow { flex-basis: 100%; }
-  :root[data-ui="gloves"] .row .d { white-space: normal; }
+  /* Две кнопки справа (локации: карта и Я.Карты) — рядом, под текстом */
+  :root[data-ui="gloves"] div.row:has(> .btn + .btn) > .grow { flex-basis: 100%; }
+  :root[data-ui="gloves"] div.batt-row > .grow { flex-basis: 100%; }
+  :root[data-ui="gloves"] div.batt-row > .grow + * { margin-left: 0; }
+  :root[data-ui="gloves"] .row .d { white-space: normal; text-wrap: pretty; }
+  :root[data-ui="gloves"] .row .d .bt { white-space: nowrap; }
+  :root[data-ui="gloves"] .row .t { text-wrap: balance; }
   /* Настольные действия в поле не нужны: перенос борта, удаление пункта */
   :root[data-ui="gloves"] .row .row-move,
   :root[data-ui="gloves"] .ck [data-act="pack-del-item"] { display: none; }
@@ -1987,8 +2102,22 @@
   /* Чек-лист: панель действий не прилипает — список важнее */
   :root[data-ui="gloves"] .act-bar { position: static; margin: 12px 0 0; padding: 0; background: none; }
   :root[data-ui="gloves"] .wx-hour-top { flex-wrap: wrap; }
-  :root[data-ui="gloves"] .bar-row { grid-template-columns: 1fr auto; row-gap: 4px; }
-  :root[data-ui="gloves"] .bar-row .n { grid-column: 1 / -1; white-space: normal; }
+  :root[data-ui="gloves"] .wx-hour-top > .grow { order: 3; flex-basis: 100%; }
+  :root[data-ui="gloves"] .wx-hour-top > .mono { margin-left: auto; }
+  :root[data-ui="gloves"] .wx-step { display: flex; gap: 8px; margin-left: auto; align-self: center; }
+  :root[data-ui="gloves"] .wx-step .ic-btn { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
+  :root[data-ui="gloves"] .bars { grid-template-columns: minmax(40px, 1fr) auto; }
+  :root[data-ui="gloves"] .bar-row { grid-template-columns: minmax(40px, 1fr) auto; row-gap: 4px; }
+  :root[data-ui="gloves"] .bar-row .n { grid-column: 1 / -1; }
+  /* Вторичный текст в перчатках — не мельче --font-d */
+  :root[data-ui="gloves"] :is(.kv .k, .svc-sub, .model-hero .hint, .seg.four button, .bar-row .v, .pill, select.sel-sm) { font-size: var(--font-d); }
+  :root[data-ui="gloves"] .sel-fit.sm::after { font-size: var(--font-d); }
+  :root[data-ui="gloves"] .seg.four button { padding: 0 6px; }
+  :root[data-ui="gloves"] select.sel-sm { color: var(--text); }
+  :root[data-ui="gloves"] .seg-ic button { min-height: 80px; font-size: 14px; }
+  :root[data-ui="gloves"] .seg-ic button svg { width: 30px; height: 30px; }
+  :root[data-ui="gloves"] .day-chip i { width: 10px; height: 10px; }
+  :root[data-ui="gloves"] .hero .btn + .btn { margin-top: 18px; }
   :root[data-ui="gloves"] .mode-card { font-size: 14px; }
   :root[data-ui="gloves"] .mode-card small { font-size: 12.5px; }
   /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
@@ -2000,22 +2129,35 @@
   :root[data-ui="max"] { --art-opacity: 1; }
   :root[data-ui="max"] body::before {
     inset: -12%;
+    /* Пятна крупные и заходят под колонку карточек: стеклу есть что
+       размывать. Анимируется только transform. */
     background:
-      radial-gradient(28% 22% at 22% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
-      radial-gradient(26% 22% at 82% 26%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%),
-      radial-gradient(34% 26% at 62% 82%, color-mix(in srgb, var(--ok) 20%, transparent), transparent 70%),
-      radial-gradient(22% 18% at 18% 78%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+      radial-gradient(42% 30% at 16% 20%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 70%),
+      radial-gradient(40% 28% at 90% 34%, color-mix(in srgb, var(--accent-2) 36%, transparent), transparent 70%),
+      radial-gradient(48% 30% at 58% 86%, color-mix(in srgb, var(--ok) 22%, transparent), transparent 72%),
+      radial-gradient(34% 24% at 8% 64%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 70%);
     animation: aurora 48s ease-in-out infinite alternate;
     will-change: transform;
   }
-  :root[data-ui="max"][data-theme="light"] body::before { opacity: 0.55; }
+  /* Светлая тема: пастель из неоновых оттенков — тёмный акцент давал серые пятна */
+  :root[data-ui="max"][data-theme="light"] body::before {
+    opacity: 0.85;
+    background:
+      radial-gradient(42% 30% at 16% 20%, color-mix(in srgb, var(--neon-1) 30%, transparent), transparent 70%),
+      radial-gradient(40% 28% at 90% 34%, color-mix(in srgb, var(--neon-2) 28%, transparent), transparent 70%),
+      radial-gradient(48% 30% at 58% 86%, color-mix(in srgb, var(--neon-3) 18%, transparent), transparent 72%);
+  }
   :root[data-ui="max"] body::after {
     display: block;
     inset: 0;
+    --g: color-mix(in srgb, var(--accent) 6%, transparent);
+    --G: color-mix(in srgb, var(--accent) 12%, transparent);
     background-image:
-      linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px),
-      linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px);
-    background-size: 36px 36px;
+      linear-gradient(var(--G) 1px, transparent 1px),
+      linear-gradient(90deg, var(--G) 1px, transparent 1px),
+      linear-gradient(var(--g) 1px, transparent 1px),
+      linear-gradient(90deg, var(--g) 1px, transparent 1px);
+    background-size: 144px 144px, 144px 144px, 36px 36px, 36px 36px;
     -webkit-mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
     mask-image: radial-gradient(120% 70% at 50% 0%, #000 10%, transparent 75%);
   }
@@ -2028,7 +2170,16 @@
     -webkit-backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
     backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
   }
+  :root[data-ui="max"][data-theme="light"] body::after {
+    --g: color-mix(in srgb, var(--accent) 4%, transparent);
+    --G: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
   :root[data-ui="max"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 82%, transparent); }
+  :root[data-ui="max"][data-theme="light"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 96%, transparent); }
+  /* Стекло прозрачнее только там, где оно уже есть */
+  :root[data-ui="max"] :is(.card.hero, .wx-hero, .ready-panel .gauge-tile) { --card-alpha: 60%; }
+  :root[data-ui="max"][data-theme="light"] :is(.card.hero, .wx-hero, .ready-panel .gauge-tile) { --card-alpha: 70%; }
+  :root[data-ui="max"] .ready-panel .gauge-tile { box-shadow: var(--shadow), inset 0 1px 0 color-mix(in srgb, var(--accent) 35%, transparent); }
   /* Рамка героя — неоновый градиент по кругу и мягкий ореол. Неподвижный:
      бегущий градиент на большой карточке — перерисовка всей карточки
      каждый кадр (замер: +10 % занятости главного потока в простое). */
@@ -2043,25 +2194,45 @@
      появления кнопки и замирает, дальше рамка только дышит. Бег угла —
      перерисовка каждый кадр (замер: ~12 % главного потока, пока бежит),
      поэтому он привлекает внимание и не жжёт батарею всё время. */
+  /* Комета гаснет (--glow-k → 0) в те же три круга: в покое рамка ровная,
+     без белого пятна замершего блика. Лишних перерисовок нет — угол
+     и яркость меняются в одних и тех же кадрах. */
+  @keyframes comet-out { from, 80% { --glow-k: 100%; } to { --glow-k: 0%; } }
+  :root[data-ui="max"] { --comet: #fff; }
+  :root[data-ui="max"][data-theme="light"] { --comet: var(--accent-2); }
   :root[data-ui="max"] [data-next]::after {
     background: conic-gradient(from var(--glow-a),
-      color-mix(in srgb, var(--accent) 25%, transparent) 0deg 200deg,
+      color-mix(in srgb, var(--accent) calc(70% - var(--glow-k) * 0.45), transparent) 0deg 200deg,
       color-mix(in srgb, var(--accent) 70%, transparent) 280deg,
-      #fff 325deg,
-      var(--accent) 342deg,
-      color-mix(in srgb, var(--accent) 25%, transparent) 360deg);
+      color-mix(in srgb, var(--comet) var(--glow-k), color-mix(in srgb, var(--accent) 70%, transparent)) 325deg,
+      color-mix(in srgb, var(--accent) calc(70% + var(--glow-k) * 0.3), transparent) 342deg,
+      color-mix(in srgb, var(--accent) calc(70% - var(--glow-k) * 0.45), transparent) 360deg);
     animation:
       glow-spin var(--glow-period) linear var(--glow-phase, 0s) 3,
+      comet-out calc(var(--glow-period) * 3) linear var(--glow-phase, 0s) 1 forwards,
       next-breathe var(--glow-period) ease-in-out var(--glow-phase, 0s) infinite;
   }
+  /* По ширине текста: иначе градиент начинался за концом короткого слова */
   :root[data-ui="max"] .head h1 {
-    background: linear-gradient(100deg, var(--text) 55%, color-mix(in srgb, var(--accent) 80%, var(--text)));
+    width: fit-content;
+    max-width: 100%;
+    background: linear-gradient(100deg, var(--text) 35%, color-mix(in srgb, var(--accent) 85%, var(--text)));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   :root[data-ui="max"] .timer:not(.landed) { text-shadow: 0 0 22px color-mix(in srgb, var(--c, var(--ok)) 55%, transparent); }
-  :root[data-ui="max"] .btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 0 0 1px color-mix(in srgb, var(--ok) 60%, transparent), 0 12px 38px -10px var(--ok); }
+  /* Порядок важен: база → светлая тема → следующий шаг. Правило слоя
+     modes перебивает .btn-primary[data-next] из effects, поэтому рамка
+     шага повторена здесь. */
+  :root[data-ui="max"] .card.hero:has([data-next]) { box-shadow: var(--shadow), 0 0 32px -18px var(--accent); }
+  :root[data-ui="max"] .btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 0 0 1px color-mix(in srgb, var(--ok) 60%, transparent), 0 10px 28px -12px color-mix(in srgb, var(--ok) 85%, transparent); }
+  /* Светлая тема: свечение на светлом читается как грязь — слабее и без ореола цифр */
+  :root[data-ui="max"][data-theme="light"] { --fx-glow: 0.9; }
+  :root[data-ui="max"][data-theme="light"] .timer:not(.landed) { text-shadow: none; }
+  :root[data-ui="max"][data-theme="light"] .card.hero { box-shadow: var(--shadow), 0 22px 44px -28px color-mix(in srgb, var(--accent-2) 55%, transparent); }
+  :root[data-ui="max"][data-theme="light"] .btn-primary { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 0 0 1px color-mix(in srgb, var(--ok) 50%, transparent), 0 10px 24px -12px color-mix(in srgb, var(--ok) 60%, transparent); }
+  :root[data-ui="max"] .btn-primary[data-next] { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent), 0 10px 28px -12px var(--ok); }
   :root[data-ui="max"] #tabbar { background: color-mix(in srgb, var(--bg-2) 62%, transparent); box-shadow: var(--shadow-pop), 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent) inset; }
   :root[data-ui="max"] #tabbar .tab[aria-current="page"] svg { filter: drop-shadow(0 0 6px var(--accent)); }
   /* Карточки проявляются при прокрутке — на том, что умеет
@@ -2075,6 +2246,11 @@
       animation-range: entry 0% entry 60%;
     }
   }
+
+  /* Фото во весь экран — всегда чёрное, без стекла: правила листов обоих
+     режимов лежат в этом слое и перебили бы dialog.photo из screens
+     при любой специфичности. */
+  :root[data-ui] dialog.photo { background: #000; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 /* == styles/07-print.css == */
@@ -3138,6 +3314,8 @@ RC.CHANGELOG = [
       'Календарь лётных дней за 12 недель в статистике журнала. На вкладке «Полёт» — собранные борта с кнопкой «Чек-лист».',
       'У строки борта во «Флоте» — цветная полоса статуса. Ярлыки на значке приложения (Android): «Начать полёт», «Журнал», «Окна».',
       'Лёгкий отклик вибрацией на отметку пункта, взлёт и посадку — там, где телефон это умеет. Ничего из этого не ходит в сеть.',
+      'Фон и картинки в стиле «Кокпит»: изолинии и приборная сетка, силуэты бортов без фото, рисунки пустых экранов и приветствия. Всё внутри приложения, без сети.',
+      'Аккуратнее на телефоне: строки «Сегодня» и аккумуляторов не зажимают текст, панель чек-листа ниже, свои галочки в формах, фото — на чёрном в любом режиме.',
     ],
   },
   {
@@ -3533,7 +3711,7 @@ RC.HELP = {
       id: 'maintenance',
       title: 'Обслуживание и регламент',
       blocks: [
-        'Записи обслуживания живут в карточке борта, сегмент «Обслуживание»: «Добавить запись обслуживания» — что сделано, тип (ремонт, замена, прошивка, осмотр, задача), дата, причина, следующее действие, фото повреждения, галочка «Выполнено».',
+        'Записи обслуживания живут в карточке борта, сегмент «Обслуживание»: «Добавить запись» — что сделано, тип (ремонт, замена, прошивка, осмотр, задача), дата, причина, следующее действие, фото повреждения, галочка «Выполнено».',
         { h: 'Открытая работа' },
         'Пока работа не отмечена выполненной, борт в статусе «Обслуживание», а работа видна на «Сегодня» и в «Обзоре» карточки. «Выполнено» ставится одним касанием прямо в списке. Чип «Обслуживание» в списках кликабелен: одна открытая работа — открывает её, несколько — карточку борта.',
         { h: 'Цепочка после краша' },
@@ -4146,10 +4324,15 @@ function svcState(a) {
 // Тексты регламента живут рядом с расчётом — иначе формулировки на
 // «Сегодня», в карточке и в чек-листе разъедутся между собой.
 // Показываем только настроенные счётчики: пустой пользователю не нужен.
+// Число и единица — через неразрывный пробел (NB): «12 / мин» не рвутся
+// по строкам в узких ячейках. fmtDur глобально не трогаем — её текст
+// идёт и в CSV.
+const NB = '\u00a0';
+const nbDur = (m) => fmtDur(m).replace(/ /g, NB);
 function svcSinceText(sv) {
   const parts = [];
-  if (sv.every) parts.push(`${sv.flights} ${plural(sv.flights, 'полёт', 'полёта', 'полётов')}`);
-  if (sv.everyMin) parts.push(`${fmtDur(sv.minutes)} налёта`);
+  if (sv.every) parts.push(`${sv.flights}${NB}${plural(sv.flights, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${nbDur(sv.minutes)} налёта`);
   return parts.join(' и ');
 }
 // «каждые» согласуется с числом: при единице нужна другая форма,
@@ -4158,20 +4341,20 @@ function svcEveryText(sv) {
   const parts = [];
   if (sv.every) {
     parts.push(sv.every === 1 ? 'каждый полёт'
-      : `каждые ${sv.every} ${plural(sv.every, 'полёт', 'полёта', 'полётов')}`);
+      : `каждые ${sv.every}${NB}${plural(sv.every, 'полёт', 'полёта', 'полётов')}`);
   }
   if (sv.everyMin) {
     parts.push(sv.everyMin === 60 ? 'каждый час налёта'
       : sv.everyMin === 1 ? 'каждую минуту налёта'
-      : `каждые ${fmtDur(sv.everyMin)} налёта`);
+      : `каждые ${nbDur(sv.everyMin)} налёта`);
   }
   return parts.join(' или ');
 }
 // «Сколько осталось» — по каждому счётчику; наступит тот, что раньше.
 function svcLeftText(sv) {
   const parts = [];
-  if (sv.every) parts.push(`${sv.left} ${plural(sv.left, 'полёт', 'полёта', 'полётов')}`);
-  if (sv.everyMin) parts.push(`${fmtDur(sv.leftMin)} налёта`);
+  if (sv.every) parts.push(`${sv.left}${NB}${plural(sv.left, 'полёт', 'полёта', 'полётов')}`);
+  if (sv.everyMin) parts.push(`${nbDur(sv.leftMin)} налёта`);
   return parts.join(' или ');
 }
 
@@ -4941,7 +5124,7 @@ function todayAircraftRow(a, right) {
   return `<div class="row">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">${TYPES[a.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
+      <span class="d wrap">${TYPES[a.type] || ''}${b ? ' · <span class="nowrap">' + battTag(b) + '</span>' + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
     ${right}
   </div>`;
 }
@@ -5003,7 +5186,7 @@ function backupBannerHtml() {
   const days = backupAgeDays();
   return `<div class="banner backup">${ICONS.backup}<span class="grow">${days == null
     ? 'Резервной копии ещё не было'
-    : `Резервная копия — ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span>
+    : `Резервная копия&nbsp;— ${days}&nbsp;${plural(days, 'день', 'дня', 'дней')} назад`}</span>
     <button class="btn-sm btn" data-act="export-all">Сохранить</button></div>`;
 }
 
@@ -5042,7 +5225,7 @@ function onboardingSteps() {
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  let h = pageHead('Сегодня', { sub: `${date} <span class="state-pill ${state}">${TODAY_HINT[state]}</span>`, help: 'today' });
+  let h = pageHead('Сегодня', { sub: `${date} <span class="state-pill sp-${state}">${TODAY_HINT[state]}</span>`, help: 'today' });
 
   if (UI.updateReady) {
     h += `<div class="banner ok">Доступно обновление приложения.
@@ -5066,7 +5249,7 @@ function viewToday() {
     // «Обучение заново» — тот же путь, что при первом запуске: пройденные
     // шаги зачёркиваются, блок исчезает, когда не осталось ни одного.
     const doneN = steps.length - todo;
-    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat onb">
+    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} <span class="cnt">· осталось ${todo} из ${steps.length}</span></div><div class="card flat onb">
       <div class="onb-head"><span class="grow"><span class="t">Шаг ${doneN + 1} из ${steps.length}</span>
         <span class="d">подсветка ведёт к следующему действию</span>
         <span class="progress"><i style="width:${Math.round(doneN / steps.length * 100)}%"></i></span></span></div>`;
@@ -5074,7 +5257,7 @@ function viewToday() {
       ? `<div class="row done"><span class="row-ic">${ICONS.check}</span>
          <span class="grow"><span class="t">${t}</span></span></div>`
       : rowBtn(attrs + ` data-onb="${i}"`, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
-    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`);
+    if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`, 'close');
     h += '</div>';
   }
 
@@ -5125,7 +5308,7 @@ function readyPanelHtml() {
       <span class="gt-t">${title}</span><span class="gt-d">${sub}</span></button>`;
   return `<div class="ready-panel opt">
     ${tile('#/fleet', pct(readyN, S.aircraft.length), 'var(--ok)', `<b>${readyN}/${S.aircraft.length}</b>`,
-      'Флот', 'готовы к вылету', `Флот: готовы ${readyN} из ${S.aircraft.length}`)}
+      'Флот', 'готовы к&nbsp;вылету', `Флот: готовы ${readyN} из ${S.aircraft.length}`)}
     ${tile('#/batteries', pct(charged, batts.length), 'var(--accent)', `<b>${charged}/${batts.length}</b>`,
       'АКБ', 'заряжены', `Аккумуляторы: заряжены ${charged} из ${batts.length}`)}
     ${tile('#/weather', wx.p, wx.c, wx.v, 'Погода', wx.t, 'Погода сейчас: ' + wx.t)}
@@ -5201,10 +5384,10 @@ function todayHome(onboarding) {
       </div>`).join('');
     h += flown.map((b) => {
       const cyc = Math.round(+b.cycles) || 0; // из копии — не обязательно число
-      return `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+      return `<div class="row stack"><span class="row-ic">${ICONS.bolt}</span>
         <button class="grow row-main" data-act="edit-batt" data-id="${b.id}"><span class="grow">
           <span class="t">Зарядить: ${esc(b.label)}</span>
-          <span class="d">после полёта · ${cyc} ${plural(cyc, 'цикл', 'цикла', 'циклов')}</span></span></button>
+          <span class="d">${cyc}&nbsp;${plural(cyc, 'цикл', 'цикла', 'циклов')}</span></span></button>
         <button class="chip st-flown" data-act="batt-charge" data-id="${b.id}">${CHARGE_LABEL.flown}</button>
       </div>`;
     }).join('');
@@ -5238,18 +5421,18 @@ function todayField() {
   const b = armedBattery(hero);
   const site = S.sites.find((s) => s.id === hero.prepared.siteId);
   let h = `<div class="card hero">
-    <div class="hero-kicker">${chargeKnown(b) ? 'Готов к вылету' : 'Почти готов'}${ready.length > 1 ? ` · ещё ${ready.length - 1}` : ''}</div>
+    <div class="hero-kicker${chargeKnown(b) ? '' : ' kick-warn'}">${chargeKnown(b) ? 'Готов к вылету' : 'Почти готов'}${ready.length > 1 ? ` · ещё ${ready.length - 1}` : ''}</div>
     <div class="hero-top">
       ${aircraftThumb(hero, true)}
       <span class="grow">
         <span class="hero-name">${esc(hero.name)}</span>
-        <span class="d">${TYPES[hero.type] || ''}${b ? ' · ' + battTag(b) + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span>
-        <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в ${fmtTime(hero.prepared.at)}${site ? ' · ' + esc(site.name) : ''}</span>
+        <span class="d">${TYPES[hero.type] || ''}${b ? '&nbsp;· ' + battTag(b) + (CHARGE_LABEL[b.charge] ? '&nbsp;· ' + CHARGE_LABEL[b.charge] : '') : ''}</span>
+        <span class="d hero-ok"><span class="ico14">${ICONS.check}</span>Чек-лист пройден в&nbsp;${fmtTime(hero.prepared.at)}${site ? '&nbsp;· ' + esc(site.name) : ''}</span>
       </span>
     </div>
     ${chargeKnown(b)
       ? `<button class="btn btn-primary" data-act="takeoff-prepared" data-id="${hero.id}">${ICONS.takeoff}Взлёт</button>`
-      : `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Взлёт».</span>${chargeChip(b)}</div>`}
+      : `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд АКБ&nbsp;— появится «Взлёт».</span>${chargeChip(b)}</div>`}
   </div>`;
   const rest = armedFleet().filter((a) => a.id !== hero.id);
   h += todayFleetBlock('Остальные борта', rest, String(rest.length));
@@ -5321,10 +5504,10 @@ function todayDebrief() {
   }
   const flown = S.batteries.filter((b) => b.charge === 'flown' && b.status !== 'retired');
   if (flown.length) {
-    rows += `<div class="row"><span class="row-ic">${ICONS.bolt}</span>
+    rows += `<div class="row stack"><span class="row-ic">${ICONS.bolt}</span>
       <button class="grow row-main" data-nav="#/batteries"><span class="grow">
-        <span class="t">${flown.length === 1 ? 'Зарядить: ' + esc(flown[0].label) : `Зарядить ${flown.length} ${plural(flown.length, 'аккумулятор', 'аккумулятора', 'аккумуляторов')}`}</span>
-        <span class="d">${flown.length === 1 ? 'после полёта' : flown.map((b) => esc(b.label)).join(' · ')}</span></span></button>
+        <span class="t">${flown.length === 1 ? 'Зарядить: ' + esc(flown[0].label) : `Зарядить ${flown.length}&nbsp;АКБ`}</span>
+        <span class="d wrap">${flown.length === 1 ? 'после полёта' : flown.map((b) => esc(b.label)).join(' · ')}</span></span></button>
       ${flown.length === 1
         ? `<button class="chip st-flown" data-act="batt-charge" data-id="${flown[0].id}">${CHARGE_LABEL.flown}</button>`
         : `<button class="btn btn-sm" data-act="batts-charged-all">Все заряжены</button>`}
@@ -5333,10 +5516,10 @@ function todayDebrief() {
   const since = flightsSinceBackup();
   if (since || backupDue()) {
     const days = backupAgeDays();
-    rows += `<div class="row"><span class="row-ic">${ICONS.backup}</span>
+    rows += `<div class="row stack"><span class="row-ic">${ICONS.backup}</span>
       <button class="grow row-main" data-nav="#/backup"><span class="grow">
-        <span class="t">Сохранить резервную копию</span>
-        <span class="d wrap">${since ? `${since} ${plural(since, 'полёт', 'полёта', 'полётов')} с последней копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days} ${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
+        <span class="t">Резервная копия</span>
+        <span class="d wrap">${since ? `${since}&nbsp;${plural(since, 'полёт', 'полёта', 'полётов')} без копии` : 'полётов после копии нет'}${days == null ? ' · копии ещё не было' : ` · ${days}&nbsp;${plural(days, 'день', 'дня', 'дней')} назад`}</span></span></button>
       <button class="btn btn-sm" data-act="export-all">Сохранить</button>
     </div>`;
   }
@@ -5356,11 +5539,17 @@ function todayDebrief() {
   return { main: h, side: todaySide(wxHeroOrRow(armedFleet()[0]), today, '') };
 }
 
-function sessionRow(s) {
+// Строка полёта. o.inDay — строка под заголовком дня: вместо даты время
+// взлёта, итог — только если не «Нормальный»; o.noName — внутри карточки
+// борта, имя борта уже в шапке.
+function sessionRow(s, o = {}) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
+  const res = `<span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span>`;
+  const when = o.inDay ? (+s.start > 0 ? fmtTime(+s.start) : '') : fmtDate(s.date);
+  const tail = o.inDay && (!s.result || s.result === 'normal') ? '' : ' · ' + res;
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
-    `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span> ${esc(a ? a.name : 'Борт удалён')}</span>
-     <span class="d">${fmtDate(s.date)} · ${fmtDur(s.durationMin)} · <span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span></span></span>`);
+    `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span>${o.noName ? '' : ' ' + esc(a ? a.name : 'Борт удалён')}</span>
+     <span class="d">${when ? when + ' · ' : ''}${fmtDur(s.durationMin)}${tail}</span></span>`);
 }
 
 /* == src/11-fleet.js == */
@@ -5406,7 +5595,7 @@ function fleetRow(a) {
   return `<div class="row fleet-row" data-st="${statusOf(a)}">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>
+      <span class="d">${[TYPES[a.type] || '', b ? battTag(b) : '', a.manufacturer ? esc(a.manufacturer) : ''].filter(Boolean).join('&nbsp;· ')}</span></span></button>
     ${chip(statusOf(a), a.id, true)}
     <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
   </div>`;
@@ -5539,8 +5728,8 @@ function armedFleet() { return S.aircraft.filter((a) => armedBattery(a)); }
 // Подпись аккумулятора, светящаяся состоянием заряда: зелёная — заряжен,
 // синяя — после полёта (разряжен). Один вид на бортах и в списке АКБ.
 function battTag(b, text) {
-  const cls = b.charge === 'ready' ? 'bt-ready' : b.charge === 'flown' ? 'bt-flown' : '';
-  return `<span class="${cls}">${esc(text != null ? text : b.label)}</span>`;
+  const cls = b.charge === 'ready' ? ' bt-ready' : b.charge === 'flown' ? ' bt-flown' : '';
+  return `<span class="bt${cls}">${esc(text != null ? text : b.label)}</span>`;
 }
 const CHARGE_LABEL = { ready: 'заряжен', flown: 'после полёта' };
 
@@ -5705,7 +5894,7 @@ function svcLineHtml(a, svc) {
       <span class="small nowrap" style="color:var(--${svc.due ? 'maint' : 'mut'})">${svc.due ? 'Пора осмотреть' : `До осмотра ${svcLeftText(svc)}`}</span>
       <span class="progress"><i style="width:${pct}%${svc.due ? ';background:var(--maint)' : ''}"></i></span>
     </div>
-    <div class="svc-sub"><span class="grow">пройдено ${svcSinceText(svc)} · регламент ${svcEveryText(svc)}</span>
+    <div class="svc-sub"><span class="grow opt">пройдено ${svcSinceText(svc)} · регламент ${svcEveryText(svc)}</span>
       ${svc.due ? `<button class="btn btn-sm" data-act="add-maint" data-id="${a.id}" data-kind="inspection" data-title="Осмотр по регламенту">Осмотр</button>` : ''}
     </div>`;
 }
@@ -5764,8 +5953,8 @@ function modelOverviewHtml(a) {
   }
   if (a.wingspan) kv.push(['Размах', `${esc(a.wingspan)} мм`]);
   const own = wxOwnWind(a);
-  kv.push(['Ветер · высота', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с · до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
-  if (svc) kv.push(['Регламент', svcEveryText(svc)]);
+  kv.push(['Ветер', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с`]);
+  kv.push(['Высота', `до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
   if (alarmMs(a)) kv.push(['Сигнал таймера', fmtClock(alarmMs(a))]);
   h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>
     `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div></div>`;
@@ -5776,7 +5965,7 @@ function modelOverviewHtml(a) {
   h += `<div class="h2">Компоненты${filled.length ? ` <span class="cnt">${filled.length}</span>` : ''}</div><div class="card flat">`;
   h += filled.map(([key, label]) => compRow(a, key, label, comps[key])).join('');
   h += rowBtn('data-act="model-tab" data-tab="components"',
-    `<span class="grow"><span class="t muted">${filled.length ? 'Все компоненты' : 'Добавить компонент'}</span></span>`, 'plus');
+    `<span class="grow"><span class="t" style="color:var(--${filled.length ? 'accent' : 'mut'})">${filled.length ? 'Все компоненты' : 'Добавить компонент'}</span></span>`, filled.length ? '' : 'plus');
   h += '</div>';
 
   // Открытые работы
@@ -5821,7 +6010,7 @@ function modelComponentsHtml(a) {
   const comps = a.components || {};
   return '<div class="card flat">' + compSlots(a).map(([key, label]) =>
     key === 'battery' ? compBatteryRow(a) : compRow(a, key, label, comps[key])).join('') +
-    '</div><p class="small muted" style="margin-top:8px">Состав зависит от типа борта: у самолёта и крыла есть «Трубка Пито» и «ПАК». У компонента есть поле «Версия прошивки» — она видна в «Обзоре».</p>';
+    '</div><p class="small muted opt" style="margin-top:8px">Состав зависит от типа борта: у самолёта и крыла есть «Трубка Пито» и «ПАК». У&nbsp;компонента есть поле «Версия прошивки»&nbsp;— она видна в «Обзоре».</p>';
 }
 
 // Обслуживание: открытые работы, «Добавить запись», история закрытых.
@@ -5829,11 +6018,9 @@ function modelMaintHtml(a) {
   const maint = maintOf(a);
   const openM = maint.filter((m) => !m.done);
   const doneM = maint.filter((m) => m.done);
-  let h = '<div class="card flat">';
-  h += openM.length ? maintOpenRows(openM)
-    : '<div class="row"><span class="grow muted small">Открытых работ нет</span></div>';
-  h += '</div>';
-  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">Добавить запись обслуживания</button>`;
+  let h = openM.length ? `<div class="card flat">${maintOpenRows(openM)}</div>`
+    : '<p class="small muted" style="margin:0 2px 10px">Открытых работ нет</p>';
+  h += `<button class="btn" data-act="add-maint" data-id="${a.id}">${ICONS.plus}Добавить запись</button>`;
   if (doneM.length) {
     h += `<div class="h2">История <span class="cnt">${doneM.length}</span></div><div class="card flat">`;
     h += doneM.map((m) => rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
@@ -5850,7 +6037,7 @@ function modelHistoryHtml(a, flights) {
     return `<div class="empty">${ICONS.flight}<p>Полётов у этого борта ещё не было.</p>
       <button class="btn btn-sm" data-act="start-prep" data-id="${a.id}">Чек-лист и полёт</button></div>`;
   }
-  return logGroupedHtml(flights) + `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
+  return logGroupedHtml(flights, null, false, { noName: true }) + `<button class="btn" data-nav="#/journal">Весь журнал</button>`;
 }
 
 /* == src/13-flight.js == */
@@ -5879,7 +6066,7 @@ function viewFlight() {
     h += '<div class="h2">Готовы к вылету</div><div class="card flat">';
     h += prepared.map((a) => `<div class="row">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">чек-лист пройден в ${fmtTime(a.prepared.at)}</span></span>
+      <span class="d">чек-лист пройден в&nbsp;${fmtTime(a.prepared.at)}</span></span>
       ${chargeKnown(armedBattery(a))
         ? `<button class="btn btn-sm btn-primary" data-act="takeoff-prepared" data-id="${a.id}">Взлёт</button>`
         : chargeChip(armedBattery(a))}
@@ -5904,7 +6091,7 @@ function viewFlight() {
   }
   h += '<div class="card flat" style="margin-top:10px">' +
     rowBtn('data-nav="#/journal"', `<span class="grow"><span class="t">Журнал полётов</span>
-      <span class="d wrap">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать, CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
+      <span class="d wrap">${done.length ? `${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · статистика, печать,&nbsp;CSV` : 'Полётов пока не было'}</span></span>`, 'journal') +
     '</div>';
   return h;
 }
@@ -5941,7 +6128,7 @@ function viewPrep() {
 
   const kept = UI.prep.runId && preparedFresh(a);
   let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
-    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · подготовлен в ' + fmtTime(a.prepared.at) : '') });
+    sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · <span class="nowrap">подготовлен в ' + fmtTime(a.prepared.at) + '</span>' : '') });
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -6012,11 +6199,14 @@ function viewPrep() {
     if (chargeKnown(pbat)) {
       h += `<button class="btn btn-primary" data-act="start-flight">${ICONS.takeoff}Начать полёт</button>`;
     } else {
-      h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд аккумулятора — и появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
+      h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд АКБ&nbsp;— появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
     }
     h += `<button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
   }
-  h += `<button class="btn" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button></div>`;
+  h += '</div>';
+  // Отмена — вне липкой панели: панель держит только то, что ведёт
+  // к вылету, и не занимает пол-экрана на телефоне.
+  h += `<button class="btn prep-cancel" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button>`;
   return h;
 }
 
@@ -6208,11 +6398,11 @@ function viewSession() {
   if (s.landedAt) {
     h += `<button class="btn btn-primary" data-act="finish-flight" data-id="${s.id}">Записать итог</button>
       <button class="btn" data-act="resume-flight" data-id="${s.id}">Продолжить полёт</button>
-      <p class="small muted session-hint">Посадка зафиксирована, таймер остановлен. «Продолжить полёт» снова запустит его.</p>`;
+      <p class="small muted session-hint opt">Посадка зафиксирована, таймер остановлен. «Продолжить&nbsp;полёт» снова запустит его.</p>`;
   } else {
     h += `<button class="btn btn-primary btn-land" data-act="land-flight" data-id="${s.id}">${ICONS.landing}Посадка</button>
       <button class="btn" data-act="discard-flight" data-id="${s.id}">Отменить — полёта не было</button>
-      <p class="small muted session-hint">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже. Можно свернуть приложение — время не потеряется.</p>`;
+      <p class="small muted session-hint opt">После посадки таймер остановится, а итог — результат, заметки, проблемы — можно записать позже. Можно свернуть приложение — время не потеряется.</p>`;
   }
 
   // Полёты за сегодня — как на вкладке «Полёт»
@@ -6256,7 +6446,9 @@ function sessionDetailHtml(s) {
 // Список полётов, сгруппированный по датам: заголовок дня с числом
 // полётов и налётом. Используется в журнале и на вкладке «Полёт».
 // noDayHead — без заголовков дней (вызывающий рисует свой, «Сегодня»).
-function logGroupedHtml(list, totalsFrom, noDayHead) {
+// Строки — внутри дня (время вместо даты); rowOpts — доп. параметры
+// sessionRow (noName в карточке борта).
+function logGroupedHtml(list, totalsFrom, noDayHead, rowOpts) {
   // totalsFrom: полный журнал для честных итогов дня, когда list обрезан
   const full = totalsFrom || list;
   // Длинный журнал (> 20 строк): карточки дней раскладываются лениво
@@ -6282,7 +6474,7 @@ function logGroupedHtml(list, totalsFrom, noDayHead) {
       h += `<div class="card flat${lazy}"${lazy ? ` style="--n:${rowsOf.get(cur)}"` : ''}>`;
       open = true;
     }
-    h += sessionRow(sess);
+    h += sessionRow(sess, Object.assign({ inDay: true }, rowOpts));
   }
   if (open) h += '</div>';
   return h;
@@ -6388,7 +6580,9 @@ function printLog() {
 // наружу ничего не уходит. Полоски — доля от максимума в списке.
 function statBars(rows) {
   const max = rows.reduce((n, r) => Math.max(n, r.v), 0) || 1;
-  return '<div class="card">' + rows.map((r) => `<div class="bar-row">
+  // .bars — общая сетка карточки (subgrid): полоски всех строк кончаются
+  // на одной вертикали. res — ключ итога (только из RESULTS) для цвета.
+  return '<div class="card bars">' + rows.map((r) => `<div class="bar-row"${r.res ? ` data-res="${r.res}"` : ''}>
     <span class="n">${esc(r.k)}</span>
     <span class="bar-track"><i style="width:${Math.max(2, Math.round(r.v / max * 100))}%"></i></span>
     <span class="v">${esc(r.label)}</span></div>`).join('') + '</div>';
@@ -6465,7 +6659,7 @@ function statSections(done) {
   // Итоги: считаем доли честно, «рейтинга» не рисуем.
   out.push({ key: 'results', title: 'Чем заканчивались', rows: Object.keys(RESULTS).map((k) => {
     const n = done.filter((s) => (s.result || 'normal') === k).length;
-    return { k: RESULTS[k], v: n, label: String(n), n };
+    return { k: RESULTS[k], v: n, label: String(n), n, res: k };
   }).filter((r) => r.v) });
 
   // Аккумуляторы: циклы = износ, изношенные сверху.
@@ -6504,7 +6698,7 @@ function heatHtml(done) {
   }
   return `<div class="h2 opt">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
     <div class="card opt"><div class="heat" role="img" aria-label="Календарь полётов за ${HEAT_WEEKS} недель: ${days} ${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}">${cells}</div>
-    <div class="heat-legend"><span>пн — вс по столбцам, неделя за неделей</span>
+    <div class="heat-legend"><span>столбец — неделя, пн сверху</span>
       <span class="sw">меньше <i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i> больше</span></div></div>`;
 }
 
@@ -6598,7 +6792,8 @@ function viewPacking() {
   let h = pageHead('Сборы', { back: '#/today', act: 'add-pack', actLabel: 'Новый набор', help: 'packing' });
   if (!S.packing.length) return h + emptyState('Создайте набор «что взять с собой».', 'add-pack', 'Новый набор', 'packing');
   h += '<div class="card flat">';
-  h += S.packing.map((p) => {
+  // По алфавиту: порядок записей в базе случаен для пилота
+  h += S.packing.slice().sort((x, y) => String(x.name || '').localeCompare(String(y.name || ''), 'ru')).map((p) => {
     const done = p.items.filter((i) => i.done).length;
     return rowBtn(`data-nav="#/pack/${p.id}"`,
       `<span class="grow"><span class="t">${esc(p.name)}</span>
@@ -6616,11 +6811,13 @@ function viewPack() {
   h += `<div class="progress"><i style="width:${p.items.length ? Math.round(done / p.items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${done} из ${p.items.length}</div>`;
   h += '<div class="card flat">';
+  // Удаление пункта — слева, подальше от клетки: большой палец привык
+  // к клетке у правого края (как в чек-листе), а удаляет пункт сразу.
   h += p.items.map((it, i) => `<div class="ck" data-ck="${i}" data-state="${it.done ? 'ok' : ''}">
+      <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
       <button class="ck-main" data-act="pack-toggle" data-i="${i}">
         <span class="grow"><span class="t">${esc(it.t)}</span></span></button>
       <button class="st" data-act="pack-toggle" data-i="${i}"${UI.packLastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''} aria-label="${it.done ? 'Собрано' : 'Не собрано'}">${it.done ? ICONS.check : ''}</button>
-      <button class="ic-btn" data-act="pack-del-item" data-i="${i}" aria-label="Удалить пункт">${ICONS.x}</button>
     </div>`).join('');
   h += '</div>';
   h += `<form data-form="pack-item" class="btn-line" style="margin-bottom:8px">
@@ -7114,7 +7311,11 @@ function wxHourCardHtml(day, hr, lim) {
   const chipCls = hr.verdict === 'ok' ? 'st-ready' : hr.verdict === 'warn' ? 'st-check' : 'st-grounded';
   const desc = [wxDesc(hr), hr.temp != null ? wxNum(hr.temp) + '°' : ''].filter(Boolean).join(' · ');
   const marks = (hr.stop ? [hr.stop] : hr.diff.why).join(' · ');
-  return `<div class="h2">${String(hr.hh).padStart(2, '0')}:00 <span class="cnt">выбранный час</span></div>
+  // Час ±1 кнопками — видны только в перчатках (.wx-step): там клетка
+  // полоски ~13 px, другого способа выбрать час нет.
+  const step = (h, label, ic, off) => `<button type="button" class="ic-btn" data-act="weather-hour" data-h="${h}" aria-label="${label}"${off ? ' disabled' : ''}>${ICONS[ic]}</button>`;
+  return `<div class="h2">${String(hr.hh).padStart(2, '0')}:00 <span class="cnt">выбранный час</span>
+    <span class="wx-step">${step(hr.hh - 1, 'Предыдущий час', 'back', hr.hh === 0)}${step(hr.hh + 1, 'Следующий час', 'chev', hr.hh === 23)}</span></div>
     <div class="card wx-hour">
       <div class="wx-hour-top">
         <span class="wx-ic">${ICONS[wxIcon(hr)]}</span>
@@ -7179,12 +7380,12 @@ function wxAttentionHtml(day, lim) {
   const rows = spans.slice(0, 5).map((s) => {
     const time = `${String(s.from).padStart(2, '0')}:00–${String(s.to + 1).padStart(2, '0')}:00`;
     const sub = s.key.startsWith('warn:возможны') || s.key === 'bad:осадки' || s.key === 'bad:дождь'
-      ? `вероятность ${s.pp} %${s.prec > 0 ? ` · до ${wxMm(s.prec)} мм` : ''}`
-      : `ветер до ${wxNum(s.w)} м/с · порывы до ${wxNum(s.g)}`;
+      ? `вероятность&nbsp;${s.pp}&nbsp;%${s.prec > 0 ? ` · до&nbsp;${wxMm(s.prec)}&nbsp;мм` : ''}`
+      : `ветер до&nbsp;${wxNum(s.w)}&nbsp;м/с · порывы до&nbsp;${wxNum(s.g)}`;
     const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
     return `<button class="row" data-act="weather-hour" data-h="${s.from}">
       <span class="row-ic">${ICONS[s.icon]}</span>
-      <span class="grow"><span class="t"><span class="mono">${time}</span> · ${s.text}</span><span class="d wrap">${sub}</span></span>
+      <span class="grow"><span class="t">${s.text}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
       <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>
     </button>`;
   }).join('');
@@ -7373,6 +7574,7 @@ function viewWeather() {
     <div class="menu menu-grid" popover="manual" id="wx-alt-menu" role="menu" aria-label="Высота полёта" hidden>
       <button class="menu-head" role="menuitemradio" data-act="wx-alt-set" data-alt=""
         aria-checked="${!altPick}">По карточке борта · ${lim.altOwn} м</button>
+      <div class="menu-cap xs muted" style="grid-column:1/-1;padding:4px 12px 0">Высота над землёй, м</div>
       ${Array.from({ length: WX_ALT_MAX / WX_ALT_STEP }, (_, i) => (i + 1) * WX_ALT_STEP)
         .map((m) => `<button role="menuitemradio" data-act="wx-alt-set" data-alt="${m}"
           aria-checked="${altPick === m}">${m}</button>`).join('')}
@@ -7499,7 +7701,7 @@ function viewMore() {
   h += '<div class="h2">Настройки</div><div class="card">';
   const themeNow = themePref();
   h += field('Тема', `<div class="seg">
-    ${[['system', 'Как в системе'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(([v, l]) =>
+    ${[['system', 'Системная'], ['dark', 'Тёмная'], ['light', 'Светлая']].map(([v, l]) =>
       `<button data-act="theme-set" data-theme="${v}" aria-pressed="${themeNow === v}">${l}</button>`).join('')}
   </div>`);
   const mode = uiMode();
@@ -7519,11 +7721,11 @@ function viewMore() {
   if (UI.updateReady) {
     h += rowBtn('data-act="update-app"', `<span class="grow"><span class="t" style="color:var(--ok)">Обновить приложение</span><span class="d wrap">Новая версия готова</span></span>`, 'update');
   } else {
-    h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления <span class="badge online">online</span></span><span class="d wrap">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')}</span></span>`, 'update');
+    h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления</span><span class="d wrap">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')} <span class="badge online">online</span></span></span>`, 'update');
   }
   h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d wrap">История изменений</span></span>`, 'whatsnew');
   h += rowBtn('data-nav="#/help"', `<span class="grow"><span class="t">Инструкция</span><span class="d wrap">Как пользоваться: экраны, чек-лист, полёт, копия</span></span>`, 'help');
-  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'templates');
+  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'check');
   h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d wrap">Где живут ваши данные</span></span>`, 'privacy');
   h += '</div>';
 
@@ -7542,7 +7744,7 @@ function firmwareHtml() {
   const link = (url, label, primary) =>
     `<a class="btn btn-sm${primary ? ' btn-primary' : ''}" href="${esc(url)}"
       target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
-  let h = `<details class="fold"><summary>Прошивки Walksnail (${fw.items.length})</summary><div class="fold-body">`;
+  let h = `<details class="fold"><summary>Прошивки Walksnail <span class="cnt muted small">${fw.items.length}</span></summary><div class="fold-body">`;
   if (fw.warn) h += `<div class="banner warn">${esc(fw.warn)}</div>`;
   // Кнопки отдельной строкой под текстом: на телефоне название с номером
   // версии иначе ломается на три строки, зажатое кнопками справа.
@@ -7583,7 +7785,7 @@ function viewTools() {
   h += firmwareHtml();
   RC.TOOL_CATS.forEach((cat) => {
     const list = RC.TOOLS.filter((t) => t.cat === cat.id);
-    h += `<details class="fold"><summary>${esc(cat.name)} (${list.length})</summary>
+    h += `<details class="fold"><summary>${esc(cat.name)} <span class="cnt muted small">${list.length}</span></summary>
       <div class="fold-body"><div class="card flat">${list.map(toolRow).join('')}</div></div></details>`;
   });
   h += `<p class="small muted" style="margin-top:12px">Каталог — ссылки на официальные источники.
@@ -7626,20 +7828,24 @@ function viewSites() {
   </div>`).join('');
   h += '</div>';
   h += `<p class="small muted" style="margin-top:10px">Координаты открывают локацию на внешней карте
-    <span class="badge online">online</span> и включают окна погоды. Проще всего — кнопка
+    <span class="badge online">online</span> и включают окна погоды. Проще всего&nbsp;— кнопка
     «Определить по GPS» прямо на поле.</p>`;
   return h;
 }
 
+// Строка АКБ: состояние («списан», «следить») — значком в названии,
+// справа только чип заряда; в подписи главное первым — циклы и борт.
 function battRow(b) {
   const o = battOwner(b.id);
   const charge = b.status === 'retired' ? '' : chargeChip(b);
-  return `<div class="row">
+  const n = Math.round(+b.cycles) || 0;
+  const kind = [esc(b.chem || ''), (b.cells ? b.cells + 'S' : '') + (b.p > 1 ? b.p + 'P' : '')].filter(Boolean).join(' ');
+  const spec = [kind, b.capacity ? b.capacity + '&nbsp;мА·ч' : '', b.weight ? b.weight + '&nbsp;г' : ''].filter(Boolean).join(' · ');
+  return `<div class="row batt-row">
     <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:var(--seg)">
-      <span class="t">${esc(b.label)}</span>
-      <span class="d">${esc(b.chem || '')} ${b.cells ? b.cells + 'S' : ''}${b.p > 1 ? b.p + 'P' : ''} ${b.capacity ? '· ' + b.capacity + ' мА·ч' : ''}${b.weight ? ' · ' + b.weight + ' г' : ''} · ${b.cycles || 0} циклов${o ? ` · ${battTag(b, 'в «' + o.name + '»')}` : ''}</span></button>
+      <span class="t">${esc(b.label)}${b.status === 'retired' ? ' <span class="badge bad">списан</span>' : b.status === 'watch' ? ' <span class="badge warn">следить</span>' : ''}</span>
+      <span class="d">${[`${n}&nbsp;${plural(n, 'цикл', 'цикла', 'циклов')}`, o ? battTag(b, 'в «' + o.name + '»') : '', spec].filter(Boolean).join(' · ')}</span></button>
     ${charge}
-    ${b.status === 'retired' ? '<span class="chip st-grounded">Списан</span>' : b.status === 'watch' ? '<span class="chip st-check">Следить</span>' : ''}
   </div>`;
 }
 
@@ -7662,7 +7868,7 @@ function battSortCmp() {
 }
 
 function viewBatteries() {
-  let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить' }) + fleetSeg('batteries');
+  let h = pageHead('Флот', { act: 'add-batt', actLabel: 'Добавить', help: 'fleet' }) + fleetSeg('batteries');
   if (!S.batteries.length) return h + emptyState('Заведите парк батарей — циклы будут считаться по полётам.', 'add-batt', 'Добавить АКБ', 'batteries');
   const groups = fleetGroups();
   h += `<div class="fleet-bar">
@@ -7716,18 +7922,21 @@ function viewTemplates() {
 }
 
 function viewBackup() {
-  const counts = `${S.aircraft.length} ${plural(S.aircraft.length, 'борт', 'борта', 'бортов')}, ` +
-    `${S.sessions.filter((s) => s.end).length} ${plural(S.sessions.length, 'полёт', 'полёта', 'полётов')}, ` +
-    `${S.configs.length} ${plural(S.configs.length, 'конфигурация', 'конфигурации', 'конфигураций')}`;
+  // Склонение — по тому же числу, что показано (было — по всем полётам,
+  // включая идущий: «1 полётов»).
+  const flown = S.sessions.filter((s) => s.end).length;
+  const counts = `${S.aircraft.length}&nbsp;${plural(S.aircraft.length, 'борт', 'борта', 'бортов')}, ` +
+    `${flown}&nbsp;${plural(flown, 'полёт', 'полёта', 'полётов')}, ` +
+    `${S.configs.length}&nbsp;${plural(S.configs.length, 'конфигурация', 'конфигурации', 'конфигураций')}`;
   let h = pageHead('Данные', { back: '#/more', sub: counts, help: 'data' });
   h += `<div class="banner">Все данные RC Planner живут в этом браузере на этом устройстве.
     Резервная копия — обычный файл, вы сами решаете, где его хранить.</div>`;
   h += `<button class="btn btn-primary" data-act="export-all">Сохранить резервную копию</button>`;
   const lb = +S.settings.lastBackupAt || 0;
-  h += `<p class="small muted" style="margin:6px 2px 0">Последняя копия: ${lb
-    ? `${fmtDate(new Date(lb).toLocaleDateString('en-CA'))}, ${fmtTime(lb)}${backupDue() ? ' — <span style="color:var(--warn)">пора обновить</span>' : ''}`
+  h += `<p class="small muted" style="margin:8px 2px 0">Последняя копия: ${lb
+    ? `${fmtDate(new Date(lb).toLocaleDateString('en-CA'))}, ${fmtTime(lb)}${backupDue() ? ' — <span class="nowrap" style="color:var(--warn)">пора обновить</span>' : ''}`
     : 'ещё не было'}. На телефоне файл предлагается через системный лист «Поделиться».</p>`;
-  h += `<div class="card" style="margin-top:8px">` +
+  h += `<div class="card" style="margin-top:16px">` +
     field('Восстановить из файла', `<input type="file" accept=".rcpilot,.json,application/json" data-change="import-file">`,
       'Файл .rcpilot или .json, созданный RC Planner') + '</div>';
   h += `<hr class="sep"><button class="btn btn-danger" data-act="wipe-all">Стереть все данные</button>
@@ -7742,11 +7951,11 @@ function viewPrivacy() {
     <p><strong>Ваши данные хранятся на этом устройстве.</strong></p>
     <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Борта, полёты,
     чек-листы, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
-    в интернет — в приложении просто нет кода, который бы это делал.</p>
+    в интернет&nbsp;— в&nbsp;приложении просто нет кода, который бы это делал.</p>
     <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. В фоне приложение обращается
     в сеть только за обновлением самой страницы.</p>
     <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
-    (помечены <span class="badge online">online</span>). Что уходит наружу:</p>
+    <span class="nowrap">(помечены <span class="badge online">online</span>)</span>. Что уходит наружу:</p>
     <ul class="small" style="padding-left:18px;margin-top:4px">
       <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
       <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
@@ -8682,11 +8891,11 @@ function openModelForm(a, presetId, saved, cloneId) {
       'Один АКБ — один борт; занятые в списке не показываются')}
     <div class="grid2">
       ${field('Макс. ветер, м/с', `<input type="number" name="maxWind" min="1" max="60" step="0.5" value="${numVal(a.maxWind)}" placeholder="≈${wxEstimate(a)}">`, 'пусто — оценка по ТТХ')}
-      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до 3000')}
+      ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до&nbsp;3000&nbsp;м')}
     </div>
     <div class="grid2">
       ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
-      ${field('Осмотр каждые, минут налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
+      ${field('Осмотр каждые, мин налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
     </div>
     <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
       Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>

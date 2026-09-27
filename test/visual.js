@@ -87,11 +87,11 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     'выбор темы переживает перезагрузку');
   await page.screenshot({ path: path.join(SHOTS, 'phone-light.png') });
 
-  // «Как в системе» снимает ключ, тема берётся у системы
+  // «Системная» снимает ключ, тема берётся у системы
   await page.click('[data-act="theme-set"][data-theme="system"]');
   await page.waitForTimeout(60);
   ok((await page.evaluate(() => localStorage.getItem('rcp.theme'))) === null,
-    '«Как в системе» удаляет rcp.theme');
+    '«Системная» удаляет rcp.theme');
   await context.close();
 
   // Тема по системе: светлая система без сохранённого выбора — светлый интерфейс
