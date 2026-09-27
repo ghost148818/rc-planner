@@ -145,7 +145,7 @@ function modelOverviewHtml(a) {
   }
   if (a.wingspan) kv.push(['Размах', `${esc(a.wingspan)} мм`]);
   const own = wxOwnWind(a);
-  kv.push(['Ветер · высота', `${own ? 'до ' + own : '≈' + wxEstimate(a, bat && bat.weight)} м/с · до ${wxOwnAlt(a)} м`]);
+  kv.push(['Ветер · высота', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с · до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
   if (svc) kv.push(['Регламент', svcEveryText(svc)]);
   if (alarmMs(a)) kv.push(['Сигнал таймера', fmtClock(alarmMs(a))]);
   h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>

@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-u7yMj2+rMy2k5RC3zXddMBlyp0aik3HWaP/71pacIUQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-1xFvSbWKLC5GyFfZK78IrkeOQ2VdbSZRgKlvcf7b2vA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="9ae578940a">
+  <meta name="build" content="900f9db630">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -389,6 +389,9 @@
     background: var(--accent-bg);
   }
   .head .head-act:active { transform: scale(0.97); }
+  .head .head-act { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .head .head-act-ic { display: none; }
+  .head .head-act-ic svg { width: 22px; height: 22px; }
   .head .head-ic {
     width: var(--seg); height: var(--seg);
     margin-right: -6px;
@@ -478,7 +481,13 @@
     }
     #tabbar .tab { flex: none; width: 74px; min-height: 66px; }
     #views { margin: 0 auto 0 100px; max-width: 1140px; padding: 24px 32px 32px; }
-    #views:not(.two-col) { max-width: 812px; }
+    /* Экраны в одну колонку — по центру свободного места правее рельсы,
+       а не прижаты к ней (ревью 3.0: справа пустовало ~400 px). */
+    #views:not(.two-col) { max-width: 812px; margin-left: max(112px, calc((100vw - 812px + 100px) / 2)); }
+    #tabbar .tab { font-size: 12px; color: var(--mut); }
+    /* Широкие кнопки в колонке 750 px выглядят растянутыми — ограничены */
+    #views > .btn, #views > .btn-line, .today-main > .btn { max-width: 460px; }
+    .ring ~ .btn, .ring ~ .session-hint, .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 460px; }
     #views.two-col {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 372px;
@@ -489,7 +498,7 @@
     .today-side > .wx-slot > .h2 { margin-top: 6px; }
   }
   @media (min-width: 1300px) {
-    #views { margin-left: auto; }
+    #views.two-col { margin-left: auto; }
   }
 }
 
@@ -642,6 +651,10 @@
   .chip-link:active { opacity: 0.7; }
   /* В строке чип не выдавливает имя: 40 % ширины и многоточие */
   .row > .chip { flex: 0 1 auto; min-width: 0; max-width: 40%; }
+  /* Чип-кнопка (заряд) не режется: подпись у неё без многоточия */
+  .row > button.chip { flex: none; max-width: none; }
+  /* «заряд?» — то, на что пилоту надо нажать: янтарный, а не серый */
+  button.chip.st-unknown[data-act="batt-charge"] { --c: var(--warn); }
 
   .badge {
     display: inline-block;
@@ -737,7 +750,7 @@
 
   /* ---------- Формы ---------- */
   .field { margin-bottom: 13px; }
-  .field > label {
+  .field > label:not(.check-row) {
     display: block;
     font-size: var(--font-d);
     font-weight: 600;
@@ -794,6 +807,7 @@
     width: 24px; height: 24px; flex: none; margin: 0;
     accent-color: var(--ok);
   }
+  .field > label:empty { display: none; }
   .field .hint, .hint { font-size: 12.5px; color: var(--dim); margin-top: 4px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 
@@ -1205,6 +1219,7 @@
   .hero .d { display: block; color: var(--mut); font-size: var(--font-d); margin-top: 2px; white-space: normal; }
   .hero .hero-ok { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--ok); }
   .hero .btn { margin-top: 0; }
+  .banner.nocharge { align-items: center; }
   .hero .btn + .btn { margin-top: 9px; }
   .hero-kicker {
     display: inline-flex; align-items: center; gap: 7px;
@@ -1232,7 +1247,7 @@
     color: var(--info); background: var(--info-bg);
   }
   .wx-hero .row-ic svg { width: 21px; height: 21px; }
-  .wx-hero .t { display: block; font-size: 17px; font-weight: 750; line-height: 1.25; }
+  .wx-hero .t { display: block; font-size: 17px; font-weight: 750; line-height: 1.25; text-wrap: balance; }
   .wx-hero .t.ok { color: var(--ok); }
   .wx-hero .t.warn { color: var(--warn); }
   .wx-hero .t.muted { color: var(--mut); }
@@ -1391,7 +1406,12 @@
   .act-bar .banner > svg { margin-top: 0; }
   .act-bar .btn + .btn { margin-top: 8px; }
   @media (min-width: 900px) {
-    .act-bar { bottom: 0; margin-left: -32px; margin-right: -32px; padding-left: 32px; padding-right: 32px; }
+    .act-bar {
+      bottom: 0; margin-left: -32px; margin-right: -32px; padding-left: 32px; padding-right: 32px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;
+    }
+    .act-bar .banner { grid-column: 1 / -1; margin-bottom: 0; }
+    .act-bar .btn + .btn { margin-top: 0; }
   }
 
   /* ================= Полёт: HUD ================= */
@@ -1504,9 +1524,16 @@
   .grp-empty { margin: 2px 2px 8px; }
 
   /* ================= Журнал и статистика ================= */
-  .bar-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  /* Подпись — дорожка — значение: одна сетка на все строки, дорожки
+     начинаются и кончаются на одной вертикали. */
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(84px, 34%) minmax(40px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
   .bar-row .n {
-    flex: 0 0 92px;
     color: var(--mut);
     font-size: var(--font-d);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1527,7 +1554,6 @@
     transition: width 0.3s var(--ease);
   }
   .bar-row .v {
-    flex: 0 0 auto;
     min-width: 78px;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -1536,6 +1562,7 @@
   }
   /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
   .heat {
+    max-width: 460px;
     display: grid;
     grid-template-rows: repeat(7, 1fr);
     grid-auto-flow: column;
@@ -1941,6 +1968,29 @@
   :root[data-ui="gloves"] .strip:not(.tap) { height: 20px; }
   :root[data-ui="gloves"] .menu, :root[data-ui="gloves"] dialog { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-2); }
   :root[data-ui="gloves"] dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, 0.7); }
+  /* Шапка: действие — круглой кнопкой-иконкой, подпись в aria-label */
+  :root[data-ui="gloves"] .head .head-act { width: var(--seg); height: var(--seg); padding: 0; border-radius: 50%; }
+  :root[data-ui="gloves"] .head .head-act-t { display: none; }
+  :root[data-ui="gloves"] .head .head-act-ic { display: flex; }
+  /* Строка с кнопкой справа: не влезают рядом — кнопка уходит на свою
+     строку под текстом, а не наезжает на него (ревью 3.0). */
+  :root[data-ui="gloves"] div.row { flex-wrap: wrap; row-gap: 12px; }
+  :root[data-ui="gloves"] div.row > .grow { flex: 1 1 58%; }
+  :root[data-ui="gloves"] div.row > .grow + * { margin-left: auto; }
+  :root[data-ui="gloves"] div.tool-row > .grow { flex-basis: 100%; }
+  :root[data-ui="gloves"] .row .d { white-space: normal; }
+  /* Настольные действия в поле не нужны: перенос борта, удаление пункта */
+  :root[data-ui="gloves"] .row .row-move,
+  :root[data-ui="gloves"] .ck [data-act="pack-del-item"] { display: none; }
+  /* Сегменты карточки борта — 2×2 */
+  :root[data-ui="gloves"] .seg.four { display: grid; grid-template-columns: 1fr 1fr; }
+  /* Чек-лист: панель действий не прилипает — список важнее */
+  :root[data-ui="gloves"] .act-bar { position: static; margin: 12px 0 0; padding: 0; background: none; }
+  :root[data-ui="gloves"] .wx-hour-top { flex-wrap: wrap; }
+  :root[data-ui="gloves"] .bar-row { grid-template-columns: 1fr auto; row-gap: 4px; }
+  :root[data-ui="gloves"] .bar-row .n { grid-column: 1 / -1; white-space: normal; }
+  :root[data-ui="gloves"] .mode-card { font-size: 14px; }
+  :root[data-ui="gloves"] .mode-card small { font-size: 12.5px; }
   /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
   :root[data-ui="gloves"] [data-next] { animation: none; box-shadow: none; outline: 3px solid var(--accent); outline-offset: 3px; }
   :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; }
@@ -4465,6 +4515,7 @@ const ICONS = {
   whatsnew: ic('<path d="M10 3.6 11.3 8a1.6 1.6 0 0 0 1.1 1.1l4.4 1.3-4.4 1.3a1.6 1.6 0 0 0-1.1 1.1L10 17.2l-1.3-4.4a1.6 1.6 0 0 0-1.1-1.1L3.2 10.4l4.4-1.3A1.6 1.6 0 0 0 8.7 8L10 3.6Z"/><path d="M18 13.5l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/>'),
   update: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
   move: ic('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M3.5 12h17"/>'),
+  edit: ic('<path d="M13.5 6.5 17.5 10.5"/><path d="M4 20l1-4.5L15.8 4.7a2 2 0 0 1 2.9 0l.6.6a2 2 0 0 1 0 2.9L8.5 19Z"/>'),
   paste: ic('<rect x="5" y="4" width="14" height="17.5" rx="2"/><path d="M9 4.5V3.4A1.4 1.4 0 0 1 10.4 2h3.2A1.4 1.4 0 0 1 15 3.4v1.1"/><path d="M12 9.5v7M8.8 13.3 12 16.5l3.2-3.2"/>'),
   // знаки состояний и служебные: вместо текстовых ✓ ✕ — ★ ☆ × +
   check: ic('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.2),
@@ -4517,12 +4568,17 @@ const TAB_OF = {
 // help — id раздела инструкции (RC.HELP.sections): круглая кнопка «?»
 // в шапке ведёт на #/help/<id>; стоит правее действия, чтобы действие
 // («Добавить», «⋯») оставалось на привычном месте у края.
+// Иконка кнопки действия в шапке: в режиме «В перчатках» остаётся только
+// она (круглая кнопка), подпись уходит в aria-label — иначе длинная
+// подпись («Новый набор») налезала на крупный заголовок.
+const HEAD_ACT_ICON = { 'edit-model': 'edit', 'pack-reset': 'update' };
 function pageHead(title, opts) {
   opts = opts || {};
   const act = !opts.act ? (opts.right || '')
     : opts.actIcon && ICONS[opts.actIcon]
       ? `<button class="head-act head-ic" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}" aria-haspopup="menu">${ICONS[opts.actIcon]}</button>`
-      : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
+      : `<button class="head-act" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}"><span class="head-act-ic">${
+          ICONS[HEAD_ACT_ICON[opts.act] || 'plus']}</span><span class="head-act-t">${opts.actLabel}</span></button>`;
   const help = opts.help
     ? `<button class="head-ic head-help" data-nav="#/help/${esc(opts.help)}" aria-label="Инструкция">${ICONS.help}</button>` : '';
   return `<div class="head">
@@ -5708,7 +5764,7 @@ function modelOverviewHtml(a) {
   }
   if (a.wingspan) kv.push(['Размах', `${esc(a.wingspan)} мм`]);
   const own = wxOwnWind(a);
-  kv.push(['Ветер · высота', `${own ? 'до ' + own : '≈' + wxEstimate(a, bat && bat.weight)} м/с · до ${wxOwnAlt(a)} м`]);
+  kv.push(['Ветер · высота', `${own ? 'до&nbsp;' + own : '≈' + wxEstimate(a, bat && bat.weight)}&nbsp;м/с · до&nbsp;${wxOwnAlt(a)}&nbsp;м`]);
   if (svc) kv.push(['Регламент', svcEveryText(svc)]);
   if (alarmMs(a)) kv.push(['Сигнал таймера', fmtClock(alarmMs(a))]);
   h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>
@@ -6446,7 +6502,7 @@ function heatHtml(done) {
     const cls = d > today ? ' class="future"' : key === iso(today) ? ' class="today"' : '';
     cells += `<i${cls}${l ? ` data-l="${l}"` : ''}></i>`;
   }
-  return `<div class="h2">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
+  return `<div class="h2 opt">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
     <div class="card opt"><div class="heat" role="img" aria-label="Календарь полётов за ${HEAT_WEEKS} недель: ${days} ${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}">${cells}</div>
     <div class="heat-legend"><span>пн — вс по столбцам, неделя за неделей</span>
       <span class="sw">меньше <i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i> больше</span></div></div>`;
@@ -7216,7 +7272,7 @@ function wxHeroHtml(a, compact) {
   else if (day.windows.length) { title = 'Окна на сегодня прошли'; cls = 'muted'; }
   else { title = 'Сегодня лучше не лететь'; cls = 'warn'; }
   const hr = day.hours.find((x) => x.hh === now) || day.hours[0];
-  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${hr.top ? ` · ${wxNum(hr.alt)} на ${hr.top} м` : ''} · порывы до ${wxNum(hr.gust)}`;
+  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${hr.top ? ` · <span class="nowrap">${wxNum(hr.alt)} на ${hr.top} м</span>` : ''} · <span class="nowrap">порывы до ${wxNum(hr.gust)}</span>`;
   const stale = Date.now() - (+c.fetched || 0) > WX_STALE_MS
     ? ' · <span style="color:var(--warn)">устарел</span>' : '';
   const sub = compact ? windNow + stale
@@ -7513,7 +7569,7 @@ function viewTools() {
     Само приложение работает офлайн.</div>`;
   const fav = S.settings.favTools || [];
   const favTools = RC.TOOLS.filter((t) => fav.includes(t.id));
-  const toolRow = (t) => `<div class="row">
+  const toolRow = (t) => `<div class="row tool-row">
       <span class="grow"><span class="t">${esc(t.name)} <span class="badge online">online</span></span>
       <span class="d wrap">${esc(t.desc)}</span>
       <span class="d wrap muted">Источник: ${esc(t.src)}</span></span>

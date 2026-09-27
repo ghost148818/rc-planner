@@ -88,7 +88,7 @@ function viewTools() {
     Само приложение работает офлайн.</div>`;
   const fav = S.settings.favTools || [];
   const favTools = RC.TOOLS.filter((t) => fav.includes(t.id));
-  const toolRow = (t) => `<div class="row">
+  const toolRow = (t) => `<div class="row tool-row">
       <span class="grow"><span class="t">${esc(t.name)} <span class="badge online">online</span></span>
       <span class="d wrap">${esc(t.desc)}</span>
       <span class="d wrap muted">Источник: ${esc(t.src)}</span></span>

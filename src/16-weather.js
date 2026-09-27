@@ -639,7 +639,7 @@ function wxHeroHtml(a, compact) {
   else if (day.windows.length) { title = 'Окна на сегодня прошли'; cls = 'muted'; }
   else { title = 'Сегодня лучше не лететь'; cls = 'warn'; }
   const hr = day.hours.find((x) => x.hh === now) || day.hours[0];
-  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${hr.top ? ` · ${wxNum(hr.alt)} на ${hr.top} м` : ''} · порывы до ${wxNum(hr.gust)}`;
+  const windNow = `<span class="nowrap">${wxNum(hr.w10)} м/с</span> у земли${hr.top ? ` · <span class="nowrap">${wxNum(hr.alt)} на ${hr.top} м</span>` : ''} · <span class="nowrap">порывы до ${wxNum(hr.gust)}</span>`;
   const stale = Date.now() - (+c.fetched || 0) > WX_STALE_MS
     ? ' · <span style="color:var(--warn)">устарел</span>' : '';
   const sub = compact ? windNow + stale

@@ -52,6 +52,29 @@
   :root[data-ui="gloves"] .strip:not(.tap) { height: 20px; }
   :root[data-ui="gloves"] .menu, :root[data-ui="gloves"] dialog { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-2); }
   :root[data-ui="gloves"] dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(0, 0, 0, 0.7); }
+  /* Шапка: действие — круглой кнопкой-иконкой, подпись в aria-label */
+  :root[data-ui="gloves"] .head .head-act { width: var(--seg); height: var(--seg); padding: 0; border-radius: 50%; }
+  :root[data-ui="gloves"] .head .head-act-t { display: none; }
+  :root[data-ui="gloves"] .head .head-act-ic { display: flex; }
+  /* Строка с кнопкой справа: не влезают рядом — кнопка уходит на свою
+     строку под текстом, а не наезжает на него (ревью 3.0). */
+  :root[data-ui="gloves"] div.row { flex-wrap: wrap; row-gap: 12px; }
+  :root[data-ui="gloves"] div.row > .grow { flex: 1 1 58%; }
+  :root[data-ui="gloves"] div.row > .grow + * { margin-left: auto; }
+  :root[data-ui="gloves"] div.tool-row > .grow { flex-basis: 100%; }
+  :root[data-ui="gloves"] .row .d { white-space: normal; }
+  /* Настольные действия в поле не нужны: перенос борта, удаление пункта */
+  :root[data-ui="gloves"] .row .row-move,
+  :root[data-ui="gloves"] .ck [data-act="pack-del-item"] { display: none; }
+  /* Сегменты карточки борта — 2×2 */
+  :root[data-ui="gloves"] .seg.four { display: grid; grid-template-columns: 1fr 1fr; }
+  /* Чек-лист: панель действий не прилипает — список важнее */
+  :root[data-ui="gloves"] .act-bar { position: static; margin: 12px 0 0; padding: 0; background: none; }
+  :root[data-ui="gloves"] .wx-hour-top { flex-wrap: wrap; }
+  :root[data-ui="gloves"] .bar-row { grid-template-columns: 1fr auto; row-gap: 4px; }
+  :root[data-ui="gloves"] .bar-row .n { grid-column: 1 / -1; white-space: normal; }
+  :root[data-ui="gloves"] .mode-card { font-size: 14px; }
+  :root[data-ui="gloves"] .mode-card small { font-size: 12.5px; }
   /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
   :root[data-ui="gloves"] [data-next] { animation: none; box-shadow: none; outline: 3px solid var(--accent); outline-offset: 3px; }
   :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; }

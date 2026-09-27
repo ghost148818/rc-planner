@@ -48,6 +48,7 @@ const ICONS = {
   whatsnew: ic('<path d="M10 3.6 11.3 8a1.6 1.6 0 0 0 1.1 1.1l4.4 1.3-4.4 1.3a1.6 1.6 0 0 0-1.1 1.1L10 17.2l-1.3-4.4a1.6 1.6 0 0 0-1.1-1.1L3.2 10.4l4.4-1.3A1.6 1.6 0 0 0 8.7 8L10 3.6Z"/><path d="M18 13.5l.8 2.7 2.7.8-2.7.8-.8 2.7-.8-2.7-2.7-.8 2.7-.8.8-2.7Z"/>'),
   update: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>'),
   move: ic('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M3.5 12h17"/>'),
+  edit: ic('<path d="M13.5 6.5 17.5 10.5"/><path d="M4 20l1-4.5L15.8 4.7a2 2 0 0 1 2.9 0l.6.6a2 2 0 0 1 0 2.9L8.5 19Z"/>'),
   paste: ic('<rect x="5" y="4" width="14" height="17.5" rx="2"/><path d="M9 4.5V3.4A1.4 1.4 0 0 1 10.4 2h3.2A1.4 1.4 0 0 1 15 3.4v1.1"/><path d="M12 9.5v7M8.8 13.3 12 16.5l3.2-3.2"/>'),
   // знаки состояний и служебные: вместо текстовых ✓ ✕ — ★ ☆ × +
   check: ic('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.2),
@@ -100,12 +101,17 @@ const TAB_OF = {
 // help — id раздела инструкции (RC.HELP.sections): круглая кнопка «?»
 // в шапке ведёт на #/help/<id>; стоит правее действия, чтобы действие
 // («Добавить», «⋯») оставалось на привычном месте у края.
+// Иконка кнопки действия в шапке: в режиме «В перчатках» остаётся только
+// она (круглая кнопка), подпись уходит в aria-label — иначе длинная
+// подпись («Новый набор») налезала на крупный заголовок.
+const HEAD_ACT_ICON = { 'edit-model': 'edit', 'pack-reset': 'update' };
 function pageHead(title, opts) {
   opts = opts || {};
   const act = !opts.act ? (opts.right || '')
     : opts.actIcon && ICONS[opts.actIcon]
       ? `<button class="head-act head-ic" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}" aria-haspopup="menu">${ICONS[opts.actIcon]}</button>`
-      : `<button class="head-act" data-act="${opts.act}">${opts.actLabel}</button>`;
+      : `<button class="head-act" data-act="${opts.act}" aria-label="${esc(opts.actLabel || '')}"><span class="head-act-ic">${
+          ICONS[HEAD_ACT_ICON[opts.act] || 'plus']}</span><span class="head-act-t">${opts.actLabel}</span></button>`;
   const help = opts.help
     ? `<button class="head-ic head-help" data-nav="#/help/${esc(opts.help)}" aria-label="Инструкция">${ICONS.help}</button>` : '';
   return `<div class="head">

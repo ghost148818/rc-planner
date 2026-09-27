@@ -212,7 +212,7 @@ function heatHtml(done) {
     const cls = d > today ? ' class="future"' : key === iso(today) ? ' class="today"' : '';
     cells += `<i${cls}${l ? ` data-l="${l}"` : ''}></i>`;
   }
-  return `<div class="h2">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
+  return `<div class="h2 opt">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
     <div class="card opt"><div class="heat" role="img" aria-label="Календарь полётов за ${HEAT_WEEKS} недель: ${days} ${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}">${cells}</div>
     <div class="heat-legend"><span>пн — вс по столбцам, неделя за неделей</span>
       <span class="sw">меньше <i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i> больше</span></div></div>`;
