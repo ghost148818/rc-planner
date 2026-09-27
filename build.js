@@ -37,7 +37,14 @@ for (const f of ICON_FILES) {
 
 // --- Источники ---
 const css = read('styles.css');
-const js = [
+// Исходники приложения — src/NN-*.js, порядок задаёт номер в имени.
+// Это обычные скрипты (не ES-модули): у них общая глобальная область,
+// поэтому вклейка подряд ничего не меняет в поведении. Тот же список
+// в том же порядке стоит в index.html (для запуска без сборки) —
+// test/checks.js сверяет их.
+const SRC = fs.readdirSync(path.join(ROOT, 'src')).filter((f) => /^\d\d-[\w-]+\.js$/.test(f)).sort();
+if (!SRC.length) fail('в src/ нет исходников');
+const js = "'use strict';\n" + [
   'db.js',
   'data/checklists.js',
   'data/presets.js',
@@ -46,8 +53,10 @@ const js = [
   'data/packing.js',
   'data/changelog.js',
   'data/help.js',
-  'app.js',
-].map((f) => '/* == ' + f + ' == */\n' + read(f)).join('\n');
+].concat(SRC.map((f) => 'src/' + f))
+  // 'use strict' ставится один раз в начале вклейки — только там он
+  // директива для всего скрипта; строки в начале файлов нужны запуску без сборки.
+  .map((f) => '/* == ' + f + ' == */\n' + read(f).replace(/^'use strict';\n/m, '')).join('\n');
 let html = read('index.html');
 const manifestSrc = read('pwa/manifest.json');
 let manifest;

@@ -9,6 +9,9 @@ const { ok, finish } = require('./helpers');
 
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+// Исходники приложения — src/NN-*.js по порядку, как их склеивает сборка.
+const SRC_FILES = fs.readdirSync(path.join(ROOT, 'src')).filter((f) => /^\d\d-[\w-]+\.js$/.test(f)).sort();
+const readApp = () => SRC_FILES.map((f) => read('src/' + f)).join('\n');
 
 // Загрузка data/*.js в песочницу.
 const sandbox = {};
@@ -37,7 +40,7 @@ console.log('Слоты оборудования:');
 // Литерал COMPONENTS из app.js исполняем в песочнице — он самодостаточен
 // (типы бортов записаны литералами). Так проверка видит настоящие ключи
 // и типы, а не разбор регуляркой.
-const appSrc = read('app.js');
+const appSrc = readApp();
 const compBlock = (appSrc.match(/const COMPONENTS = \[[\s\S]*?\n\];/) || [])[0];
 ok(!!compBlock, 'блок COMPONENTS найден в app.js');
 const cbox = {};
@@ -178,6 +181,9 @@ for (const c of RC.CHANGELOG) {
 
 console.log('Каркас:');
 const html = read('index.html');
+// Запуск без сборки: index.html подключает те же src/ в том же порядке.
+const devSrc = [...html.matchAll(/<script src="src\/([\w-]+\.js)"><\/script>/g)].map((m) => m[1]);
+ok(JSON.stringify(devSrc) === JSON.stringify(SRC_FILES), 'index.html подключает все src/ по порядку (' + SRC_FILES.length + ')');
 for (const m of ['build:css', 'build:js', 'build:pwa']) ok(html.includes('<!-- ' + m + ' -->'), 'маркер ' + m);
 ok(html.includes('Content-Security-Policy'), 'CSP задан');
 ok(html.includes('name="build"'), 'meta build есть');
@@ -200,7 +206,7 @@ for (const out of ['public/index.html', 'dist/rc-planner.html']) {
   ok(want.length >= 2 && want.every((h) => inCsp.has(h)), out + ': CSP содержит хэши всех ' + want.length + ' inline-скриптов');
 }
 
-const app = read('app.js');
+const app = readApp();
 // Каждый экран из TAB_OF обязан иметь отрисовщик в RENDERERS.
 const tabOf = (app.match(/const TAB_OF = \{([\s\S]*?)\};/) || [])[1] || '';
 const renderers = (app.match(/const RENDERERS = \{([\s\S]*?)\};/) || [])[1] || '';
