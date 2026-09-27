@@ -520,6 +520,27 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(wxU.startsWith('https://api.open-meteo.com/v1/forecast?') && !/pilot|notes|name=/.test(wxU),
     'запрос погоды: тот же хост, кроме координат наружу ничего не уходит');
 
+  // Проба пятнадцатая (3.0): набор сборов из копии с пунктами не массивом
+  // ронял «Сегодня» дома (счёт собранного) и экран «Сборы». NORM.packing
+  // приводит пункты к массиву объектов со строковым текстом.
+  await page.evaluate(async () => {
+    await window.RCDB.put('packing', { id: 'bad-pack', name: 'Проба сборов', items: 'не массив' });
+    await window.RCDB.put('packing', { id: 'bad-pack2', name: { x: 1 }, items: [null, { t: {} }, { t: 'Целый пункт', done: 'да' }] });
+    await window.loadAll();
+    location.hash = '#/packing';
+  });
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => UI.view === 'packing' && document.getElementById('views').innerText.includes('Проба сборов')),
+    '«Сборы» отрисованы со сломанным набором из копии');
+  ok(await page.evaluate(() => {
+    const a = S.packing.find((x) => x.id === 'bad-pack'), b = S.packing.find((x) => x.id === 'bad-pack2');
+    return Array.isArray(a.items) && !a.items.length && b.name === '' && b.items.length === 1 && b.items[0].done === true;
+  }), 'NORM: пункты сборов — массив, текст строкой, имя строкой');
+  await page.evaluate(() => { location.hash = '#/today'; });
+  await page.waitForTimeout(250);
+  ok(await page.evaluate(() => UI.view === 'today' && !!document.querySelector('#views .head h1')), '«Сегодня» со сломанными сборами из копии не падает');
+  await page.evaluate(async () => { await window.RCDB.del('packing', 'bad-pack'); await window.RCDB.del('packing', 'bad-pack2'); await window.loadAll(); });
+
   // Проба одиннадцатая: свой шаблон чек-листа из копии. Пункты не массивом
   // роняли «Шаблоны» (t.items.length), форму шаблона и смену шаблона на
   // чек-листе; ключ прототипа в типе показывал исходник функции, как в

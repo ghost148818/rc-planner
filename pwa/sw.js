@@ -44,11 +44,20 @@ self.addEventListener('fetch', (e) => {
 
   if (req.mode === 'navigate') {
     // Сеть первой: обновление доезжает сразу; офлайн — из кэша.
+    // В кэш оболочки кладём ТОЛЬКО саму оболочку: удачный HTML-ответ на
+    // корень области или index.html. Раньше туда попадала любая навигация
+    // внутри области — 404-страница или открытый по адресу файл картинки
+    // становились «приложением» при следующем офлайн-запуске (ревью 3.0).
     e.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./index.html', copy));
+          const path = new URL(req.url).pathname;
+          const scope = new URL(self.registration.scope).pathname;
+          const shell = path === scope || path === scope + 'index.html';
+          if (res.ok && shell && (res.headers.get('content-type') || '').includes('text/html')) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put('./index.html', copy));
+          }
           return res;
         })
         .catch(() => caches.match('./index.html'))

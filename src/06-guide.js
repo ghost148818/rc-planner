@@ -111,12 +111,16 @@ function applyNext() {
   UI.next = step;
   if (!step) return;
   const here = !step.views || step.views.includes(UI.view);
-  if (here) {
-    for (const sel of step.sels) {
-      const el = document.querySelector('#views ' + sel);
-      if (el) { el.setAttribute('data-next', step.key); return; }
+  // Селекторы собраны из id записей — те проверены validateBackup
+  // ([\w.-]), но подсветка не стоит падения экрана: ошибка — без подсветки.
+  try {
+    if (here) {
+      for (const sel of step.sels) {
+        const el = document.querySelector('#views ' + sel);
+        if (el) { el.setAttribute('data-next', step.key); return; }
+      }
     }
-  }
+  } catch (e) { return; }
   if (step.tab && TAB_OF[UI.view] !== step.tab) {
     const t = document.querySelector(`#tabbar .tab[data-nav="#/${step.tab}"]`);
     if (t) t.setAttribute('data-next', step.key);

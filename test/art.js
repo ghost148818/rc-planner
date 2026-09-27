@@ -14,25 +14,13 @@ const { slots } = JSON.parse(fs.readFileSync(path.join(DIR, 'slots.json'), 'utf8
 const byFile = new Map(slots.map((s) => [s.file, s]));
 const SERVICE = new Set(['slots.json', 'README.md', '.gitkeep']);
 
-// SVG грузится как картинка (mask-image) — скрипты там не исполняются,
-// но файл всё равно обязан быть чистым рисунком: без скриптов,
-// обработчиков, внешних ссылок, вложенных картинок и сущностей.
-const SVG_BAD = [
-  [/<script/i, 'тег <script>'],
-  [/\son[a-z]+\s*=/i, 'обработчик on…='],
-  [/javascript:/i, 'javascript:'],
-  [/<foreignObject/i, '<foreignObject>'],
-  [/<image/i, '<image>'],
-  [/<use[^>]+href\s*=\s*["'](?!#)/i, '<use> на внешний файл'],
-  [/(?:xlink:)?href\s*=\s*["']\s*(?:https?:|\/\/|data:)/i, 'внешняя ссылка href'],
-  [/url\(\s*["']?\s*(?:https?:|\/\/|data:)/i, 'внешний url()'],
-  [/@import/i, '@import'],
-  [/<!ENTITY|<!DOCTYPE/i, 'DOCTYPE/ENTITY'],
-  [/<(?:text|tspan)\b/i, 'текст в рисунке'],
-];
+// SVG проверяется белым списком из art-rules.js — тем же, что в сборке
+// (почему не чёрным — см. шапку art-rules.js).
+const { SLOT_FILE_RE, svgProblems } = require('../art-rules');
 
 (async () => {
   console.log('Картинки (assets/art):');
+  ok(slots.every((x) => SLOT_FILE_RE.test(x.file)), 'имена слотов безопасны (латиница, .webp или .svg)');
   const files = fs.readdirSync(DIR).filter((f) => !SERVICE.has(f));
   if (!files.length) {
     console.log('  картинок нет — используется запасной вид (процедурный фон и иконки)');
@@ -49,10 +37,8 @@ const SVG_BAD = [
     const kb = fs.statSync(p).size / 1024;
     ok(kb <= slot.maxKB, `${f}: ${kb.toFixed(0)} КБ ≤ ${slot.maxKB} КБ`);
     if (f.endsWith('.svg')) {
-      const src = fs.readFileSync(p, 'utf8');
-      ok(/^\s*(<\?xml[^>]*>\s*)?<svg\b/.test(src), f + ': начинается с <svg>');
-      ok(new RegExp('viewBox\\s*=\\s*["\']0 0 ' + slot.w + ' ' + slot.h + '["\']').test(src), `${f}: viewBox="0 0 ${slot.w} ${slot.h}"`);
-      for (const [re, what] of SVG_BAD) ok(!re.test(src), `${f}: нет ${what}`);
+      const bad = svgProblems(fs.readFileSync(p, 'utf8'), slot);
+      ok(!bad.length, f + ': SVG по белому списку' + (bad.length ? ' — ' + bad.join('; ') : ''));
       continue;
     }
     if (!sharp) { ok(false, f + ': нужен sharp для проверки растра — npm install'); continue; }

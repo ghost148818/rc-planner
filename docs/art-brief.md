@@ -146,8 +146,21 @@
 - Корень: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160">`.
 - Только контуры: `fill="none" stroke="#000" stroke-width="2"
   stroke-linecap="round" stroke-linejoin="round"`; допускаются мелкие
-  заливки-точки. Никаких `<text>`, `<image>`, `<script>`, фильтров,
-  градиентов, внешних ссылок и `style` с `url()`.
+  заливки-точки.
+- **Строгий белый список** (`art-rules.js`; сборка ПАДАЕТ на нарушении —
+  открытый по прямой ссылке SVG выполнялся бы на адресе приложения):
+  - элементы: `svg g path rect circle ellipse line polyline polygon defs
+    linearGradient radialGradient stop clipPath mask`;
+  - атрибуты: геометрия (`d x y x1 y1 x2 y2 cx cy r rx ry points width
+    height transform viewBox`), оформление (`fill stroke stroke-* opacity
+    fill-* clip-rule vector-effect`), `id`, `xmlns` (только SVG),
+    `clip-path`/`mask`/`fill` со ссылкой вида `url(#id)`;
+  - нельзя: `<title>`, `<desc>`, `<text>`, `<style>`, `<image>`, `<a>`,
+    `<use>`, `<script>`, фильтры `<fe…>`, анимации, атрибуты `style`
+    и `class`, префиксы пространств имён (`xlink:`, `sodipodi:`,
+    `inkscape:`), сущности `&…;`, обратный слэш, текст вне тегов.
+    Экспорт из редакторов обычно содержит лишнее — чистить руками или
+    писать SVG кодом.
 - Стиль — как иконки приложения (Lucide-подобный контур): простые
   геометричные линии, 15–40 путей, воздух по краям 10–15 px.
 

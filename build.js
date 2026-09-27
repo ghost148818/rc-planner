@@ -52,7 +52,16 @@ const css = CSS_FILES.map((f) => '/* == styles/' + f + ' == */\n' + read('styles
 // Проверки размеров, форматов и безопасности SVG — test/art.js.
 const ART_DIR = path.join(ROOT, 'assets', 'art');
 const ART_SLOTS = JSON.parse(read('assets/art/slots.json')).slots;
+const { SLOT_FILE_RE, svgProblems } = require('./art-rules');
+for (const a of ART_SLOTS) if (!SLOT_FILE_RE.test(a.file)) fail('slots.json: недопустимое имя файла «' + a.file + '»');
 const artPresent = ART_SLOTS.filter((a) => fs.existsSync(path.join(ART_DIR, a.file)));
+// SVG — белым списком (art-rules.js): открытый по прямому адресу, он
+// документ на origin приложения без CSP. Нарушение — сборка падает, и на
+// сайт такой файл не попадёт даже без npm test.
+for (const a of artPresent.filter((x) => x.file.endsWith('.svg'))) {
+  const bad = svgProblems(fs.readFileSync(path.join(ART_DIR, a.file), 'utf8'), a);
+  if (bad.length) fail('assets/art/' + a.file + ': ' + bad.join('; '));
+}
 const artUrl = (a) => 'url("art/' + a.file + '")';
 const artCss = artPresent.map((a) => {
   const name = a.file.replace(/\.\w+$/, '');

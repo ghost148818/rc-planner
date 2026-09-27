@@ -65,6 +65,14 @@ const NORM = {
       .map((i) => ({ t: i.t, hint: typeof i.hint === 'string' ? i.hint : '' }));
   },
   configs(c) { c.date = dateOrNull(c.date); },
+  // Набор сборов из копии: пункты не массивом роняли «Сегодня» (дома —
+  // счёт собранного) и экран «Сборы» (ревью 3.0; было и до 3.0).
+  packing(p) {
+    p.name = typeof p.name === 'string' ? p.name : '';
+    p.items = (Array.isArray(p.items) ? p.items : [])
+      .filter((i) => i && typeof i.t === 'string')
+      .map((i) => ({ t: i.t, done: !!i.done }));
+  },
   // Состояние пункта прогона идёт в data-state без esc(): строка
   // `"><img onerror=…>` из копии исполнялась в деталях полёта
   // (аудит 2026-09-05, живая проба). Только ok/fail/skip, иначе null.

@@ -44,6 +44,26 @@ const PUB = path.join(__dirname, '..', 'public');
   const controlled = await page.evaluate(() => !!navigator.serviceWorker.controller);
   ok(controlled, 'service worker контролирует страницу');
 
+  // Кэш оболочки (ревью 3.0): навигация на чужой адрес внутри области
+  // (404, файл картинки) НЕ подменяет index.html в кэше — иначе офлайн
+  // вместо приложения открывалась бы страница ошибки или картинка.
+  const probe = await context.newPage();
+  await probe.goto(srv.url + 'no-such-page').catch(() => {});
+  await probe.goto(srv.url + 'manifest.json').catch(() => {});
+  await probe.close();
+  await page.waitForTimeout(300);
+  const shellOk = await page.evaluate(async () => {
+    const keys = await caches.keys();
+    for (const k of keys) {
+      const r = await (await caches.open(k)).match('./index.html');
+      if (r) return (await r.text()).includes('id="tabbar"');
+    }
+    return false;
+  });
+  ok(shellOk, 'кэш оболочки: 404 и не-HTML не подменяют index.html');
+  ok(Array.isArray(manifest.shortcuts) && manifest.shortcuts.length === 3 &&
+    manifest.shortcuts.every((x) => /^\.\/#\/[a-z]+$/.test(x.url)), 'ярлыки manifest ведут на внутренние экраны');
+
   // Офлайн: страница открывается из кэша
   await context.setOffline(true);
   await page.reload();

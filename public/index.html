@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-Uuzkc1u1/sgj3VBLIIL2P5qO9dv4K0EMAdZ5E3ryBFU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-u7yMj2+rMy2k5RC3zXddMBlyp0aik3HWaP/71pacIUQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="6b8627ac32">
+  <meta name="build" content="9ae578940a">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -4242,6 +4242,14 @@ const NORM = {
       .map((i) => ({ t: i.t, hint: typeof i.hint === 'string' ? i.hint : '' }));
   },
   configs(c) { c.date = dateOrNull(c.date); },
+  // Набор сборов из копии: пункты не массивом роняли «Сегодня» (дома —
+  // счёт собранного) и экран «Сборы» (ревью 3.0; было и до 3.0).
+  packing(p) {
+    p.name = typeof p.name === 'string' ? p.name : '';
+    p.items = (Array.isArray(p.items) ? p.items : [])
+      .filter((i) => i && typeof i.t === 'string')
+      .map((i) => ({ t: i.t, done: !!i.done }));
+  },
   // Состояние пункта прогона идёт в data-state без esc(): строка
   // `"><img onerror=…>` из копии исполнялась в деталях полёта
   // (аудит 2026-09-05, живая проба). Только ok/fail/skip, иначе null.
@@ -4830,12 +4838,16 @@ function applyNext() {
   UI.next = step;
   if (!step) return;
   const here = !step.views || step.views.includes(UI.view);
-  if (here) {
-    for (const sel of step.sels) {
-      const el = document.querySelector('#views ' + sel);
-      if (el) { el.setAttribute('data-next', step.key); return; }
+  // Селекторы собраны из id записей — те проверены validateBackup
+  // ([\w.-]), но подсветка не стоит падения экрана: ошибка — без подсветки.
+  try {
+    if (here) {
+      for (const sel of step.sels) {
+        const el = document.querySelector('#views ' + sel);
+        if (el) { el.setAttribute('data-next', step.key); return; }
+      }
     }
-  }
+  } catch (e) { return; }
   if (step.tab && TAB_OF[UI.view] !== step.tab) {
     const t = document.querySelector(`#tabbar .tab[data-nav="#/${step.tab}"]`);
     if (t) t.setAttribute('data-next', step.key);
@@ -6088,6 +6100,11 @@ function syncAlarms() {
   const need = alarmSessions().length > 0;
   if (need && !ALARM) ALARM = setInterval(checkAlarms, 1000);
   else if (!need && ALARM) { clearInterval(ALARM); ALARM = null; }
+  // Полётов нет — звук больше не нужен: отпускаем аудиоустройство.
+  if (!need && AUDIO && !S.sessions.some((s) => !s.end)) {
+    try { AUDIO.close(); } catch (e) { /* уже закрыт */ }
+    AUDIO = null;
+  }
 }
 // Касание перед полётом с сигналом — будим звук заранее.
 function audioUnlockFor(aircraftId) {

@@ -301,6 +301,11 @@ function syncAlarms() {
   const need = alarmSessions().length > 0;
   if (need && !ALARM) ALARM = setInterval(checkAlarms, 1000);
   else if (!need && ALARM) { clearInterval(ALARM); ALARM = null; }
+  // Полётов нет — звук больше не нужен: отпускаем аудиоустройство.
+  if (!need && AUDIO && !S.sessions.some((s) => !s.end)) {
+    try { AUDIO.close(); } catch (e) { /* уже закрыт */ }
+    AUDIO = null;
+  }
 }
 // Касание перед полётом с сигналом — будим звук заранее.
 function audioUnlockFor(aircraftId) {

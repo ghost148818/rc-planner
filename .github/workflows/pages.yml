@@ -1,7 +1,7 @@
 # Выкладка на GitHub Pages: сборка public/ (та же папка, что у GitVerse
 # Pages) повторяется здесь — так на сайт попадают и картинки из
-# assets/art, закоммиченные без пересборки. build.js зависимостей
-# не требует: npm install не нужен.
+# assets/art, закоммиченные без пересборки. Перед выкладкой — проверки
+# данных и картинок (npm ci ставит sharp; браузеры Playwright не качаются).
 # Включить один раз: Settings → Pages → Source: GitHub Actions.
 # Для ветки, отличной от main: Settings → Environments → github-pages →
 # Deployment branches — добавить правило для этой ветки.
@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -32,7 +32,13 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # Проверки ДО выкладки: сборка сама падает на небезопасном SVG,
+      # test:data сверяет CSP-хэши и инварианты данных, test:art — размеры
+      # и форматы картинок (нужен sharp из devDependencies).
+      - run: npm ci --no-audit --no-fund
       - run: node build.js
+      - run: node test/checks.js
+      - run: node test/art.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
