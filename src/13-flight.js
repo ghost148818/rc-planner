@@ -32,6 +32,11 @@ function viewFlight() {
     h += '</div>';
   }
 
+  // Собранные, но не подготовленные борта — чек-лист в одно касание
+  // (3.0: без них вкладка без полёта за день была пустой).
+  const rest = armedFleet().filter((a) => !takeoffReady(a) && !activeSessionOf(a.id));
+  h += todayFleetBlock('К вылету', rest, String(rest.length));
+
   // Экран облегчён (2.0): только полёты за сегодня, вся история — в «Журнале».
   const done = S.sessions.filter((s) => s.end).sort((a, b) => b.start - a.start);
   const today = done.filter((s) => s.date === todayISO());

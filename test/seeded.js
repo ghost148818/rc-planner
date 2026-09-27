@@ -305,6 +305,12 @@ async function run(browser, tag, opts) {
   ok(!(await has('[data-act="takeoff-prepared"]')), `${tag}: дома кнопки «Взлёт» нет`);
   ok(await has('.banner.backup'), `${tag}: баннер резервной копии показан (копия 20 дней назад)`);
   ok(await has('.wx-hero'), `${tag}: герой погоды из кэша на «Сегодня»`);
+  // 3.0: панель готовности (три шкалы) — в перчатках скрыта как вторичная
+  ok((await count('.ready-panel .gauge-tile')) === 3, `${tag}: панель готовности — флот, АКБ, погода`);
+  ok((await page.isVisible('.ready-panel')) === !opts.gloves, `${tag}: панель готовности ${opts.gloves ? 'скрыта в перчатках' : 'видна'}`);
+  // Следующий шаг дома: АКБ b2 «после полёта» — подсвечен её чип, и он один
+  ok((await count('[data-next]')) === 1 && await has('[data-act="batt-charge"][data-id="b2"][data-next]'),
+    `${tag}: дома подсвечен ровно один шаг — зарядить АКБ после полёта`);
 
   // --- Флот, карточка борта (четыре сегмента) ---
   await shot('fleet', '#/fleet');
@@ -438,6 +444,8 @@ async function run(browser, tag, opts) {
   ok(await has('.prep-batt button.chip.st-ready[data-id="b3"]'),
     `${tag}: на чек-листе виден чип заряда АКБ — «заряжен»`);
   ok(await has('[data-act="start-flight"]'), `${tag}: с отмеченным зарядом «Начать полёт» есть`);
+  ok((await count('[data-next]')) === 1 && await has('.ck[data-ck="3"][data-next]'),
+    `${tag}: чек-лист подсвечивает первый пустой пункт`);
   // АКБ без состояния (b4 посеяна с пустым charge): полёт не начать,
   // «Отметить готовым» остаётся; тап по чипу возвращает кнопку.
   // Чек-лист уже открыт (UI.prep жив): адрес тот же, борт выбирать не надо
@@ -514,6 +522,8 @@ async function run(browser, tag, opts) {
   await STATE_STEPS.field(page);
   await shot('today-field', '#/today');
   ok((await count('[data-act="takeoff-prepared"]')) >= 1, `${tag}: на поле есть кнопка «Взлёт»`);
+  ok((await count('[data-next]')) === 1 && await has('.card.hero [data-act="takeoff-prepared"][data-next]'),
+    `${tag}: на поле подсвечен «Взлёт» героя`);
   ok(await has('.card.hero'), `${tag}: на поле герой — подготовленный борт`);
   ok(await has('.banner.backup'), `${tag}: баннер копии виден и на поле`);
   // Взлёт тоже начинает полёт: без отметки заряда вместо кнопки чип,
@@ -527,6 +537,7 @@ async function run(browser, tag, opts) {
   ok(await has('.card.hero'), `${tag}: борт без отметки заряда остаётся героем «на поле»`);
   ok(await has('.card.hero .banner.nocharge button.chip[data-act="batt-charge"]'),
     `${tag}: в герое — подсказка и чип заряда`);
+  ok(await has('.card.hero button.chip[data-next]'), `${tag}: без заряда подсвечен чип заряда героя`);
   await checkScreen(page, tag, 'today-field-nocharge', opts.viewport, !!opts.gloves);
   await page.screenshot({ path: path.join(OUT, `${tag}-today-field-nocharge.png`), fullPage: true });
   await nav(page, '#/flight');
@@ -552,9 +563,45 @@ async function run(browser, tag, opts) {
   ok(!(await has('[data-act="takeoff-prepared"]')), `${tag}: в полёте кнопки «Взлёт» нет`);
   ok(await has('#timer'), `${tag}: в полёте на «Сегодня» живой таймер`);
   ok(await has('[data-act="land-flight"]'), `${tag}: в полёте на «Сегодня» есть «Посадка»`);
+  ok(await has('[data-act="land-flight"][data-next]'), `${tag}: в полёте подсвечена «Посадка»`);
+  await nav(page, '#/journal');
+  ok(await has('#tabbar .tab[data-nav="#/flight"][data-next]'), `${tag}: с другой вкладки подсвечена вкладка «Полёт»`);
   await shot('session', '#/session/live');
   ok(await has('[data-act="land-flight"]'), `${tag}: на активном полёте есть кнопка «Посадка»`);
   ok(await has('.ring'), `${tag}: кольцо таймера на экране полёта`);
+  ok(await has('.air-pill') && (await page.textContent('#air-pill')).includes('В воздухе'), `${tag}: статус «В воздухе»`);
+  // Сигнал таймера (3.0): меню на экране полёта пишет минуты в карточку
+  // борта; кольцо считает до сигнала; время вышло — .over; сигнал —
+  // вибрация (navigator.vibrate подменён записью вызовов).
+  await page.evaluate(() => { window.__vib = []; navigator.vibrate = (p) => { window.__vib.push(p); return true; }; });
+  await page.click('[data-act="alarm-menu"]');
+  await page.waitForFunction(() => { const m = document.getElementById('alarm-menu'); return !!m && (typeof m.togglePopover === 'function' ? m.matches(':popover-open') : !m.hidden); });
+  await stamp(page);
+  await page.click('#alarm-menu [data-act="alarm-set"][data-min="2"]');
+  await painted(page);
+  ok(await page.evaluate(() => (S.aircraft.find((a) => a.id === 'a1') || {}).alarmMin === 2), `${tag}: сигнал 2 мин записан в карточку борта`);
+  ok((await page.textContent('.alarm-btn')).includes('02:00'), `${tag}: пилюля сигнала показывает 02:00`);
+  ok(await has('#ring.over') && (await page.textContent('#air-pill')).includes('Время вышло'), `${tag}: полёт дольше сигнала — кольцо «время вышло»`);
+  ok(await page.evaluate(() => window.__vib.length === 0), `${tag}: давно прошедший сигнал задним числом не срабатывает`);
+  // Полёт за секунду до сигнала и сигнал выбран заново (как сделал бы
+  // пилот): через секунду — вибрация и янтарное кольцо
+  const liveStart = await page.evaluate(async () => {
+    const s = await window.RCDB.get('sessions', 'live'); const was = s.start;
+    s.start = Date.now() - 118500; await window.RCDB.put('sessions', s); await window.loadAll(); render(true);
+    return was;
+  });
+  await page.click('[data-act="alarm-menu"]');
+  await page.waitForFunction(() => { const m = document.getElementById('alarm-menu'); return !!m && (typeof m.togglePopover === 'function' ? m.matches(':popover-open') : !m.hidden); });
+  await page.click('#alarm-menu [data-act="alarm-set"][data-min="2"]');
+  await page.waitForFunction(() => window.__vib.length > 0, null, { timeout: 6000 }).catch(() => {});
+  ok(await page.evaluate(() => window.__vib.length === 1), `${tag}: сигнал сработал один раз — вибрация`);
+  await page.waitForFunction(() => !!document.querySelector('#ring.over'), null, { timeout: 3000 }).catch(() => {});
+  ok(await has('#ring.over'), `${tag}: после сигнала кольцо янтарное`);
+  await page.evaluate(async (was) => {
+    const s = await window.RCDB.get('sessions', 'live'); s.start = was; await window.RCDB.put('sessions', s);
+    const a = await window.RCDB.get('aircraft', 'a1'); a.alarmMin = null; await window.RCDB.put('aircraft', a);
+    await window.loadAll();
+  }, liveStart);
   await shot('session-landed', '#/session/live', async (p) => {
     await p.click('[data-act="land-flight"]');
     await p.waitForSelector('[data-act="resume-flight"]');
@@ -578,6 +625,7 @@ async function run(browser, tag, opts) {
     await p.waitForSelector('[data-act="journal-tab"][data-tab="stats"][aria-pressed="true"]');
   });
   ok(await has('[data-act="journal-tab"][data-tab="stats"][aria-pressed="true"]'), `${tag}: вкладка «Статистика» включается`);
+  ok((await count('.heat i')) === 84 && (await count('.heat i[data-l]')) >= 10, `${tag}: календарь лётных дней — 12 недель, дни с полётами отмечены`);
   const menuOpen = () => { const m = document.getElementById('journal-menu'); return !!m && (typeof m.togglePopover === 'function' ? m.matches(':popover-open') : !m.hidden); };
   await shot('journal-menu', '#/journal', async (p) => {
     await p.click('[data-act="journal-tab"][data-tab="log"]');

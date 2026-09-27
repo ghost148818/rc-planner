@@ -51,7 +51,7 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
     await window.RCDB.put('aircraft', {
       id: 'attr-probe', name: 'Проба атрибута', type: 'plane', components: {},
       weight: payload, wingspan: payload, maxWind: payload, maxAlt: payload,
-      svcEvery: payload, svcEveryMin: payload,
+      svcEvery: payload, svcEveryMin: payload, alarmMin: payload,
     });
     await window.RCDB.put('batteries', {
       id: 'attr-batt', label: 'Проба АКБ', chem: 'lipo',

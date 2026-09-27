@@ -205,7 +205,11 @@ function openModal(title, body) {
     <div class="dlg-body">${body}</div>
   </dialog>`;
   const d = $('dialog', root);
+  // Фокус — на самом окне, а не на крестике: showModal ставит его на
+  // первую кнопку, и кольцо фокуса на «×» выглядело подсказкой «жми сюда».
+  d.tabIndex = -1;
   try { d.showModal(); } catch (e) { d.setAttribute('open', ''); }
+  try { d.focus({ preventScroll: true }); } catch (e) { /* старый браузер — фокус где был */ }
   document.body.classList.add('locked');
   d.addEventListener('cancel', (ev) => { ev.preventDefault(); dismissModal(); });
   d.addEventListener('click', (ev) => { if (ev.target === d) dismissModal(); });

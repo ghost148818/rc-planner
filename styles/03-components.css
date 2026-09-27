@@ -597,6 +597,7 @@
       overlay 0.28s var(--ease) allow-discrete, display 0.28s var(--ease) allow-discrete;
   }
   dialog[open] { transform: translateY(0); opacity: 1; }
+  dialog:focus, dialog:focus-visible { outline: none; }
   @starting-style {
     dialog[open] { transform: translateY(40px); opacity: 0; }
   }
