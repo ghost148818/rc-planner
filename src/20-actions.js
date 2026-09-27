@@ -765,7 +765,8 @@ const ACTIONS = {
   'ui-set': (el) => {
     const m = el.dataset.ui;
     if (!UI_MODES.includes(m)) return;
-    if (m === 'standard') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
+    // «Максимум» — умолчание: ключ снимается, остальные режимы запоминаются
+    if (m === 'max') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
     applyTheme();
     render(true);
   },

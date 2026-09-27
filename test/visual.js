@@ -106,15 +106,16 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     await context.close();
   }
 
-  // Режимы интерфейса (3.0): «В перчатках» — токены растут, панель и
-  // строки крупнее; «Максимум» и возврат к «Стандарту»; старый ключ
+  // Режимы интерфейса (3.0): по умолчанию «Максимум» (ключа нет);
+  // «В перчатках» — токены растут, панель и строки крупнее; «Стандарт»
+  // запоминается ключом, возврат к «Максимуму» его снимает; старый ключ
   // rcp.gloves переводится на rcp.ui.
   {
     const { context, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 } });
     await page.goto(srv.url);
     await page.waitForSelector('#tabbar .tab');
     const ui = () => page.evaluate(() => document.documentElement.dataset.ui);
-    ok((await ui()) === 'standard', 'по умолчанию режим «Стандарт»');
+    ok((await ui()) === 'max', 'по умолчанию режим «Максимум»');
     await page.evaluate(() => { location.hash = '#/more'; });
     await page.click('[data-act="ui-set"][data-ui="gloves"]');
     await page.waitForTimeout(60);
@@ -127,15 +128,23 @@ const SCREENS = ['today', 'fleet', 'flight', 'journal', 'more', 'tools'];
     await page.waitForSelector('#tabbar .tab');
     ok((await ui()) === 'gloves', 'перчатки переживают перезагрузку');
     await page.screenshot({ path: path.join(SHOTS, 'phone-gloves.png') });
-    await page.click('[data-act="ui-set"][data-ui="max"]');
-    await page.waitForTimeout(60);
-    ok((await ui()) === 'max', 'режим «Максимум» включается');
-    await page.screenshot({ path: path.join(SHOTS, 'phone-max.png') });
     await page.click('[data-act="ui-set"][data-ui="standard"]');
     await page.waitForTimeout(60);
-    ok((await ui()) === 'standard' && !(await page.evaluate(() => localStorage.getItem('rcp.ui'))), 'возврат к «Стандарту» снимает ключ');
+    ok((await ui()) === 'standard' && (await page.evaluate(() => localStorage.getItem('rcp.ui'))) === 'standard', 'режим «Стандарт» включается и запоминается');
+    await page.reload();
+    await page.waitForSelector('#tabbar .tab');
+    ok((await ui()) === 'standard', '«Стандарт» переживает перезагрузку');
+    await page.click('[data-act="ui-set"][data-ui="max"]');
+    await page.waitForTimeout(60);
+    ok((await ui()) === 'max' && !(await page.evaluate(() => localStorage.getItem('rcp.ui'))), 'возврат к «Максимуму» снимает ключ');
+    await page.screenshot({ path: path.join(SHOTS, 'phone-max.png') });
+    // Значение 'max' от прежней сборки 3.0 — тоже «Максимум»
+    await page.evaluate(() => localStorage.setItem('rcp.ui', 'max'));
+    await page.reload();
+    await page.waitForSelector('#tabbar .tab');
+    ok((await ui()) === 'max', 'сохранённый rcp.ui=max открывается в «Максимуме»');
     // Старый ключ режима «В перчатках» (до 3.0) — тот же режим после обновления
-    await page.evaluate(() => localStorage.setItem('rcp.gloves', '1'));
+    await page.evaluate(() => { localStorage.removeItem('rcp.ui'); localStorage.setItem('rcp.gloves', '1'); });
     await page.reload();
     await page.waitForSelector('#tabbar .tab');
     ok((await ui()) === 'gloves', 'старый rcp.gloves=1 открывается в перчатках');

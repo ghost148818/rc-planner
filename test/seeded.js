@@ -283,13 +283,14 @@ async function run(browser, tag, opts) {
   await page.waitForSelector('#tabbar .tab');
   await seed(page);
   // Режим интерфейса: gloves: true — «В перчатках», ui: 'max' — «Максимум»
-  const ui = opts.gloves ? 'gloves' : opts.ui || '';
+  // (умолчание: ключа нет), без ui — «Стандарт» (ключ standard).
+  const ui = opts.gloves ? 'gloves' : opts.ui || 'standard';
   await page.evaluate(({ theme, ui }) => {
     localStorage.setItem('rcp.theme', theme);
-    if (ui) localStorage.setItem('rcp.ui', ui); else localStorage.removeItem('rcp.ui');
+    if (ui === 'max') localStorage.removeItem('rcp.ui'); else localStorage.setItem('rcp.ui', ui);
     window.applyTheme();
   }, { theme: opts.theme, ui });
-  if (ui) ok(await page.evaluate((u) => document.documentElement.dataset.ui === u, ui), `${tag}: режим «${ui}» включён`);
+  ok(await page.evaluate((u) => document.documentElement.dataset.ui === u, ui), `${tag}: режим «${ui}» включён`);
 
   const shot = async (name, hash, pre, opts2) => {
     await nav(page, hash);

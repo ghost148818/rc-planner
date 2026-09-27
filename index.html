@@ -14,7 +14,7 @@
   <script>
     // Тема и режим интерфейса до первой отрисовки, чтобы не мигало.
     // Тот же расчёт живёт в src/02-utils.js как applyTheme()/uiMode():
-    // без сохранённого выбора тема берётся у системы, режим — «Стандарт».
+    // без сохранённого выбора тема берётся у системы, режим — «Максимум».
     // rcp.gloves='1' — старый ключ режима «В перчатках» (до 3.0).
     try {
       var d = document.documentElement, t = localStorage.getItem('rcp.theme');
@@ -24,10 +24,10 @@
       d.dataset.theme = t;
       var u = localStorage.getItem('rcp.ui');
       if (!u && localStorage.getItem('rcp.gloves') === '1') u = 'gloves';
-      d.dataset.ui = u === 'gloves' || u === 'max' ? u : 'standard';
+      d.dataset.ui = u === 'gloves' || u === 'standard' ? u : 'max';
     } catch (e) {
       document.documentElement.dataset.theme = 'dark';
-      document.documentElement.dataset.ui = 'standard';
+      document.documentElement.dataset.ui = 'max';
     }
   </script>
   <!-- build:pwa -->

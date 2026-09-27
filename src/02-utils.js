@@ -237,8 +237,10 @@ function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
 // Тема и режим интерфейса — только UI-предпочтения в localStorage.
 // rcp.theme: light|dark, отсутствует — как в системе.
-// rcp.ui: gloves|max, отсутствует — «Стандарт». До 3.0 режим «В перчатках»
-// хранился в rcp.gloves='1' — переводится на новый ключ при первом чтении.
+// rcp.ui: gloves|standard, отсутствует — «Максимум» (решение владельца
+// 2026-09-27: красивый вид по умолчанию). Старое значение 'max' тоже
+// читается как «Максимум». До 3.0 режим «В перчатках» хранился
+// в rcp.gloves='1' — переводится на новый ключ при первом чтении.
 // Тот же расчёт продублирован инлайн-скриптом в index.html, чтобы первая
 // отрисовка не мигала; здесь — источник для настроек и смены темы системы.
 const THEME_COLOR = { dark: '#0b1017', light: '#eef2f7' };
@@ -254,7 +256,7 @@ function uiMode() {
     lsSet('rcp.ui', u);
     lsDel('rcp.gloves');
   }
-  return UI_MODES.includes(u) ? u : 'standard';
+  return UI_MODES.includes(u) ? u : 'max';
 }
 function applyTheme() {
   let t = themePref();

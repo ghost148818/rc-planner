@@ -6,15 +6,15 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-3hcw8akuNtwuHEtiOFAqZf8yrSgxVQyMrfGngAu4lrs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-9MuJTblhNBvTivaGVXqsd7cfoZMmSmlOSObzGLPiGnA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="d606b5c68a">
+  <meta name="build" content="7c090f101a">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
     // Тема и режим интерфейса до первой отрисовки, чтобы не мигало.
     // Тот же расчёт живёт в src/02-utils.js как applyTheme()/uiMode():
-    // без сохранённого выбора тема берётся у системы, режим — «Стандарт».
+    // без сохранённого выбора тема берётся у системы, режим — «Максимум».
     // rcp.gloves='1' — старый ключ режима «В перчатках» (до 3.0).
     try {
       var d = document.documentElement, t = localStorage.getItem('rcp.theme');
@@ -24,10 +24,10 @@
       d.dataset.theme = t;
       var u = localStorage.getItem('rcp.ui');
       if (!u && localStorage.getItem('rcp.gloves') === '1') u = 'gloves';
-      d.dataset.ui = u === 'gloves' || u === 'max' ? u : 'standard';
+      d.dataset.ui = u === 'gloves' || u === 'standard' ? u : 'max';
     } catch (e) {
       document.documentElement.dataset.theme = 'dark';
-      document.documentElement.dataset.ui = 'standard';
+      document.documentElement.dataset.ui = 'max';
     }
   </script>
   <link rel="manifest" href="manifest.json">
@@ -44,8 +44,9 @@
 
    Три режима интерфейса — html[data-ui]:
      gloves   — «В перчатках»: крупно, контрастно, без эффектов и лишнего;
-     standard — по умолчанию: чисто, мягкое свечение следующего шага;
-     max      — «Максимум»: стекло, аврора, неон, живые рамки.
+     standard — спокойный: чисто, мягкое свечение следующего шага;
+     max      — «Максимум», по умолчанию (ключа rcp.ui нет): стекло,
+                аврора, неон, живые рамки.
    Тема — html[data-theme] (dark | light), выбор хранит localStorage. */
 
 @layer reset, tokens, base, layout, components, screens, effects, modes, art, print;
@@ -3328,7 +3329,7 @@ RC.CHANGELOG = [
     title: 'Кокпит: новый дизайн, подсветка следующего шага, сигнал таймера',
     items: [
       'Новый вид «Кокпит»: графит с приборным цианом, плавающая панель вкладок, живые переходы между экранами. Тёмная и светлая темы переделаны целиком.',
-      'Три режима интерфейса в «Ещё»: «В перчатках» — крупно и только главное, «Стандарт» и «Максимум» — живой фон, стекло и неоновые рамки.',
+      'Три режима интерфейса в «Ещё»: «Максимум» по умолчанию — живой фон, стекло и неоновые рамки; «Стандарт» спокойнее; «В перчатках» — крупно и только главное.',
       'Подсветка следующего шага: на экране светится ровно одна кнопка — посадка, итог, взлёт, заряд, осмотр, первый пустой пункт чек-листа.',
       'Экран полёта в стиле HUD: кольцо со шкалой, статус «В воздухе» и «Время вышло». Во время полёта с любой вкладки подсвечена «Полёт».',
       'Сигнал таймера — «время на аккумулятор»: вибрация и три гудка, когда время выходит. Задаётся на экране полёта или в карточке борта.',
@@ -3536,8 +3537,8 @@ RC.HELP = {
         'Там же — три режима интерфейса, выбор карточкой с картинкой:',
         { list: [
           '«В перчатках» — для поля: кнопки, строки, клетки чек-листа и панель вкладок крупнее, текст контрастнее; фона, стекла и анимаций нет, вторичные блоки (панель готовности, календарь лётных дней) скрыты.',
-          '«Стандарт» — по умолчанию: спокойный тёмный или светлый вид, мягкая подсветка следующего шага.',
-          '«Максимум» — живой фон, стеклянные карточки, неоновые рамки у главного. Выглядит ярче и тратит чуть больше батареи.',
+          '«Стандарт» — спокойный тёмный или светлый вид, мягкая подсветка следующего шага. Экономнее к батарее.',
+          '«Максимум» — по умолчанию: живой фон, стеклянные карточки, неоновые рамки у главного. Выглядит ярче и тратит чуть больше батареи.',
         ] },
         'Режим переживает перезапуск. Если раньше был включён «В перчатках», он сохранится после обновления.',
         { h: 'Ярлыки на значке' },
@@ -4178,8 +4179,10 @@ function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
 // Тема и режим интерфейса — только UI-предпочтения в localStorage.
 // rcp.theme: light|dark, отсутствует — как в системе.
-// rcp.ui: gloves|max, отсутствует — «Стандарт». До 3.0 режим «В перчатках»
-// хранился в rcp.gloves='1' — переводится на новый ключ при первом чтении.
+// rcp.ui: gloves|standard, отсутствует — «Максимум» (решение владельца
+// 2026-09-27: красивый вид по умолчанию). Старое значение 'max' тоже
+// читается как «Максимум». До 3.0 режим «В перчатках» хранился
+// в rcp.gloves='1' — переводится на новый ключ при первом чтении.
 // Тот же расчёт продублирован инлайн-скриптом в index.html, чтобы первая
 // отрисовка не мигала; здесь — источник для настроек и смены темы системы.
 const THEME_COLOR = { dark: '#0b1017', light: '#eef2f7' };
@@ -4195,7 +4198,7 @@ function uiMode() {
     lsSet('rcp.ui', u);
     lsDel('rcp.gloves');
   }
-  return UI_MODES.includes(u) ? u : 'standard';
+  return UI_MODES.includes(u) ? u : 'max';
 }
 function applyTheme() {
   let t = themePref();
@@ -8833,7 +8836,8 @@ const ACTIONS = {
   'ui-set': (el) => {
     const m = el.dataset.ui;
     if (!UI_MODES.includes(m)) return;
-    if (m === 'standard') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
+    // «Максимум» — умолчание: ключ снимается, остальные режимы запоминаются
+    if (m === 'max') lsDel('rcp.ui'); else lsSet('rcp.ui', m);
     applyTheme();
     render(true);
   },
