@@ -89,7 +89,7 @@ function renderTabbar() {
   const live = activeSessions().length > 0;
   $('#tabbar').innerHTML = TABS.map((t) =>
     `<button class="tab" data-nav="#/${t.id}" ${t.id === active ? 'aria-current="page"' : ''}${t.id === 'flight' && live ? ' aria-label="Полёт — идёт полёт"' : ''}>
-      ${ICONS[t.id]}${t.id === 'flight' && live ? '<i class="live" aria-hidden="true"></i>' : ''}<span>${t.label}</span></button>`).join('');
+      ${t.id === active ? '<i class="tab-ind" aria-hidden="true"></i>' : ''}${ICONS[t.id]}${t.id === 'flight' && live ? '<i class="live" aria-hidden="true"></i>' : ''}<span>${t.label}</span></button>`).join('');
 }
 
 // render — обёртка над paint(): при поддержке View Transitions и без
@@ -132,6 +132,7 @@ function paint(keepScroll, toTop) {
   // класс тот же, колонки складывает CSS.
   views.classList.toggle('two-col', UI.view === 'today');
   renderTabbar();
+  applyNext(); // подсветка следующего шага — на готовой разметке
 
   if (keepScroll) {
     window.scrollTo(0, y);
@@ -157,12 +158,24 @@ function paint(keepScroll, toTop) {
       if (t && cur && !cur.end && !cur.landedAt) {
         const ms = Date.now() - cur.start;
         t.innerHTML = clockHtml(ms);
-        // кольцо экрана полёта: заполнение относительно обычной длительности
+        // кольцо экрана полёта: заполнение относительно цели (сигнал
+        // таймера или обычная длительность); цель пройдена — .over
         const ring = $('#ring-fill');
-        if (ring) ring.setAttribute('stroke-dashoffset', ringOffset(ms, +ring.dataset.avg || 0));
+        if (ring) {
+          const target = +ring.dataset.target || 0;
+          ring.setAttribute('stroke-dashoffset', ringOffset(ms, target));
+          const over = target > 0 && ms >= target;
+          const box = $('#ring');
+          if (box && box.classList.contains('over') !== over) {
+            box.classList.toggle('over', over);
+            const pill = $('#air-pill');
+            if (pill) { pill.classList.toggle('alarm', over); pill.textContent = over ? 'Время вышло' : 'В воздухе'; }
+          }
+        }
       } else { clearInterval(TIMER); TIMER = null; }
     }, 1000);
   }
+  syncAlarms();
   // Экран не гаснет только на экране полёта в воздухе; в остальных
   // случаях (посадка, отмена, уход с экрана) замок отпускается здесь.
   syncWakeLock();

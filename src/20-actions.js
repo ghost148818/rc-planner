@@ -165,7 +165,7 @@ const ACTIONS = {
     openModelForm({
       name: cloneName(src.name), type: src.type, manufacturer: src.manufacturer,
       weight: src.weight, wingspan: src.wingspan,
-      maxWind: src.maxWind, maxAlt: src.maxAlt,
+      maxWind: src.maxWind, maxAlt: src.maxAlt, alarmMin: src.alarmMin,
     }, null, null, src.id);
   },
   'model-empty': () => { closeModal(); openModelForm(null); },
@@ -251,6 +251,7 @@ const ACTIONS = {
       return;
     }
     it.state = it.state === 'ok' ? null : 'ok';
+    if (it.state) haptic();
     UI.prep.lastIdx = i; // эта клетка получит анимацию отметки
     UI.prep.menuIdx = null;
     render(true);
@@ -311,6 +312,8 @@ const ACTIONS = {
     if (!pb) { alert('Без аккумулятора не летаем: установите АКБ в борт.'); render(true); return; }
     if (!chargeKnown(pb)) { alert('Отметьте заряд аккумулятора: «заряжен» или «после полёта».'); render(true); return; }
     UI.prep = null; // сразу, до await: двойной тап не должен создать два полёта
+    audioUnlockFor(p.aircraftId);
+    haptic(20);
     const run = await savePrepRun(p);
     await takeoff(p.aircraftId, run.id, p.siteId);
   },
@@ -386,6 +389,8 @@ const ACTIONS = {
     if (act) { go('#/session/' + act.id); return; } // у борта один полёт за раз
     const a = S.aircraft.find((x) => x.id === el.dataset.id);
     if (!a || !takeoffReady(a)) { render(); return; }
+    audioUnlockFor(a.id);
+    haptic(20);
     const pr = a.prepared;
     await takeoff(a.id, pr.runId, pr.siteId);
   },
@@ -402,6 +407,7 @@ const ACTIONS = {
   'land-flight': async (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
     if (!s || s.end || s.landedAt) return;
+    haptic(30);
     s.landedAt = Date.now();
     await put('sessions', s);
     render();
@@ -419,7 +425,7 @@ const ACTIONS = {
   },
   'resume-flight': async (el) => {
     const s = S.sessions.find((x) => x.id === el.dataset.id);
-    if (s && !s.end) { s.landedAt = null; await put('sessions', s); render(); }
+    if (s && !s.end) { audioUnlockFor(s.aircraftId); s.landedAt = null; await put('sessions', s); render(); }
   },
   'discard-flight': (el) => confirmModal('Удалить эту запись? Полёт не будет засчитан.',
     'discard-flight-yes', `data-id="${el.dataset.id}"`),
@@ -618,6 +624,27 @@ const ACTIONS = {
     render(true);
   },
   'wx-help': () => openModal('Как считается окно', wxHelpHtml()),
+  // Сигнал таймера с экрана полёта: меню минут, выбор — в карточку борта.
+  'alarm-menu': (el) => {
+    toggleMenu(el, 'alarm-menu');
+    const m = $('#alarm-menu');
+    const cur = m && menuOpen(m) && m.querySelector('[aria-checked="true"]');
+    if (cur) m.scrollTop = Math.max(0, cur.offsetTop - m.clientHeight / 2);
+  },
+  'alarm-set': async (el) => {
+    const s = S.sessions.find((x) => x.id === UI.arg);
+    const a = s && S.aircraft.find((x) => x.id === s.aircraftId);
+    closeMenus();
+    if (!a) return;
+    const v = +el.dataset.min;
+    a.alarmMin = el.dataset.min !== '' && v > 0 && v <= 120 ? v : null;
+    if (a.alarmMin) audioUnlock(); // касание — единственный момент, когда звук можно разбудить
+    // Новый сигнал раньше уже прошедшего времени не должен гудеть задним числом
+    if (s && Date.now() - s.start > alarmMs(a) + ALARM_WINDOW_MS) ALARM_FIRED.add(s.id);
+    else if (s) ALARM_FIRED.delete(s.id);
+    await put('aircraft', a);
+    render(true);
+  },
   // Превью Windy прямо на странице (embed-виджет; iframe через DOM —
   // сборка сторожит литерал как офлайн-ресурс, а это online по кнопке).
   'wx-windy': (el) => {

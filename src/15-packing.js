@@ -26,7 +26,7 @@ function viewPack() {
   h += `<div class="progress"><i style="width:${p.items.length ? Math.round(done / p.items.length * 100) : 0}%"></i></div>
     <div class="small muted" style="margin-bottom:8px">${done} из ${p.items.length}</div>`;
   h += '<div class="card flat">';
-  h += p.items.map((it, i) => `<div class="ck" data-state="${it.done ? 'ok' : ''}">
+  h += p.items.map((it, i) => `<div class="ck" data-ck="${i}" data-state="${it.done ? 'ok' : ''}">
       <button class="ck-main" data-act="pack-toggle" data-i="${i}">
         <span class="grow"><span class="t">${esc(it.t)}</span></span></button>
       <button class="st" data-act="pack-toggle" data-i="${i}"${UI.packLastIdx === i ? ` style="view-transition-name: ck-${i}"` : ''} aria-label="${it.done ? 'Собрано' : 'Не собрано'}">${it.done ? ICONS.check : ''}</button>

@@ -189,6 +189,35 @@ function statSections(done) {
   return out;
 }
 
+// Календарь лётных дней (3.0): последние 12 недель, столбец — неделя
+// с понедельника, яркость клетки — налёт дня. Считается из того же
+// отфильтрованного списка, что и остальная статистика; даты — локальные,
+// как у полёта (s.date = todayISO() при взлёте).
+const HEAT_WEEKS = 12;
+function heatHtml(done) {
+  const byDay = new Map();
+  for (const s of done) byDay.set(s.date, (byDay.get(s.date) || 0) + (s.durationMin || 0));
+  const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const today = new Date(todayISO() + 'T12:00:00');
+  const start = new Date(today);
+  start.setDate(today.getDate() - ((today.getDay() + 6) % 7) - 7 * (HEAT_WEEKS - 1));
+  let cells = '', days = 0;
+  for (let i = 0; i < HEAT_WEEKS * 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = iso(d);
+    const min = byDay.get(key) || 0;
+    if (min || byDay.has(key)) days++;
+    const l = !byDay.has(key) ? 0 : min < 15 ? 1 : min < 45 ? 2 : 3;
+    const cls = d > today ? ' class="future"' : key === iso(today) ? ' class="today"' : '';
+    cells += `<i${cls}${l ? ` data-l="${l}"` : ''}></i>`;
+  }
+  return `<div class="h2">Лётные дни <span class="cnt">${HEAT_WEEKS} недель · ${days} ${plural(days, 'день', 'дня', 'дней')}</span></div>
+    <div class="card opt"><div class="heat" role="img" aria-label="Календарь полётов за ${HEAT_WEEKS} недель: ${days} ${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}">${cells}</div>
+    <div class="heat-legend"><span>пн — вс по столбцам, неделя за неделей</span>
+      <span class="sw">меньше <i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i> больше</span></div></div>`;
+}
+
 // Вкладка «Статистика» журнала: list — уже отфильтрованный по борту
 // список; statSections не меняется, фильтр применён до расчёта.
 function journalStatsHtml(list) {
@@ -202,6 +231,8 @@ function journalStatsHtml(list) {
     <div class="stat"><div class="v">${fmtDur(total / done.length)}</div><div class="k">средний полёт</div></div>
     <div class="stat"><div class="v">${days}</div><div class="k">${plural(days, 'лётный день', 'лётных дня', 'лётных дней')}</div></div>
   </div>`;
+
+  h += heatHtml(done);
 
   for (const sec of statSections(done)) {
     if (!sec.rows.length) continue;

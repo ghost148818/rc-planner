@@ -48,6 +48,8 @@ function openModelForm(a, presetId, saved, cloneId) {
     </div>
     <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
       Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>
+    ${field('Сигнал таймера полёта, мин', `<input type="number" name="alarmMin" min="0.5" max="120" step="0.5" value="${numVal(a.alarmMin)}" placeholder="напр. 5">`,
+      'время на аккумулятор: вибрация и звук в полёте, кольцо таймера считает до него. Пусто — без сигнала')}
     ${field('Фото', `<input type="file" name="photo" accept="image/*">`,
       a.photo ? 'Фото уже есть — новое заменит его'
         : cloneId ? 'Фото образца не копируется — снимите новое' : '')}
@@ -354,6 +356,8 @@ const FORMS = {
     a.maxAlt = maxAlt ? Math.min(WX_ALT_MAX, Math.max(10, maxAlt)) : null;
     const svcEvery = Math.round(+fd.get('svcEvery'));
     a.svcEvery = svcEvery > 0 ? Math.min(999, svcEvery) : null;
+    const alarmMin = Math.round(+String(fd.get('alarmMin') || '').replace(',', '.') * 2) / 2;
+    a.alarmMin = alarmMin > 0 ? Math.min(120, alarmMin) : null;
     const svcEveryMin = Math.round(+fd.get('svcEveryMin'));
     a.svcEveryMin = svcEveryMin > 0 ? Math.min(99999, svcEveryMin) : null;
     a.notes = fd.get('notes').trim();

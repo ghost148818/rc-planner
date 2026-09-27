@@ -282,12 +282,14 @@ async function run(browser, tag, opts) {
   await page.goto(opts.url);
   await page.waitForSelector('#tabbar .tab');
   await seed(page);
-  await page.evaluate(({ theme, gloves }) => {
+  // Режим интерфейса: gloves: true — «В перчатках», ui: 'max' — «Максимум»
+  const ui = opts.gloves ? 'gloves' : opts.ui || '';
+  await page.evaluate(({ theme, ui }) => {
     localStorage.setItem('rcp.theme', theme);
-    if (gloves) localStorage.setItem('rcp.ui', 'gloves'); else localStorage.removeItem('rcp.ui');
+    if (ui) localStorage.setItem('rcp.ui', ui); else localStorage.removeItem('rcp.ui');
     window.applyTheme();
-  }, { theme: opts.theme, gloves: !!opts.gloves });
-  if (opts.gloves) ok(await page.evaluate(() => document.documentElement.dataset.ui === 'gloves'), `${tag}: режим «В перчатках» включён`);
+  }, { theme: opts.theme, ui });
+  if (ui) ok(await page.evaluate((u) => document.documentElement.dataset.ui === u, ui), `${tag}: режим «${ui}» включён`);
 
   const shot = async (name, hash, pre, opts2) => {
     await nav(page, hash);
@@ -701,6 +703,8 @@ async function run(browser, tag, opts) {
   await run(browser, 'light', { url: srv.url, viewport: phone, theme: 'light', scale: 2 });
   await run(browser, 'gloves', { url: srv.url, viewport: phone, theme: 'dark', gloves: true, scale: 2 });
   await run(browser, 'desktop', { url: srv.url, viewport: { width: 1280, height: 800 }, theme: 'dark' });
+  await run(browser, 'max', { url: srv.url, viewport: phone, theme: 'dark', ui: 'max', scale: 2 });
+  await run(browser, 'max-light', { url: srv.url, viewport: phone, theme: 'light', ui: 'max', scale: 2 });
 
   // Приветствие первого запуска: контекст без rcp.hi (welcome: true —
   // helpers не гасят окно). Три шага, «Дальше» → «Начать» засчитывает
@@ -782,7 +786,8 @@ async function run(browser, tag, opts) {
     await page.click('.banner.ok [data-nav="#/today"]');
     await painted(page);
     ok((await text()).includes('Обучение · осталось 4 из 5'), 'обучение: шаг с бортом засчитан');
-    ok((await cnt('#views .t[style*="line-through"]')) === 1, 'обучение: пройденный шаг зачёркнут');
+    ok((await cnt('#views .row.done')) === 1, 'обучение: пройденный шаг зачёркнут');
+    ok((await cnt('#views [data-next]')) === 1 && (await cnt('#views [data-onb][data-next]')) === 1, 'обучение: подсвечен ровно один шаг — следующий');
     // Остальные шаги — записью в базу (как это сделали бы действия приложения)
     await page.evaluate(async () => {
       const now = Date.now();

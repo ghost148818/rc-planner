@@ -89,12 +89,8 @@ function backupBannerHtml() {
     <button class="btn-sm btn" data-act="export-all">Сохранить</button></div>`;
 }
 
-// Подпись под датой в шапке: состояние дня словами.
-const TODAY_HINT = {
-  field: '<span style="color:var(--ok)">на поле</span>',
-  flying: '<span style="color:var(--ok)">в полёте</span>',
-  debrief: '<span class="muted">разбор дня</span>',
-};
+// Подпись под датой в шапке: состояние дня словами — пилюлей с точкой.
+const TODAY_HINT = { home: 'дома', field: 'на поле', flying: 'в полёте', debrief: 'разбор дня' };
 
 // «Начало работы»: пять шагов, каждый ведёт прямо к действию.
 // Первый запуск — засчитано всё, что уже есть (since = 0, предикаты те же,
@@ -128,7 +124,7 @@ function onboardingSteps() {
 function viewToday() {
   const state = todayState();
   const date = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
-  let h = pageHead('Сегодня', { sub: date + (TODAY_HINT[state] ? ' · ' + TODAY_HINT[state] : ''), help: 'today' });
+  let h = pageHead('Сегодня', { sub: `${date} <span class="state-pill ${state}">${TODAY_HINT[state]}</span>`, help: 'today' });
 
   if (UI.updateReady) {
     h += `<div class="banner ok">Доступно обновление приложения.
@@ -151,11 +147,15 @@ function viewToday() {
   if (onboarding) {
     // «Обучение заново» — тот же путь, что при первом запуске: пройденные
     // шаги зачёркиваются, блок исчезает, когда не осталось ни одного.
-    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat">`;
-    h += steps.map(([t, d, ok2, attrs, icon]) => ok2
-      ? `<div class="row" style="opacity:0.55"><span class="row-ic" style="color:var(--ok)">${ICONS.templates}</span>
-         <span class="grow"><span class="t" style="text-decoration:line-through">${t}</span></span></div>`
-      : rowBtn(attrs, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
+    const doneN = steps.length - todo;
+    h += `<div class="h2">${tour ? 'Обучение' : 'Начало работы'} · осталось ${todo} из ${steps.length}</div><div class="card flat onb">
+      <div class="onb-head"><span class="grow"><span class="t">Шаг ${doneN + 1} из ${steps.length}</span>
+        <span class="d">подсветка ведёт к следующему действию</span>
+        <span class="progress"><i style="width:${Math.round(doneN / steps.length * 100)}%"></i></span></span></div>`;
+    h += steps.map(([t, d, ok2, attrs, icon], i) => ok2
+      ? `<div class="row done"><span class="row-ic">${ICONS.check}</span>
+         <span class="grow"><span class="t">${t}</span></span></div>`
+      : rowBtn(attrs + ` data-onb="${i}"`, `<span class="grow"><span class="t">${t}</span><span class="d wrap">${d}</span></span>`, icon)).join('');
     if (tour) h += rowBtn('data-act="dismiss-tour"', `<span class="grow"><span class="t">Завершить обучение</span><span class="d wrap">Скрыть этот блок</span></span>`);
     h += '</div>';
   }
@@ -173,6 +173,45 @@ function viewToday() {
     : todayHome(onboarding);
   return `<div class="today-main"><div class="today-top">${h}</div>${part.main}</div>
     <aside class="today-side">${part.side}</aside>`;
+}
+
+// Панель готовности (3.0): три шкалы-кольца одним взглядом — сколько
+// бортов собрано и готово, сколько АКБ заряжено, можно ли лететь сейчас
+// (по свежему кэшу прогноза, без запросов). Тап — на нужный экран.
+// В перчатках скрыта (.opt): там только главное.
+function readyPanelHtml() {
+  if (!S.aircraft.length) return '';
+  const armed = armedFleet();
+  const readyN = armed.filter((a) => ['ready', 'unknown'].includes(statusOf(a))).length;
+  const batts = S.batteries.filter((b) => b.status !== 'retired');
+  const charged = batts.filter((b) => b.charge === 'ready').length;
+  const pct = (n, d) => (d ? Math.round(n / d * 100) : 0);
+  let wx = { p: 0, c: 'var(--unk)', v: ICONS.weather, t: 'нет прогноза' };
+  try {
+    const c = wxCacheFresh();
+    const idx = c ? (c.json.daily.time || []).indexOf(wxTodayISO()) : -1;
+    const lim = wxLimitsOf(armed[0]);
+    const day = idx < 0 ? null : wxDay(c.json, idx, lim.maxW, lim.alt);
+    const hr = day && day.hours.find((x) => x.hh === wxNowHour());
+    if (hr) {
+      const load = wxHourLoad(hr, lim.maxW);
+      wx = {
+        p: hr.verdict === 'bad' ? 100 : Math.max(8, Math.round(Math.min(1, load) * 100)),
+        c: hr.verdict === 'ok' ? 'var(--ok)' : hr.verdict === 'warn' ? 'var(--warn)' : 'var(--bad)',
+        v: `<b>${wxNum(hr.w10)}<i>м/с</i></b>`, t: WX_WORDS[hr.verdict] + ' сейчас',
+      };
+    }
+  } catch (e) { /* кэш не разобран — плитка без прогноза */ }
+  const tile = (nav, p, c, v, title, sub, label) => `<button class="gauge-tile" data-nav="${nav}" aria-label="${label}">
+      <span class="gauge-ring" style="--p:${p};--c:${c}">${v}</span>
+      <span class="gt-t">${title}</span><span class="gt-d">${sub}</span></button>`;
+  return `<div class="ready-panel opt">
+    ${tile('#/fleet', pct(readyN, S.aircraft.length), 'var(--ok)', `<b>${readyN}/${S.aircraft.length}</b>`,
+      'Флот', 'готовы к вылету', `Флот: готовы ${readyN} из ${S.aircraft.length}`)}
+    ${tile('#/batteries', pct(charged, batts.length), 'var(--accent)', `<b>${charged}/${batts.length}</b>`,
+      'АКБ', 'заряжены', `Аккумуляторы: заряжены ${charged} из ${batts.length}`)}
+    ${tile('#/weather', wx.p, wx.c, wx.v, 'Погода', wx.t, 'Погода сейчас: ' + wx.t)}
+  </div>`;
 }
 
 // Правая колонка «Сегодня»: условия (герой или строка), полёты за день,
@@ -208,7 +247,7 @@ function todayFlights() {
 // Дома: погода из кэша, «Перед выездом», главная кнопка, «К вылету»,
 // открытое обслуживание, напоминание о копии.
 function todayHome(onboarding) {
-  let h = '';
+  let h = readyPanelHtml();
   const armed = armedFleet();
 
   // Перед выездом: сборы, разряженные АКБ, подошедший регламент.
@@ -264,7 +303,7 @@ function todayHome(onboarding) {
     h += todayFleetBlock('К вылету', armed, `${armed.length} из ${S.aircraft.length}`);
   } else if (!onboarding) {
     h += '<div class="h2">К вылету</div><div class="card flat">' +
-      rowBtn('data-nav="#/fleet"', `<span class="grow"><span class="t">Соберите борт к вылету</span>
+      rowBtn('data-nav="#/fleet" data-next-arm', `<span class="grow"><span class="t">Соберите борт к вылету</span>
       <span class="d wrap">Установите аккумулятор в карточке борта — он появится здесь</span></span>`, 'batteries') + '</div>';
   }
 
@@ -281,6 +320,7 @@ function todayField() {
   const b = armedBattery(hero);
   const site = S.sites.find((s) => s.id === hero.prepared.siteId);
   let h = `<div class="card hero">
+    <div class="hero-kicker">${chargeKnown(b) ? 'Готов к вылету' : 'Почти готов'}${ready.length > 1 ? ` · ещё ${ready.length - 1}` : ''}</div>
     <div class="hero-top">
       ${aircraftThumb(hero, true)}
       <span class="grow">
@@ -306,6 +346,7 @@ function todayFlying(s) {
   const landed = !!s.landedAt;
   const ms = (landed ? s.landedAt : Date.now()) - s.start;
   let h = `<div class="card hero hero-flight">
+    <div class="hero-kicker${landed ? ' kick-land' : ''}">${landed ? 'Сел · итог не записан' : 'В воздухе'}</div>
     <div class="hero-top">
       ${a ? aircraftThumb(a, true) : ''}
       <span class="grow">

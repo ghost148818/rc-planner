@@ -121,7 +121,7 @@ function viewPrep() {
   // одна, остальные не моргают. Имя уникально в пределах страницы (ck-<i>).
   h += items.map((it, i) => {
     const open = UI.prep.menuIdx === i;
-    return `<div class="ck" data-state="${it.state || ''}">
+    return `<div class="ck" data-ck="${i}" data-state="${it.state || ''}">
       <button class="ck-main" data-act="ck-toggle" data-i="${i}">
         <span class="grow"><span class="t">${esc(it.t)}</span>${it.hint ? `<span class="d">${esc(it.hint)}</span>` : ''}</span>
       </button>
@@ -160,12 +160,16 @@ function viewPrep() {
   return h;
 }
 
-/* ---------- Экран полёта: кольцо, пилюли, посадка ----------
-   Кольцо — прошедшее время относительно средней длительности
-   завершённых полётов этого борта; нет полётов — кольцо пустое,
+/* ---------- Экран полёта: HUD-кольцо, пилюли, посадка ----------
+   Кольцо — прошедшее время относительно ЦЕЛИ: сигнала таймера борта
+   (a.alarmMin, «время на аккумулятор»), а без него — средней длительности
+   завершённых полётов этого борта. Цель пройдена — кольцо янтарное и
+   пульсирует (.over). Нет ни сигнала, ни полётов — кольцо пустое,
    подпись «первый полёт». Живое обновление — в интервале paint(). */
 const RING_R = 102;
 const RING_C = 2 * Math.PI * RING_R;
+const TICK_R = 88; // шкала из 60 делений внутри кольца
+const TICK_C = 2 * Math.PI * TICK_R;
 
 function avgFlightMs(aircraftId) {
   const done = sessionsOf(aircraftId).filter((s) => s.end && +s.durationMin > 0);
@@ -173,9 +177,18 @@ function avgFlightMs(aircraftId) {
   return done.reduce((n, s) => n + +s.durationMin, 0) / done.length * 60000;
 }
 
-function ringOffset(ms, avgMs) {
-  if (!avgMs) return RING_C.toFixed(1);
-  const p = Math.min(1, Math.max(0, ms / avgMs));
+// Сигнал таймера борта в мс (0 — не задан). Поле нормализовано в NORM.
+function alarmMs(a) {
+  const m = a && +a.alarmMin;
+  return m > 0 ? Math.round(m * 60000) : 0;
+}
+function flightTargetMs(a) {
+  return alarmMs(a) || (a ? avgFlightMs(a.id) : 0);
+}
+
+function ringOffset(ms, target) {
+  if (!target) return RING_C.toFixed(1);
+  const p = Math.min(1, Math.max(0, ms / target));
   return (RING_C * (1 - p)).toFixed(1);
 }
 
@@ -183,17 +196,110 @@ function ringHtml(s, a) {
   const landed = !!s.landedAt;
   const ms = (landed ? s.landedAt : Date.now()) - s.start;
   const avg = a ? avgFlightMs(a.id) : 0;
-  return `<div class="ring${landed ? ' landed' : ''}">
+  const alarm = alarmMs(a);
+  const target = alarm || avg;
+  const over = !landed && target > 0 && ms >= target;
+  const sub = alarm
+    ? `сигнал <span class="mono">${fmtClock(alarm)}</span>${avg ? ` · обычно <span class="mono">${fmtClock(avg)}</span>` : ''}`
+    : avg ? `обычно <span class="mono">${fmtClock(avg)}</span>` : 'первый полёт';
+  return `<div class="ring${landed ? ' landed' : ''}${over ? ' over' : ''}" id="ring">
     <svg class="r" viewBox="0 0 220 220" aria-hidden="true">
+      <circle class="ring-ticks" cx="110" cy="110" r="${TICK_R}" stroke-dasharray="1.2 ${(TICK_C / 60 - 1.2).toFixed(2)}"/>
       <circle class="ring-track" cx="110" cy="110" r="${RING_R}"/>
-      <circle class="ring-fill" id="ring-fill" cx="110" cy="110" r="${RING_R}" data-avg="${Math.round(avg)}"
-        stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${ringOffset(ms, avg)}"/>
+      <circle class="ring-fill" id="ring-fill" cx="110" cy="110" r="${RING_R}" data-target="${Math.round(target)}"
+        stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${ringOffset(ms, target)}"/>
     </svg>
     <div class="ring-in">
       <div class="timer${landed ? ' landed' : ''}" id="timer" data-sid="${s.id}">${clockHtml(ms)}</div>
-      <div class="small muted ring-sub">${avg ? `обычно <span class="mono">${fmtClock(avg)}</span>` : 'первый полёт'}</div>
+      <div class="small muted ring-sub">${sub}</div>
     </div>
   </div>`;
+}
+
+// Кнопка и меню сигнала таймера: выбор пишется в карточку борта —
+// «время на аккумулятор» у борта постоянное, а не на один полёт.
+const ALARM_STEPS = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 45, 60];
+function alarmPillHtml(a) {
+  if (!a) return '';
+  const alarm = alarmMs(a);
+  const cur = alarm ? +a.alarmMin : null;
+  return `<button type="button" class="pill alarm-btn" data-act="alarm-menu" aria-haspopup="menu" aria-expanded="false"
+      aria-pressed="${!!alarm}">${ICONS.bell}<span>${alarm ? 'Сигнал ' + fmtClock(alarm) : 'Сигнал'}</span></button>
+    <div class="menu menu-grid" popover="manual" id="alarm-menu" role="menu" aria-label="Сигнал таймера" hidden>
+      <button class="menu-head" role="menuitemradio" data-act="alarm-set" data-min="" aria-checked="${!alarm}">Без сигнала</button>
+      ${ALARM_STEPS.map((m) => `<button role="menuitemradio" data-act="alarm-set" data-min="${m}" aria-checked="${cur === m}">${m} мин</button>`).join('')}
+    </div>`;
+}
+
+/* ---------- Сигнал таймера: вибрация и звук ----------
+   Срабатывает один раз, когда полёт борта в воздухе доходит до
+   a.alarmMin, — на любом экране (проверка раз в секунду, пока такой
+   полёт есть). Вибрация — Vibration API (на iPhone её нет), звук —
+   короткие гудки Web Audio. Оба API локальные: ничего не уходит в сеть.
+   Звук браузер разрешает только после касания: AudioContext создаётся
+   и «будится» в обработчике нажатия (взлёт, выбор сигнала) — и только
+   если у борта сигнал задан, чтобы не трогать чужую музыку зря.
+   Открыли полёт спустя долгое время после сигнала — не гудим: окно
+   срабатывания 30 секунд после отметки. */
+let ALARM = null;
+let AUDIO = null;
+const ALARM_FIRED = new Set();
+const ALARM_WINDOW_MS = 30000;
+
+function audioUnlock() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!AUDIO) AUDIO = new AC();
+    if (AUDIO.state === 'suspended') AUDIO.resume().catch(() => {});
+  } catch (e) { AUDIO = null; }
+}
+function beep(times) {
+  if (!AUDIO || AUDIO.state !== 'running') return;
+  try {
+    const t0 = AUDIO.currentTime + 0.02;
+    for (let i = 0; i < times; i++) {
+      const o = AUDIO.createOscillator();
+      const g = AUDIO.createGain();
+      const t = t0 + i * 0.32;
+      o.type = 'square';
+      o.frequency.value = i === times - 1 ? 1320 : 1760;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g);
+      g.connect(AUDIO.destination);
+      o.start(t);
+      o.stop(t + 0.24);
+    }
+  } catch (e) { /* без звука — вибрация и кольцо всё равно есть */ }
+}
+function alarmSessions() {
+  return S.sessions.filter((s) => !s.end && !s.landedAt &&
+    alarmMs(S.aircraft.find((a) => a.id === s.aircraftId)) > 0);
+}
+function checkAlarms() {
+  const list = alarmSessions();
+  if (!list.length) { clearInterval(ALARM); ALARM = null; return; }
+  for (const s of list) {
+    const alarm = alarmMs(S.aircraft.find((a) => a.id === s.aircraftId));
+    const ms = Date.now() - s.start;
+    if (ms >= alarm && ms < alarm + ALARM_WINDOW_MS && !ALARM_FIRED.has(s.id)) {
+      ALARM_FIRED.add(s.id);
+      haptic([280, 120, 280, 120, 600]);
+      beep(3);
+    }
+  }
+}
+// Из paint(): интервал живёт, пока есть полёт в воздухе с сигналом.
+function syncAlarms() {
+  const need = alarmSessions().length > 0;
+  if (need && !ALARM) ALARM = setInterval(checkAlarms, 1000);
+  else if (!need && ALARM) { clearInterval(ALARM); ALARM = null; }
+}
+// Касание перед полётом с сигналом — будим звук заранее.
+function audioUnlockFor(aircraftId) {
+  if (alarmMs(S.aircraft.find((a) => a.id === aircraftId))) audioUnlock();
 }
 
 function viewSession() {
@@ -215,8 +321,12 @@ function viewSession() {
     return h;
   }
 
+  const over = !s.landedAt && flightTargetMs(a) > 0 && Date.now() - s.start >= flightTargetMs(a);
+  h += `<div class="air-state"><span class="air-pill${s.landedAt ? ' landed' : over ? ' alarm' : ''}" id="air-pill">${
+    s.landedAt ? 'Посадка' : over ? 'Время вышло' : 'В воздухе'}</span></div>`;
   h += ringHtml(s, a);
-  // Пилюли контекста: АКБ, локация, ветер у земли из кэша (если свежий)
+  // Пилюли контекста: АКБ, локация, ветер у земли из кэша (если свежий),
+  // сигнал таймера — пока борт в воздухе
   const b = S.batteries.find((x) => x.id === s.batteryId);
   const site = S.sites.find((x) => x.id === s.siteId);
   const wind = wxWindNowText(site, a);
@@ -224,6 +334,7 @@ function viewSession() {
     b ? `<span class="pill">${ICONS.batteries}${battTag(b)}</span>` : '',
     site ? `<span class="pill">${ICONS.sites}<span>${esc(site.name)}</span></span>` : '',
     wind ? `<span class="pill">${ICONS.weather}<span>${wind}</span></span>` : '',
+    s.landedAt ? '' : alarmPillHtml(a),
   ].filter(Boolean).join('');
   if (pills) h += `<div class="pills">${pills}</div>`;
 

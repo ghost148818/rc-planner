@@ -38,7 +38,7 @@ function fleetRow(a) {
   const b = armedBattery(a);
   // Имя не ужимается: кнопке имени — не меньше 45 % строки; чип статуса
   // с короткой подписью (short), чтобы не резаться многоточием.
-  return `<div class="row fleet-row">
+  return `<div class="row fleet-row" data-st="${statusOf(a)}">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
       <span class="d">${TYPES[a.type] || ''}${a.manufacturer ? ' · ' + esc(a.manufacturer) : ''}${b ? ' · ' + battTag(b) : ''}</span></span></button>

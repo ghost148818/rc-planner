@@ -61,7 +61,7 @@ function modelHeroHtml(a, flights) {
     </div>
     <div class="hero-line hero-batt">
       ${pillSelect('modelBatt', battOptions({ freeOnly: true, keepId: a.batteryId, emptyLabel: 'Без АКБ', addNew: true, noWeight: true }), a.batteryId || '',
-        `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"`)}
+        `class="sel-pill${bat ? ' sel' : ''}" data-change="model-batt" data-id="${a.id}" aria-label="Аккумулятор борта"${bat ? '' : ' data-next-arm'}`)}
       ${chargeChip(bat)}
     </div>
     ${bat ? '' : `<div class="hint">Борт с установленным АКБ считается собранным к вылету
@@ -147,6 +147,7 @@ function modelOverviewHtml(a) {
   const own = wxOwnWind(a);
   kv.push(['Ветер · высота', `${own ? 'до ' + own : '≈' + wxEstimate(a, bat && bat.weight)} м/с · до ${wxOwnAlt(a)} м`]);
   if (svc) kv.push(['Регламент', svcEveryText(svc)]);
+  if (alarmMs(a)) kv.push(['Сигнал таймера', fmtClock(alarmMs(a))]);
   h += `<div class="card"><div class="kv">${kv.map(([k, v]) =>
     `<div><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')}</div></div>`;
 

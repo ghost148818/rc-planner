@@ -41,15 +41,16 @@
     mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
     filter: drop-shadow(0 0 calc(5px * var(--fx-glow)) color-mix(in srgb, var(--c) 70%, transparent));
   }
-  .gauge-ring b { font-family: var(--mono); font-size: 15px; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .gauge-ring b { font-family: var(--mono); font-size: 15px; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; text-align: center; line-height: 1.05; }
+  .gauge-ring b i { display: block; font-family: var(--font-ui); font-style: normal; font-size: 9.5px; font-weight: 650; letter-spacing: 0.02em; color: var(--mut); }
   .gauge-ring svg { width: 26px; height: 26px; color: var(--c); }
   .gauge-tile .gt-t { font-size: 13px; font-weight: 700; margin-top: 3px; }
   .gauge-tile .gt-d { font-size: 11.5px; color: var(--mut); line-height: 1.25; }
 
   /* Шаги «Начала работы»: прогресс и строки */
   .onb-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 6px; }
-  .onb-head .t { font-weight: 750; font-size: 16px; }
-  .onb-head .d { color: var(--mut); font-size: var(--font-d); }
+  .onb-head .t { display: block; font-weight: 750; font-size: 16px; }
+  .onb-head .d { display: block; color: var(--mut); font-size: var(--font-d); }
   .onb-head .progress { margin: 8px 0 2px; }
   .row.done { opacity: 0.55; }
   .row.done .t { text-decoration: line-through; }
@@ -244,7 +245,8 @@
     background: linear-gradient(to top, var(--bg) 78%, color-mix(in srgb, var(--bg) 0%, transparent));
     z-index: 5;
   }
-  .act-bar .banner { margin-bottom: 8px; padding: 9px 12px; font-size: 13.5px; align-items: center; }
+  .act-bar .banner { margin-bottom: 8px; padding: 9px 12px; font-size: 13.5px; align-items: center; background-color: var(--bg); }
+  .act-bar .banner.warn { background: linear-gradient(var(--warn-bg), var(--warn-bg)), var(--bg); }
   .act-bar .banner > svg { margin-top: 0; }
   .act-bar .btn + .btn { margin-top: 8px; }
   @media (min-width: 900px) {
@@ -297,7 +299,7 @@
   }
   .ring svg.r { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
   .ring .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
-  .ring .ring-ticks { fill: none; stroke: var(--line); stroke-width: 6; stroke-dasharray: 1.2 9.48; opacity: 0.9; }
+  .ring .ring-ticks { fill: none; stroke: var(--line); stroke-width: 7; opacity: 0.9; }
   .ring .ring-fill {
     fill: none;
     stroke: var(--c);
@@ -387,9 +389,9 @@
     flex: 0 0 auto;
     min-width: 78px;
     text-align: right;
-    font-family: var(--mono);
     font-variant-numeric: tabular-nums;
     font-size: 13px;
+    font-weight: 600;
   }
   /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
   .heat {
@@ -411,7 +413,10 @@
   .heat i.future { background: transparent; }
   .heat-legend { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--dim); font-size: 11.5px; }
   .heat-legend .sw { display: inline-flex; gap: 3px; align-items: center; }
-  .heat-legend .sw i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3); display: inline-block; }
+  .heat-legend .sw i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-3); display: inline-block; aspect-ratio: auto; }
+  .heat-legend .sw i[data-l="1"] { background: color-mix(in srgb, var(--ok) 35%, var(--surface-3)); }
+  .heat-legend .sw i[data-l="2"] { background: color-mix(in srgb, var(--ok) 60%, var(--surface-3)); }
+  .heat-legend .sw i[data-l="3"] { background: var(--ok); }
 
   /* ================= «Ещё»: выбор режима интерфейса ================= */
   .mode-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

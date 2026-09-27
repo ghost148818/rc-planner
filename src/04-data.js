@@ -28,7 +28,9 @@ const NORM = {
     if (s.lat == null || s.lon == null) { s.lat = null; s.lon = null; }
   },
   aircraft(a) {
-    for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin']) a[k] = numOrNull(a[k]);
+    for (const k of ['weight', 'wingspan', 'maxWind', 'maxAlt', 'svcEvery', 'svcEveryMin', 'alarmMin']) a[k] = numOrNull(a[k]);
+    // Сигнал таймера — только в пределах поля формы (0,5…120 мин)
+    if (a.alarmMin != null && !(a.alarmMin > 0 && a.alarmMin <= 120)) a.alarmMin = null;
     a.type = keyOrNull(TYPES, a.type);
     a.statusManual = keyOrNull(STATUS, a.statusManual) || '';
     // Пометка «подготовлен» из копии: объект со строковым runId и числовым
