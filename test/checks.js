@@ -42,7 +42,7 @@ console.log('Слоты оборудования:');
 // и типы, а не разбор регуляркой.
 const appSrc = readApp();
 const compBlock = (appSrc.match(/const COMPONENTS = \[[\s\S]*?\n\];/) || [])[0];
-ok(!!compBlock, 'блок COMPONENTS найден в app.js');
+ok(!!compBlock, 'блок COMPONENTS найден в src/');
 const cbox = {};
 vm.createContext(cbox);
 vm.runInContext(compBlock + '\nthis.OUT = COMPONENTS;', cbox, { filename: 'app.js:COMPONENTS' });
@@ -81,7 +81,7 @@ console.log('Химия аккумуляторов:');
 // строится селект формы и оценка веса, так что тест и приложение
 // не могут разойтись.
 const chemBlock = (appSrc.match(/const BATT_CHEM = \[[\s\S]*?\n\];/) || [])[0];
-ok(!!chemBlock, 'блок BATT_CHEM найден в app.js');
+ok(!!chemBlock, 'блок BATT_CHEM найден в src/');
 const chbox = {};
 vm.createContext(chbox);
 vm.runInContext(chemBlock + '\nthis.OUT = BATT_CHEM;', chbox, { filename: 'app.js:BATT_CHEM' });
@@ -264,7 +264,7 @@ for (const id of ['start', 'today', 'fleet', 'flight', 'journal', 'packing', 'we
 const appNoTabs = app.replace(/const TAB_OF = \{[\s\S]*?\};/, '');
 const helpRefs = new Set([...appNoTabs.matchAll(/help:\s*'([\w-]+)'/g)].map((m) => m[1])
   .concat([...appNoTabs.matchAll(/#\/help\/([\w-]+)/g)].map((m) => m[1])));
-for (const id of helpRefs) ok(helpIds.has(id), 'app.js ссылается на существующий раздел ' + id);
+for (const id of helpRefs) ok(helpIds.has(id), 'src/ ссылается на существующий раздел ' + id);
 ok(helpRefs.size >= 8, 'кнопки «?» ведут не меньше чем в восемь разделов (' + helpRefs.size + ')');
 const { generate } = require('../docs/gen-guide');
 ok(read('docs/user-guide.md') === generate(H), 'docs/user-guide.md совпадает с генератором (иначе: npm run guide)');
