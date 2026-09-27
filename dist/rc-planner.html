@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-18DBvDrFQyxRVKBB/irxZhGLnmE6hMA3P9wmYXHKvsI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-Uuzkc1u1/sgj3VBLIIL2P5qO9dv4K0EMAdZ5E3ryBFU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="9c47b407d2-single">
+  <meta name="build" content="6b8627ac32-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -713,6 +713,8 @@
   .row .btn + .btn, .banner .btn + .btn { margin-top: 0; }
   .btn-line { display: flex; gap: 9px; flex-wrap: wrap; }
   .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  /* Малая кнопка рядом с полем ввода («Добавить» в сборах) — по содержимому */
+  .btn-line > input + .btn-sm { flex: 0 0 auto; }
   .btn-line + .btn-line { margin-top: 9px; }
   /* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
   .ic-btn {
@@ -1780,17 +1782,18 @@
     100% { transform: translate3d(-2%, 4%, 0) rotate(-6deg) scale(1.03); }
   }
 
-  /* ---------- Следующий шаг: бегущая рамка + мягкий пульс ----------
-     data-next ставит paint() на ОДИН элемент экрана (nextStep()). */
+  /* ---------- Следующий шаг: светящаяся рамка ----------
+     data-next ставит paint() на ОДИН элемент экрана (nextStep()).
+     Цена важна — рамка светится всё время, пока открыт экран:
+     «Стандарт» — неподвижное кольцо + тень, «дышит» только opacity
+     псевдоэлемента (работа компоновщика, без перерисовки); бегущий
+     «комета»-блик (@property --glow-a, перерисовка каждый кадр) — только
+     в «Максимуме», где за эффект осознанно платят батареей. */
   @keyframes glow-spin { to { --glow-a: 360deg; } }
-  @keyframes next-pulse {
-    0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 calc(10px * var(--fx-glow)) -4px var(--accent); }
-    50% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 calc(26px * var(--fx-glow)) -2px var(--accent); }
-  }
+  @keyframes next-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
   [data-next] {
     position: relative;
-    animation: next-pulse var(--glow-period) ease-in-out infinite;
-    animation-delay: var(--glow-phase, 0s);
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 calc(22px * var(--fx-glow)) -4px var(--accent);
   }
   [data-next]::after {
     content: "";
@@ -1799,39 +1802,30 @@
     border-radius: inherit;
     padding: 2px;
     pointer-events: none;
-    background: conic-gradient(from var(--glow-a),
-      transparent 0deg 230deg,
-      color-mix(in srgb, var(--accent) 60%, transparent) 290deg,
-      #fff 330deg,
-      var(--accent) 345deg,
-      transparent 360deg);
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent) 45%, var(--accent-2) 80%, var(--accent));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    animation: glow-spin var(--glow-period) linear infinite;
+    animation: next-breathe var(--glow-period) ease-in-out infinite;
     animation-delay: var(--glow-phase, 0s);
+    will-change: opacity;
   }
   /* Внутри карточки-списка рамка рисуется внутрь: карточка обрезает всё,
      что выходит за её край. */
-  .card.flat [data-next] { animation-name: next-pulse-in; }
+  .card.flat [data-next] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
   .card.flat [data-next]::after { inset: 0; }
-  @keyframes next-pulse-in {
-    0%, 100% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), inset 0 0 calc(18px * var(--fx-glow)) -8px var(--accent); }
-    50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), inset 0 0 calc(28px * var(--fx-glow)) -6px var(--accent); }
-  }
   /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
-  .btn-primary[data-next] { animation-name: next-pulse-primary; }
-  @keyframes next-pulse-primary {
-    0%, 100% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), 0 10px calc(26px * var(--fx-glow)) -10px var(--ok); }
-    50% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent), 0 10px calc(40px * var(--fx-glow)) -6px var(--ok); }
+  .btn-primary[data-next] {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent),
+      0 10px calc(34px * var(--fx-glow)) -8px var(--ok);
   }
-  /* Без движения: рамка сплошная, без бега */
+  /* Без движения: рамка ровная, не дышит */
   @media (prefers-reduced-motion: reduce) {
-    [data-next]::after { background: var(--accent); }
+    [data-next]::after { opacity: 1; }
   }
 
   /* ---------- Важные объекты: градиентная рамка героя ---------- */
-  .card.hero, .hud-card {
+  .card.hero {
     border-color: transparent;
     background:
       var(--sheen) padding-box,
@@ -1910,8 +1904,7 @@
   :root[data-ui="gloves"] .stat,
   :root[data-ui="gloves"] .gauge-tile,
   :root[data-ui="gloves"] .banner { background: var(--surface); box-shadow: none; border-color: var(--line); }
-  :root[data-ui="gloves"] .card.hero,
-  :root[data-ui="gloves"] .hud-card { background: var(--surface); border: 2px solid var(--line); }
+  :root[data-ui="gloves"] .card.hero { background: var(--surface); border: 2px solid var(--line); }
   :root[data-ui="gloves"] .hero-flight { border-color: var(--ok); }
   :root[data-ui="gloves"] #tabbar {
     left: 0; right: 0; bottom: 0;
@@ -1954,13 +1947,13 @@
   /* ================= «Максимум»: стекло, аврора, неон ================= */
   :root[data-ui="max"] { --art-opacity: 1; }
   :root[data-ui="max"] body::before {
-    inset: -30%;
+    inset: -12%;
     background:
       radial-gradient(28% 22% at 22% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
       radial-gradient(26% 22% at 82% 26%, color-mix(in srgb, var(--accent-2) 30%, transparent), transparent 70%),
       radial-gradient(34% 26% at 62% 82%, color-mix(in srgb, var(--ok) 20%, transparent), transparent 70%),
       radial-gradient(22% 18% at 18% 78%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
-    animation: aurora 38s ease-in-out infinite alternate;
+    animation: aurora 48s ease-in-out infinite alternate;
     will-change: transform;
   }
   :root[data-ui="max"][data-theme="light"] body::before { opacity: 0.55; }
@@ -1977,7 +1970,6 @@
   /* Стекло: только крупные поверхности — у каждого backdrop-filter своя
      цена на телефоне, у десятков строк списка его нет. */
   :root[data-ui="max"] .card.hero,
-  :root[data-ui="max"] .hud-card,
   :root[data-ui="max"] .wx-hero,
   :root[data-ui="max"] .ready-panel .gauge-tile,
   :root[data-ui="max"] dialog {
@@ -1985,16 +1977,30 @@
     backdrop-filter: blur(var(--fx-blur)) saturate(1.35);
   }
   :root[data-ui="max"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 82%, transparent); }
-  /* Живая рамка героя: градиент бежит по кругу */
-  :root[data-ui="max"] .card.hero,
-  :root[data-ui="max"] .hud-card {
+  /* Рамка героя — неоновый градиент по кругу и мягкий ореол. Неподвижный:
+     бегущий градиент на большой карточке — перерисовка всей карточки
+     каждый кадр (замер: +10 % занятости главного потока в простое). */
+  :root[data-ui="max"] .card.hero {
     background:
       var(--sheen) padding-box,
       linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
-      conic-gradient(from var(--glow-a), color-mix(in srgb, var(--accent) 80%, transparent), color-mix(in srgb, var(--accent-2) 55%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 55%, transparent) 85%, color-mix(in srgb, var(--accent) 80%, transparent)) border-box;
-    animation: glow-spin 9s linear infinite;
-    animation-delay: var(--glow-phase-slow, 0s);
-    box-shadow: var(--shadow), 0 0 40px -18px var(--accent);
+      conic-gradient(from 210deg, color-mix(in srgb, var(--accent) 85%, transparent), color-mix(in srgb, var(--accent-2) 60%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 60%, transparent) 85%, color-mix(in srgb, var(--accent) 85%, transparent)) border-box;
+    box-shadow: var(--shadow), 0 0 44px -16px var(--accent), 0 0 70px -30px var(--accent-2);
+  }
+  /* Следующий шаг в «Максимуме»: блик-комета пробегает три круга после
+     появления кнопки и замирает, дальше рамка только дышит. Бег угла —
+     перерисовка каждый кадр (замер: ~12 % главного потока, пока бежит),
+     поэтому он привлекает внимание и не жжёт батарею всё время. */
+  :root[data-ui="max"] [data-next]::after {
+    background: conic-gradient(from var(--glow-a),
+      color-mix(in srgb, var(--accent) 25%, transparent) 0deg 200deg,
+      color-mix(in srgb, var(--accent) 70%, transparent) 280deg,
+      #fff 325deg,
+      var(--accent) 342deg,
+      color-mix(in srgb, var(--accent) 25%, transparent) 360deg);
+    animation:
+      glow-spin var(--glow-period) linear var(--glow-phase, 0s) 3,
+      next-breathe var(--glow-period) ease-in-out var(--glow-phase, 0s) infinite;
   }
   :root[data-ui="max"] .head h1 {
     background: linear-gradient(100deg, var(--text) 55%, color-mix(in srgb, var(--accent) 80%, var(--text)));
@@ -4817,7 +4823,6 @@ function applyNext() {
   const now = performance.now();
   const root = document.documentElement.style;
   root.setProperty('--glow-phase', -(now % GLOW_PERIOD_MS).toFixed(0) + 'ms');
-  root.setProperty('--glow-phase-slow', -(now % 9000).toFixed(0) + 'ms');
   let step = null;
   try { step = localStep() || nextStep(); } catch (e) { step = null; }
   UI.next = step;

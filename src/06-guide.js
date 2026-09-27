@@ -106,7 +106,6 @@ function applyNext() {
   const now = performance.now();
   const root = document.documentElement.style;
   root.setProperty('--glow-phase', -(now % GLOW_PERIOD_MS).toFixed(0) + 'ms');
-  root.setProperty('--glow-phase-slow', -(now % 9000).toFixed(0) + 'ms');
   let step = null;
   try { step = localStep() || nextStep(); } catch (e) { step = null; }
   UI.next = step;

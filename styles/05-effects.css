@@ -48,17 +48,18 @@
     100% { transform: translate3d(-2%, 4%, 0) rotate(-6deg) scale(1.03); }
   }
 
-  /* ---------- Следующий шаг: бегущая рамка + мягкий пульс ----------
-     data-next ставит paint() на ОДИН элемент экрана (nextStep()). */
+  /* ---------- Следующий шаг: светящаяся рамка ----------
+     data-next ставит paint() на ОДИН элемент экрана (nextStep()).
+     Цена важна — рамка светится всё время, пока открыт экран:
+     «Стандарт» — неподвижное кольцо + тень, «дышит» только opacity
+     псевдоэлемента (работа компоновщика, без перерисовки); бегущий
+     «комета»-блик (@property --glow-a, перерисовка каждый кадр) — только
+     в «Максимуме», где за эффект осознанно платят батареей. */
   @keyframes glow-spin { to { --glow-a: 360deg; } }
-  @keyframes next-pulse {
-    0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 calc(10px * var(--fx-glow)) -4px var(--accent); }
-    50% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 calc(26px * var(--fx-glow)) -2px var(--accent); }
-  }
+  @keyframes next-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
   [data-next] {
     position: relative;
-    animation: next-pulse var(--glow-period) ease-in-out infinite;
-    animation-delay: var(--glow-phase, 0s);
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 calc(22px * var(--fx-glow)) -4px var(--accent);
   }
   [data-next]::after {
     content: "";
@@ -67,39 +68,30 @@
     border-radius: inherit;
     padding: 2px;
     pointer-events: none;
-    background: conic-gradient(from var(--glow-a),
-      transparent 0deg 230deg,
-      color-mix(in srgb, var(--accent) 60%, transparent) 290deg,
-      #fff 330deg,
-      var(--accent) 345deg,
-      transparent 360deg);
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent) 45%, var(--accent-2) 80%, var(--accent));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    animation: glow-spin var(--glow-period) linear infinite;
+    animation: next-breathe var(--glow-period) ease-in-out infinite;
     animation-delay: var(--glow-phase, 0s);
+    will-change: opacity;
   }
   /* Внутри карточки-списка рамка рисуется внутрь: карточка обрезает всё,
      что выходит за её край. */
-  .card.flat [data-next] { animation-name: next-pulse-in; }
+  .card.flat [data-next] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
   .card.flat [data-next]::after { inset: 0; }
-  @keyframes next-pulse-in {
-    0%, 100% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), inset 0 0 calc(18px * var(--fx-glow)) -8px var(--accent); }
-    50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 85%, transparent), inset 0 0 calc(28px * var(--fx-glow)) -6px var(--accent); }
-  }
   /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
-  .btn-primary[data-next] { animation-name: next-pulse-primary; }
-  @keyframes next-pulse-primary {
-    0%, 100% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent), 0 10px calc(26px * var(--fx-glow)) -10px var(--ok); }
-    50% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent), 0 10px calc(40px * var(--fx-glow)) -6px var(--ok); }
+  .btn-primary[data-next] {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent),
+      0 10px calc(34px * var(--fx-glow)) -8px var(--ok);
   }
-  /* Без движения: рамка сплошная, без бега */
+  /* Без движения: рамка ровная, не дышит */
   @media (prefers-reduced-motion: reduce) {
-    [data-next]::after { background: var(--accent); }
+    [data-next]::after { opacity: 1; }
   }
 
   /* ---------- Важные объекты: градиентная рамка героя ---------- */
-  .card.hero, .hud-card {
+  .card.hero {
     border-color: transparent;
     background:
       var(--sheen) padding-box,

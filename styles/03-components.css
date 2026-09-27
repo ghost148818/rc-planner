@@ -219,6 +219,8 @@
   .row .btn + .btn, .banner .btn + .btn { margin-top: 0; }
   .btn-line { display: flex; gap: 9px; flex-wrap: wrap; }
   .btn-line .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  /* Малая кнопка рядом с полем ввода («Добавить» в сборах) — по содержимому */
+  .btn-line > input + .btn-sm { flex: 0 0 auto; }
   .btn-line + .btn-line { margin-top: 9px; }
   /* Квадратная кнопка-иконка в строке (избранное, удалить пункт) */
   .ic-btn {
