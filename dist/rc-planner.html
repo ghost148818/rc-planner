@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-1xFvSbWKLC5GyFfZK78IrkeOQ2VdbSZRgKlvcf7b2vA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="900f9db630-single">
+  <meta name="build" content="616d4ebe85-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -142,6 +142,8 @@
 
   :root[data-theme="light"] {
     color-scheme: light;
+    /* Цвета подобраны по контрасту WCAG: мелкий текст на белом и на
+       подложке чипа — не ниже 4,5:1 (замер 3.0; было 3,5–4,2). */
     --bg: #eef2f7;
     --bg-2: #f7f9fc;
     --surface: #ffffff;
@@ -151,28 +153,28 @@
     --line-soft: rgba(30, 50, 80, 0.1);
     --text: #0f1722;
     --mut: #4d5a6a;
-    --dim: #7f8b9a;
+    --dim: #5f6b7c;
     --link: #0a64c8;
 
-    --accent: #0a93b5;
+    --accent: #067591;
     --accent-2: #4c5bd4;
     --on-accent: #ffffff;
 
-    --ok: #12894b;
-    --warn: #8f6a06;
-    --maint: #b0530f;
-    --bad: #cc2f36;
+    --ok: #0c7a40;
+    --warn: #7a5a00;
+    --maint: #98450a;
+    --bad: #b3262d;
     --info: #1f63c7;
     --unk: #6b7684;
     --on-ok: #ffffff;
 
-    --ok-bg: rgba(18, 137, 75, 0.1);
-    --warn-bg: rgba(143, 106, 6, 0.1);
-    --maint-bg: rgba(176, 83, 15, 0.11);
-    --bad-bg: rgba(204, 47, 54, 0.09);
+    --ok-bg: rgba(12, 122, 64, 0.1);
+    --warn-bg: rgba(122, 90, 0, 0.1);
+    --maint-bg: rgba(152, 69, 10, 0.1);
+    --bad-bg: rgba(179, 38, 45, 0.09);
     --info-bg: rgba(31, 99, 199, 0.09);
     --unk-bg: rgba(107, 118, 132, 0.11);
-    --accent-bg: rgba(10, 147, 181, 0.1);
+    --accent-bg: rgba(6, 117, 145, 0.1);
 
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px -16px rgba(20, 40, 70, 0.35);
     --shadow-pop: 0 18px 44px -14px rgba(20, 40, 70, 0.35);
