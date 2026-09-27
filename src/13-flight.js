@@ -147,7 +147,7 @@ function viewPrep() {
   h += '<div class="act-bar">';
   if (failed.length) {
     const n = failed.length;
-    h += `<div class="banner warn">${ICONS.x}<span class="grow">${plural(n, 'Отмечена', 'Отмечены', 'Отмечено')} ${n} ${plural(n, 'проблема', 'проблемы', 'проблем')}: ${failed.map((i) => esc(lower(i.t))).join(', ')}</span></div>`;
+    h += `<div class="banner warn">${ICONS.alert}<span class="grow">${plural(n, 'Отмечена', 'Отмечены', 'Отмечено')} ${n} ${plural(n, 'проблема', 'проблемы', 'проблем')}: ${failed.map((i) => esc(lower(i.t))).join(', ')}</span></div>`;
   }
   if (!pbat) {
     h += `<div class="banner warn">Без аккумулятора не летаем: выберите АКБ выше — он встанет в борт, и кнопки появятся.</div>`;
@@ -159,7 +159,7 @@ function viewPrep() {
     } else {
       h += `<div class="banner warn nocharge">${ICONS.batteries}<span class="grow">Отметьте заряд АКБ&nbsp;— появится «Начать полёт».</span>${chargeChip(pbat)}</div>`;
     }
-    h += `<button class="btn" data-act="prep-done">Отметить готовым — взлёт позже</button>`;
+    h += `<button class="btn" data-act="prep-done">Отметить готовым&nbsp;— взлёт позже</button>`;
   }
   h += '</div>';
   // Отмена — вне липкой панели: панель держит только то, что ведёт
@@ -425,9 +425,11 @@ function logGroupedHtml(list, totalsFrom, noDayHead, rowOpts) {
       if (open) h += '</div>';
       cur = sess.date;
       const dayList = full.filter((x) => x.date === cur);
+      // Итог дня — только когда полётов больше одного: у одиночного он
+      // повторял бы длительность строки под ним.
       if (!noDayHead) {
-        h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>
-        <span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span></div>`;
+        h += `<div class="grp-head"><span class="grow">${fmtDate(cur)}</span>${dayList.length > 1
+          ? `<span class="muted small">${dayList.length} ${plural(dayList.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(dayList.reduce((n, x) => n + (x.durationMin || 0), 0))}</span>` : ''}</div>`;
       }
       h += `<div class="card flat${lazy}"${lazy ? ` style="--n:${rowsOf.get(cur)}"` : ''}>`;
       open = true;

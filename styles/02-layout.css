@@ -209,8 +209,9 @@
        а не прижаты к ней (ревью 3.0: справа пустовало ~400 px). */
     #views:not(.two-col) { max-width: 812px; margin-left: max(112px, calc((100vw - 812px + 100px) / 2)); }
     #tabbar .tab { font-size: 12px; color: var(--mut); }
-    /* Широкие кнопки в колонке 750 px выглядят растянутыми — ограничены */
-    #views > .btn, #views > .btn-line { max-width: 460px; }
+    /* Кнопки экрана — во всю колонку, как карточки: ограничение 460 px
+       ставило главную кнопку левее края карточек под ней (ревью 3.0).
+       Исключение — экран полёта: кнопки под кольцом по центру. */
     .ring ~ .btn, .ring ~ .session-hint { margin-left: auto; margin-right: auto; max-width: 460px; }
     .ring ~ .pills { margin-left: auto; margin-right: auto; max-width: 560px; }
     #views.two-col {

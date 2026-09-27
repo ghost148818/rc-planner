@@ -597,9 +597,9 @@ const ACTIONS = {
     navigator.geolocation.getCurrentPosition((pos) => {
       form.elements.coords.value =
         pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5);
-      el.textContent = 'Определить по GPS';
+      el.textContent = 'GPS';
     }, () => {
-      el.textContent = 'GPS недоступен — разрешите геопозицию';
+      el.textContent = 'GPS: нет доступа';
     }, { timeout: 12000, enableHighAccuracy: true });
   },
 

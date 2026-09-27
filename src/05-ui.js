@@ -21,6 +21,8 @@ const ICONS = {
   // раскрытая книга — вкладка «Журнал»
   journal: ic('<path d="M4 5h5.5a3 3 0 0 1 3 3v12.5a2.3 2.3 0 0 0-2.3-2.3H4Z"/><path d="M20 5h-5.5a3 3 0 0 0-3 3v12.5a2.3 2.3 0 0 1 2.3-2.3H20Z"/>'),
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>',
+  // треугольник с восклицательным знаком — предупреждение, не кнопка «закрыть»
+  alert: ic('<path d="M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4.5"/><path d="M12 17.2v.1"/>'),
   print: ic('<path d="M6 9V3.5h12V9"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v6.5H6Z"/>'),
   chev: ic('<path d="m9 6 6 6-6 6"/>', 2),
   back: ic('<path d="M15 6 9 12l6 6"/>', 2),
@@ -142,18 +144,30 @@ function toggleMenu(btn, id) {
   const r = btn.getBoundingClientRect();
   m.style.top = Math.round(r.bottom + 6) + 'px';
   if (typeof m.showPopover === 'function') m.showPopover(); else m.hidden = false;
-  // Правый край — под кнопкой, но меню не выходит за экран: на узком
-  // телефоне при min-width 200px иначе обрезался бы левый край.
-  const right = Math.round(window.innerWidth - r.right);
-  m.style.right = Math.max(8, Math.min(right, window.innerWidth - 8 - m.offsetWidth)) + 'px';
+  // Край меню — у кнопки: кнопка в левой половине экрана — левый край
+  // (меню высоты не висит над пустым полем у рельсы), в правой — правый.
+  // Меню не выходит за экран: на узком телефоне при min-width 200px
+  // иначе обрезался бы край.
+  const W = window.innerWidth, mw = m.offsetWidth;
+  if (r.left + r.width / 2 < W / 2) {
+    m.style.left = Math.round(Math.max(8, Math.min(r.left, W - 8 - mw))) + 'px';
+    m.style.right = 'auto';
+  } else {
+    m.style.left = 'auto';
+    m.style.right = Math.round(Math.max(8, Math.min(W - r.right, W - 8 - mw))) + 'px';
+  }
   // Вертикально так же, как горизонтально: не влезло под кнопкой —
   // ставим над ней, не влезло и там — прижимаем к верху окна, остаток
   // прокручивается внутри меню (max-height в CSS). Меню высоты — первое
   // высокое: три пункта журнала помещались всегда.
+  // Низ — над плавающей панелью вкладок (на телефоне), а не под ней.
+  const tb = document.getElementById('tabbar');
+  const tbr = tb && tb.getBoundingClientRect();
+  const bottom = (tbr && tbr.width < W / 2 ? window.innerHeight : Math.min(window.innerHeight, tbr ? tbr.top : window.innerHeight)) - 8;
   const mh = m.offsetHeight;
   let top = r.bottom + 6;
-  if (top + mh > window.innerHeight - 8) top = r.top - 6 - mh;
-  m.style.top = Math.round(Math.max(8, Math.min(top, window.innerHeight - 8 - mh))) + 'px';
+  if (top + mh > bottom) top = r.top - 6 - mh;
+  m.style.top = Math.round(Math.max(8, Math.min(top, bottom - mh))) + 'px';
   btn.setAttribute('aria-expanded', 'true');
 }
 function closeMenus() {

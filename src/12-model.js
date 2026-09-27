@@ -187,7 +187,7 @@ function modelOverviewHtml(a) {
   if (a.notes) h += `<div class="h2">Заметки</div><div class="card" style="white-space:pre-wrap">${esc(a.notes)}</div>`;
 
   h += `<hr class="sep">
-    <div class="btn-line">
+    <div class="btn-line eq">
       <button class="btn" data-act="clone-model" data-id="${a.id}">Копия борта</button>
       <button class="btn" data-act="export-model" data-id="${a.id}">Экспорт борта</button>
     </div>

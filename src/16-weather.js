@@ -555,7 +555,7 @@ function wxAttentionHtml(day, lim) {
     const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
     return `<button class="row" data-act="weather-hour" data-h="${s.from}">
       <span class="row-ic">${ICONS[s.icon]}</span>
-      <span class="grow"><span class="t">${s.text}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
+      <span class="grow"><span class="t">${s.text.charAt(0).toUpperCase() + s.text.slice(1)}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
       <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>
     </button>`;
   }).join('');
@@ -749,7 +749,7 @@ function viewWeather() {
         .map((m) => `<button role="menuitemradio" data-act="wx-alt-set" data-alt="${m}"
           aria-checked="${altPick === m}">${m}</button>`).join('')}
     </div>`,
-    'Действует только на этом экране. Выше 200 м ветер берётся с барических уровней — они есть не у каждой точки');
+    'Действует только на этом экране. Выше 200&nbsp;м ветер берётся с барических уровней&nbsp;— они есть не&nbsp;у&nbsp;каждой точки');
   // День — чипами (2.0): точка на чипе — лучший вердикт дня из кэша,
   // без данных чипы просто выбирают дату для запроса.
   h += field('Дата', wxDayChipsHtml(lim));
@@ -813,7 +813,7 @@ function viewWeather() {
 
       // Полный список часов — свёрнут: полоска и карточка часа отвечают
       // на главный вопрос, список нужен для сверки.
-      h += `<details class="fold wx-fold"><summary>Все часы <span class="cnt muted small">24</span></summary><div class="fold-body">
+      h += `<details class="fold wx-fold"><summary>Все часы</summary><div class="fold-body">
         <p class="small muted" style="margin:0 0 8px">Полоска — сколько «съедено» от допустимого ветра
         борта: берём худшее из ветра у земли${day.top ? `, ветра на высоте (${wxTopText(day)})` : ''}
         и порывов. Короткая зелёная — спокойно; полная красная — за пределом.</p>`;

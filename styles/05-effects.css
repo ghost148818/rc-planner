@@ -34,6 +34,12 @@
     background: var(--art-bg) center / cover no-repeat;
     opacity: var(--art-opacity);
   }
+  /* Телефон: картинка чуть крупнее и прижата вправо-вниз — центр радара
+     уходит за левый край и не стоит «точкой» перед подписью шапки */
+  @media (max-width: 899px) {
+    /* max(): на широком телефоне (альбомная ориентация) — как cover по ширине */
+    html::before { background-size: auto max(106%, 216.7vw); background-position: 100% 100%; }
+  }
   body::before {
     inset: 0;
     background:

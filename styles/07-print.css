@@ -29,6 +29,8 @@
     }
     #print-area td:nth-child(3), #print-area td:nth-child(5),
     #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
+    /* Дата и длительность — число с единицей не разрываются */
+    #print-area td:nth-child(2), #print-area td:nth-child(4) { white-space: nowrap; }
     #print-area th { background: #eee; }
     #print-area tr { break-inside: avoid; }
   }

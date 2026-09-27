@@ -47,6 +47,7 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .row .d.wrap, dialog .row .d { white-space: normal; }
+  .row .d .bt { white-space: nowrap; }
   /* Строка с чипом или кнопкой справа (класс stack): на узком экране
      действие уходит под текст, а не выдавливает его в три слова */
   @media (max-width: 480px) {
@@ -235,6 +236,11 @@
   /* width: auto обязателен: иначе width: 100% у .btn становится основой
      flex и кнопки никогда не встают в одну строку */
   .btn-line .btn { flex: 1 1 auto; width: auto; min-width: 0; white-space: nowrap; margin-top: 0; }
+  /* Пара равных кнопок («Копия / Экспорт борта») и кнопки координат в
+     форме локации — поровну; подпись GPS меняется и может переноситься */
+  .btn-line.eq > .btn { flex: 1 1 0; }
+  form[data-form="site"] .btn-line .btn { flex: 1 1 140px; }
+  .btn-line .btn[data-act="site-gps"] { white-space: normal; }
   /* Малая кнопка рядом с полем ввода («Добавить» в сборах) — по содержимому */
   .btn-line > input + .btn-sm { flex: 0 0 auto; }
   .btn-line + .btn-line { margin-top: 9px; }
@@ -373,6 +379,7 @@
   }
   .seg-ic button svg { width: 25px; height: 25px; }
   .seg-ic button[aria-pressed="true"] svg { color: var(--accent); filter: drop-shadow(0 0 calc(6px * var(--fx-glow)) var(--accent)); }
+  :root[data-theme="light"] .seg-ic button[aria-pressed="true"] svg { filter: none; }
 
   /* ---------- Пилюли и селекты-пилюли ---------- */
   .pill-row { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 6px; scrollbar-width: none; }
@@ -446,8 +453,6 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--bg-2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-    backdrop-filter: blur(20px) saturate(1.4);
     color: var(--text);
     border: 1px solid var(--line);
     border-radius: 16px;
@@ -485,7 +490,7 @@
   .menu-grid[popover]:popover-open { display: grid; }
   .menu-grid button { justify-content: center; padding: 0 8px; font-variant-numeric: tabular-nums; }
   .menu-grid .menu-head { grid-column: 1 / -1; justify-content: flex-start; padding: 0 14px; }
-  .menu-grid button[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); font-weight: 700; }
+  .menu-grid button[aria-checked="true"] { background: var(--accent-bg); color: var(--accent); font-weight: 700; }
 
   /* ---------- Баннеры ---------- */
   .banner {
@@ -576,6 +581,8 @@
     font-weight: 650;
   }
   details.fold summary::-webkit-details-marker { display: none; }
+  /* Счётчик — в одной строке с заголовком (обёрнуты общим span) */
+  details.fold summary .cnt { font-size: inherit; font-weight: 550; color: var(--dim); }
   details.fold summary::after {
     content: "";
     margin-left: auto;

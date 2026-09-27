@@ -23,7 +23,7 @@ function todayAircraftRow(a, right) {
   return `<div class="row">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d wrap">${TYPES[a.type] || ''}${b ? ' · <span class="nowrap">' + battTag(b) + '</span>' + (CHARGE_LABEL[b.charge] ? ' · ' + CHARGE_LABEL[b.charge] : '') : ''}</span></span></button>
+      <span class="d wrap">${b ? battTag(b) + (CHARGE_LABEL[b.charge] ? '&nbsp;· <span class="nowrap">' + CHARGE_LABEL[b.charge] + '</span>' : '') : TYPES[a.type] || ''}</span></span></button>
     ${right}
   </div>`;
 }
@@ -90,7 +90,7 @@ function backupBannerHtml() {
 }
 
 // Подпись под датой в шапке: состояние дня словами — пилюлей с точкой.
-const TODAY_HINT = { home: 'дома', field: 'на поле', flying: 'в полёте', debrief: 'разбор дня' };
+const TODAY_HINT = { home: 'дома', field: 'на поле', flying: 'в полёте', debrief: 'разбор' };
 
 // «Начало работы»: пять шагов, каждый ведёт прямо к действию.
 // Первый запуск — засчитано всё, что уже есть (since = 0, предикаты те же,
@@ -351,7 +351,7 @@ function todayFlying(s) {
       ${a ? aircraftThumb(a, true) : ''}
       <span class="grow">
         <span class="hero-name">${esc(a ? a.name : 'Борт удалён')} <span class="mono muted">${flightNoText(s)}</span></span>
-        <span class="d">${landed ? 'сел — осталось записать итог' : staleSession(s) ? 'идёт уже очень долго — забыли завершить?' : 'полёт идёт, таймер не потеряется'}</span>
+        <span class="d">${landed ? 'сел — осталось записать итог' : staleSession(s) ? 'идёт уже очень долго — забыли завершить?' : 'полёт идёт, таймер не&nbsp;потеряется'}</span>
       </span>
     </div>
     <div class="timer${landed ? ' landed' : ''}" id="timer" data-sid="${s.id}">${clockHtml(ms)}</div>
@@ -375,7 +375,7 @@ function todayDebrief() {
   let h = `<div class="stat-line">
     <div class="stat"><div class="v">${today.length}</div><div class="k">${plural(today.length, 'полёт сегодня', 'полёта сегодня', 'полётов сегодня')}</div></div>
     <div class="stat"><div class="v">${fmtDur(mins)}</div><div class="k">налёт</div></div>
-    <div class="stat"><div class="v${trouble.length ? ' warn' : ''}">${trouble.length}</div><div class="k">с проблемой</div></div>
+    <div class="stat"><div class="v${trouble.length ? ' warn' : ''}">${trouble.length}</div><div class="k">${plural(trouble.length, 'проблема', 'проблемы', 'проблем')}</div></div>
   </div>`;
 
   // Разобраться: проблемные полёты без закрытой работы новее них,
@@ -444,7 +444,9 @@ function todayDebrief() {
 function sessionRow(s, o = {}) {
   const a = S.aircraft.find((x) => x.id === s.aircraftId);
   const res = `<span class="result-${esc(s.result || 'normal')}">${resultLabel(s)}</span>`;
-  const when = o.inDay ? (+s.start > 0 ? fmtTime(+s.start) : '') : fmtDate(s.date);
+  // start из копии не нормализован: вне диапазона Date — без времени, а не «Invalid Date»
+  const t = +s.start;
+  const when = o.inDay ? (t > 0 && t <= 8.64e15 ? fmtTime(t) : '') : fmtDate(s.date);
   const tail = o.inDay && (!s.result || s.result === 'normal') ? '' : ' · ' + res;
   return rowBtn(`data-act="session-info" data-id="${s.id}"`,
     `<span class="grow"><span class="t"><span class="mono">${flightNoText(s)}</span>${o.noName ? '' : ' ' + esc(a ? a.name : 'Борт удалён')}</span>

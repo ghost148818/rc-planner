@@ -25,7 +25,7 @@ function viewMore() {
   const modeCard = (m, label, note) => `<button class="mode-card" data-act="ui-set" data-ui="${m}" aria-pressed="${mode === m}">
       <span class="mode-prev ${m}" aria-hidden="true"><i></i><i></i><b></b></span>${label}<small>${note}</small></button>`;
   h += field('Интерфейс', `<div class="mode-pick" role="group" aria-label="Режим интерфейса">
-    ${modeCard('gloves', 'В перчатках', 'крупно, только главное')}
+    ${modeCard('gloves', 'Перчатки', 'крупно, только главное')}
     ${modeCard('standard', 'Стандарт', 'чисто, мягкая подсветка')}
     ${modeCard('max', 'Максимум', 'стекло, неон, живой фон')}
   </div>`, 'Подсветка всегда ведёт к следующему шагу. «Максимум» тратит чуть больше батареи');
@@ -41,8 +41,8 @@ function viewMore() {
     h += rowBtn('data-act="check-updates"', `<span class="grow"><span class="t">Проверить обновления</span><span class="d wrap">${UI.checkingUpdate ? 'Проверяю…' : 'Версия ' + esc((RC.CHANGELOG[0] || {}).v || '—')} <span class="badge online">online</span></span></span>`, 'update');
   }
   h += rowBtn('data-act="whatsnew"', `<span class="grow"><span class="t">Что нового</span><span class="d wrap">История изменений</span></span>`, 'whatsnew');
-  h += rowBtn('data-nav="#/help"', `<span class="grow"><span class="t">Инструкция</span><span class="d wrap">Как пользоваться: экраны, чек-лист, полёт, копия</span></span>`, 'help');
-  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала работы» на «Сегодня»</span></span>`, 'check');
+  h += rowBtn('data-nav="#/help"', `<span class="grow"><span class="t">Инструкция</span><span class="d wrap">Как пользоваться: экраны, <span class="nowrap">чек-лист</span>, полёт, копия</span></span>`, 'help');
+  h += rowBtn('data-act="restart-tour"', `<span class="grow"><span class="t">Пройти обучение заново</span><span class="d wrap">Приветствие и шаги «Начала&nbsp;работы» на «Сегодня»</span></span>`, 'check');
   h += rowBtn('data-nav="#/privacy"', `<span class="grow"><span class="t">Приватность</span><span class="d wrap">Где живут ваши данные</span></span>`, 'privacy');
   h += '</div>';
 
@@ -61,7 +61,7 @@ function firmwareHtml() {
   const link = (url, label, primary) =>
     `<a class="btn btn-sm${primary ? ' btn-primary' : ''}" href="${esc(url)}"
       target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
-  let h = `<details class="fold"><summary>Прошивки Walksnail <span class="cnt muted small">${fw.items.length}</span></summary><div class="fold-body">`;
+  let h = `<details class="fold"><summary><span>Прошивки Walksnail <span class="cnt">${fw.items.length}</span></span></summary><div class="fold-body">`;
   if (fw.warn) h += `<div class="banner warn">${esc(fw.warn)}</div>`;
   // Кнопки отдельной строкой под текстом: на телефоне название с номером
   // версии иначе ломается на три строки, зажатое кнопками справа.
@@ -102,7 +102,7 @@ function viewTools() {
   h += firmwareHtml();
   RC.TOOL_CATS.forEach((cat) => {
     const list = RC.TOOLS.filter((t) => t.cat === cat.id);
-    h += `<details class="fold"><summary>${esc(cat.name)} <span class="cnt muted small">${list.length}</span></summary>
+    h += `<details class="fold"><summary><span>${esc(cat.name)} <span class="cnt">${list.length}</span></span></summary>
       <div class="fold-body"><div class="card flat">${list.map(toolRow).join('')}</div></div></details>`;
   });
   h += `<p class="small muted" style="margin-top:12px">Каталог — ссылки на официальные источники.
@@ -146,7 +146,7 @@ function viewSites() {
   h += '</div>';
   h += `<p class="small muted" style="margin-top:10px">Координаты открывают локацию на внешней карте
     <span class="badge online">online</span> и включают окна погоды. Проще всего&nbsp;— кнопка
-    «Определить по GPS» прямо на поле.</p>`;
+    «GPS» в форме локации прямо на поле.</p>`;
   return h;
 }
 
@@ -156,12 +156,16 @@ function battRow(b) {
   const o = battOwner(b.id);
   const charge = b.status === 'retired' ? '' : chargeChip(b);
   const n = Math.round(+b.cycles) || 0;
-  const kind = [esc(b.chem || ''), (b.cells ? b.cells + 'S' : '') + (b.p > 1 ? b.p + 'P' : '')].filter(Boolean).join(' ');
-  const spec = [kind, b.capacity ? b.capacity + '&nbsp;мА·ч' : '', b.weight ? b.weight + '&nbsp;г' : ''].filter(Boolean).join(' · ');
+  // Химия и банки — одним куском (иначе «Li-/Ion» рвётся по дефису);
+  // если подпись АКБ их уже называет («LiPo 6S 1300 #1») — не повторяем.
+  const kindTxt = [String(b.chem || ''), (b.cells ? b.cells + 'S' : '') + (b.p > 1 ? b.p + 'P' : '')].filter(Boolean).join(' ');
+  const dup = kindTxt && String(b.label || '').toLowerCase().includes(kindTxt.toLowerCase());
+  const kind = kindTxt && !dup ? `<span class="nowrap">${esc(kindTxt)}</span>` : '';
+  const spec = [kind, b.capacity ? b.capacity + '&nbsp;мА·ч' : '', b.weight ? b.weight + '&nbsp;г' : ''].filter(Boolean).join('&nbsp;· ');
   return `<div class="row batt-row">
     <button class="grow" data-act="edit-batt" data-id="${b.id}" style="text-align:left;min-height:var(--seg)">
       <span class="t">${esc(b.label)}${b.status === 'retired' ? ' <span class="badge bad">списан</span>' : b.status === 'watch' ? ' <span class="badge warn">следить</span>' : ''}</span>
-      <span class="d">${[`${n}&nbsp;${plural(n, 'цикл', 'цикла', 'циклов')}`, o ? battTag(b, 'в «' + o.name + '»') : '', spec].filter(Boolean).join(' · ')}</span></button>
+      <span class="d">${[`${n}&nbsp;${plural(n, 'цикл', 'цикла', 'циклов')}`, o ? battTag(b, 'в «' + o.name + '»') : '', spec].filter(Boolean).join('&nbsp;· ')}</span></button>
     ${charge}
   </div>`;
 }
@@ -257,7 +261,7 @@ function viewBackup() {
     field('Восстановить из файла', `<input type="file" accept=".rcpilot,.json,application/json" data-change="import-file">`,
       'Файл .rcpilot или .json, созданный RC Planner') + '</div>';
   h += `<hr class="sep"><button class="btn btn-danger" data-act="wipe-all">Стереть все данные</button>
-    <p class="small muted" style="margin-top:8px">Удаляет всё с этого устройства. Копий нигде нет —
+    <p class="small muted" style="margin-top:8px">Удаляет всё с этого устройства. Копий нигде нет&nbsp;—
     восстановить можно будет только из вашего файла резервной копии.</p>`;
   return h;
 }
@@ -267,13 +271,13 @@ function viewPrivacy() {
   h += `<div class="card">
     <p><strong>Ваши данные хранятся на этом устройстве.</strong></p>
     <p style="margin-top:8px">RC Planner работает без сервера, аккаунтов и регистрации. Борта, полёты,
-    чек-листы, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
+    <span class="nowrap">чек-листы</span>, конфигурации и фотографии лежат в локальной базе браузера (IndexedDB) и не отправляются
     в интернет&nbsp;— в&nbsp;приложении просто нет кода, который бы это делал.</p>
     <p style="margin-top:8px">Нет аналитики, счётчиков и рекламы. В фоне приложение обращается
     в сеть только за обновлением самой страницы.</p>
     <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
     <span class="nowrap">(помечены <span class="badge online">online</span>)</span>. Что уходит наружу:</p>
-    <ul class="small" style="padding-left:18px;margin-top:4px">
+    <ul style="padding-left:18px;margin-top:4px;font-size:var(--font-d)">
       <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
       <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
       <li><b>Поиск места</b> (Nominatim/OSM): введённый вами текст запроса.</li>

@@ -41,7 +41,7 @@ function fleetRow(a) {
   return `<div class="row fleet-row" data-st="${statusOf(a)}">
     <button class="grow row-main" data-nav="#/model/${a.id}">
       ${aircraftThumb(a)}<span class="grow"><span class="t">${esc(a.name)}</span>
-      <span class="d">${[TYPES[a.type] || '', b ? battTag(b) : '', a.manufacturer ? esc(a.manufacturer) : ''].filter(Boolean).join('&nbsp;· ')}</span></span></button>
+      <span class="d">${[TYPES[a.type] || '', b ? battTag(b) : esc(a.manufacturer || '')].filter(Boolean).join('&nbsp;· ')}</span></span></button>
     ${chip(statusOf(a), a.id, true)}
     <button class="row-move" data-act="move-model" data-id="${a.id}" aria-label="Переместить в группу">${ICONS.move}</button>
   </div>`;

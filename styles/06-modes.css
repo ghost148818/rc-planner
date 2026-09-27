@@ -73,7 +73,6 @@
   :root[data-ui="gloves"] div.batt-row > .grow { flex-basis: 100%; }
   :root[data-ui="gloves"] div.batt-row > .grow + * { margin-left: 0; }
   :root[data-ui="gloves"] .row .d { white-space: normal; text-wrap: pretty; }
-  :root[data-ui="gloves"] .row .d .bt { white-space: nowrap; }
   :root[data-ui="gloves"] .row .t { text-wrap: balance; }
   /* Настольные действия в поле не нужны: перенос борта, удаление пункта */
   :root[data-ui="gloves"] .row .row-move,
@@ -88,7 +87,9 @@
   :root[data-ui="gloves"] .wx-step { display: flex; gap: 8px; margin-left: auto; align-self: center; }
   :root[data-ui="gloves"] .wx-step .ic-btn { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
   :root[data-ui="gloves"] .bars { grid-template-columns: minmax(40px, 1fr) auto; }
-  :root[data-ui="gloves"] .bar-row { grid-template-columns: minmax(40px, 1fr) auto; row-gap: 4px; }
+  /* Строки — subgrid из .bars (04-screens); здесь только отступ: своя
+     сетка строки перебила бы subgrid, и дорожки разъехались бы */
+  :root[data-ui="gloves"] .bar-row { row-gap: 4px; }
   :root[data-ui="gloves"] .bar-row .n { grid-column: 1 / -1; }
   /* Вторичный текст в перчатках — не мельче --font-d */
   :root[data-ui="gloves"] :is(.kv .k, .svc-sub, .model-hero .hint, .seg.four button, .bar-row .v, .pill, select.sel-sm) { font-size: var(--font-d); }
@@ -98,12 +99,17 @@
   :root[data-ui="gloves"] .seg-ic button { min-height: 80px; font-size: 14px; }
   :root[data-ui="gloves"] .seg-ic button svg { width: 30px; height: 30px; }
   :root[data-ui="gloves"] .day-chip i { width: 10px; height: 10px; }
-  :root[data-ui="gloves"] .hero .btn + .btn { margin-top: 18px; }
+  :root[data-ui="gloves"] .hero .btn + .btn, :root[data-ui="gloves"] .btn[data-next] + .btn { margin-top: 18px; }
+  /* Заголовок часа с кнопками ±1 — по центру, иначе полоска отрывается от текста */
+  :root[data-ui="gloves"] .h2:has(> .wx-step) { align-items: center; }
+  :root[data-ui="gloves"] .fleet-row .d { -webkit-line-clamp: 3; }
+  :root[data-ui="gloves"] .mode-card[aria-pressed="true"] { box-shadow: none; }
+  :root[data-ui="gloves"] form[data-form="site"] .btn-line .btn { flex-basis: 100%; }
   :root[data-ui="gloves"] .mode-card { font-size: 14px; }
   :root[data-ui="gloves"] .mode-card small { font-size: 12.5px; }
   /* Следующий шаг: толстая сплошная обводка, без бега и пульса */
   :root[data-ui="gloves"] [data-next] { animation: none; box-shadow: none; outline: 3px solid var(--accent); outline-offset: 3px; }
-  :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; }
+  :root[data-ui="gloves"] .card.flat [data-next] { outline-offset: -4px; border-radius: calc(var(--radius) - 4px); }
   :root[data-ui="gloves"] [data-next]::after { display: none; }
 
   /* ================= «Максимум»: стекло, аврора, неон ================= */
@@ -117,8 +123,11 @@
       radial-gradient(40% 28% at 90% 34%, color-mix(in srgb, var(--accent-2) 36%, transparent), transparent 70%),
       radial-gradient(48% 30% at 58% 86%, color-mix(in srgb, var(--ok) 22%, transparent), transparent 72%),
       radial-gradient(34% 24% at 8% 64%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 70%);
-    animation: aurora 48s ease-in-out infinite alternate;
-    will-change: transform;
+    /* Два прохода (~1,5 мин) и покой: пока фон движется, GPU каждый кадр
+       заново размывает всё стекло над ним (док, герои, плитки) — вечная
+       анимация по умолчанию стоила бы батареи. Чётное число проходов
+       с alternate возвращает пятна в исходное положение без скачка. */
+    animation: aurora 48s ease-in-out 2 alternate;
   }
   /* Светлая тема: пастель из неоновых оттенков — тёмный акцент давал серые пятна */
   :root[data-ui="max"][data-theme="light"] body::before {
@@ -156,7 +165,7 @@
     --G: color-mix(in srgb, var(--accent) 8%, transparent);
   }
   :root[data-ui="max"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 82%, transparent); }
-  :root[data-ui="max"][data-theme="light"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 96%, transparent); }
+  :root[data-ui="max"][data-theme="light"] dialog { background: var(--sheen), color-mix(in srgb, var(--bg-2) 96%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
   /* Стекло прозрачнее только там, где оно уже есть */
   :root[data-ui="max"] :is(.card.hero, .wx-hero, .ready-panel .gauge-tile) { --card-alpha: 60%; }
   :root[data-ui="max"][data-theme="light"] :is(.card.hero, .wx-hero, .ready-panel .gauge-tile) { --card-alpha: 70%; }
@@ -164,12 +173,29 @@
   /* Рамка героя — неоновый градиент по кругу и мягкий ореол. Неподвижный:
      бегущий градиент на большой карточке — перерисовка всей карточки
      каждый кадр (замер: +10 % занятости главного потока в простое). */
+  /* Рамка — отдельным слоем с маской ровно по 1 px границы: слой
+     border-box под полупрозрачным стеклом просвечивал бы всю карточку
+     (тёмная «вертушка» конуса в центре — ревью 3.0). */
   :root[data-ui="max"] .card.hero {
+    isolation: isolate;
+    border-color: transparent;
     background:
       var(--sheen) padding-box,
-      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box,
-      conic-gradient(from 210deg, color-mix(in srgb, var(--accent) 85%, transparent), color-mix(in srgb, var(--accent-2) 60%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 60%, transparent) 85%, color-mix(in srgb, var(--accent) 85%, transparent)) border-box;
+      linear-gradient(color-mix(in srgb, var(--surface) var(--card-alpha), transparent), color-mix(in srgb, var(--surface) var(--card-alpha), transparent)) padding-box;
     box-shadow: var(--shadow), 0 0 44px -16px var(--accent), 0 0 70px -30px var(--accent-2);
+  }
+  :root[data-ui="max"] .card.hero::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: conic-gradient(from 210deg, color-mix(in srgb, var(--accent) 85%, transparent), color-mix(in srgb, var(--accent-2) 60%, transparent) 25%, var(--line-soft) 45%, var(--line-soft) 65%, color-mix(in srgb, var(--ok) 60%, transparent) 85%, color-mix(in srgb, var(--accent) 85%, transparent));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
   }
   /* Следующий шаг в «Максимуме»: блик-комета пробегает три круга после
      появления кнопки и замирает, дальше рамка только дышит. Бег угла —

@@ -30,7 +30,7 @@ function viewJournal() {
   let h = pageHead('Журнал', total.length ? {
     sub: `${total.length} ${plural(total.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}`,
     act: 'journal-menu', actLabel: 'Меню журнала', actIcon: 'more', help: 'journal',
-  } : { sub: 'Полётов пока не было', help: 'journal' });
+  } : { help: 'journal' });
   // Меню «⋯»: печать и выгрузки — существующие действия. Атрибут hidden —
   // запасной режим для браузеров без popover (см. toggleMenu).
   if (total.length) {

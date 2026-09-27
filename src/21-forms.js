@@ -43,8 +43,8 @@ function openModelForm(a, presetId, saved, cloneId) {
       ${field('Высота полёта, м', `<input type="number" name="maxAlt" min="10" max="${WX_ALT_MAX}" step="10" value="${numVal(a.maxAlt)}" placeholder="${WX_DEFAULT_ALT[a.type] || 100}">`, 'для окон погоды, до&nbsp;3000&nbsp;м')}
     </div>
     <div class="grid2">
-      ${field('Осмотр каждые, полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
-      ${field('Осмотр каждые, мин налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
+      ${field('Осмотр: полётов', `<input type="number" name="svcEvery" min="1" max="999" step="1" value="${numVal(a.svcEvery)}" placeholder="напр. 10">`)}
+      ${field('Осмотр: мин налёта', `<input type="number" name="svcEveryMin" min="1" max="99999" step="1" value="${numVal(a.svcEveryMin)}" placeholder="напр. 180">`)}
     </div>
     <div class="small muted" style="margin:-6px 0 10px">Напоминание на «Сегодня» и в чек-листе; счёт заново после выполненной работы.
       Можно задать оба — сработает тот, что подойдёт раньше. Пусто — без напоминаний.</div>
@@ -102,7 +102,7 @@ function openSiteForm(s, showMap) {
     </div>
     <div class="site-map-box" hidden></div>
     <div class="hint" style="margin:6px 0 10px">Координаты нужны для окон погоды. GPS работает без
-      интернета; на карте тапните точку — координаты впишутся сами.</div>
+      интернета; на карте тапните точку&nbsp;— координаты впишутся сами.</div>
     ${field('Заметки', `<textarea name="notes" placeholder="подъезд, ЛЭП, запретные зоны рядом">${esc(s.notes || '')}</textarea>`)}
     ${field('', `<label class="check-row"><input type="checkbox" name="isDefault" ${s.isDefault ? 'checked' : ''}> Основная локация</label>`)}
     <button class="btn btn-primary" type="submit">Сохранить</button>
