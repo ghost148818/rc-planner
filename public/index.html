@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-G9wwqIXP+VkK2CYopfgekpDp8wFa8lH/gmwl8GS5Ib0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-tTbg5RzFszAk3XQI/2kIiSL8lygQvL9A6J74YIbbyio='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="7cbe766c3d">
+  <meta name="build" content="c198dd6ae9">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -579,9 +579,9 @@
   /* Строка с чипом или кнопкой справа (класс stack): на узком экране
      действие уходит под текст, а не выдавливает его в три слова */
   @media (max-width: 480px) {
-    div.row.stack { flex-wrap: wrap; row-gap: 8px; }
-    div.row.stack > .grow { flex: 1 1 58%; }
-    div.row.stack > .grow + * { margin-left: auto; }
+    .row.stack { flex-wrap: wrap; row-gap: 8px; }
+    .row.stack > .grow { flex: 1 1 58%; }
+    .row.stack > .grow + * { margin-left: auto; }
   }
   .row .chev { color: var(--dim); flex: none; }
   .row .chev svg { width: 18px; height: 18px; }
@@ -1275,6 +1275,7 @@
   .onb-head .t { display: block; font-weight: 750; font-size: 16px; }
   .onb-head .d { display: block; color: var(--mut); font-size: var(--font-d); }
   .onb-head .progress { margin: 8px 0 2px; }
+  .onb .row .t { text-wrap: balance; }
   .row.done { opacity: 0.55; }
   .row.done .t { text-decoration: line-through; }
   .row.done .row-ic { --c: var(--ok); }
@@ -1401,6 +1402,8 @@
   .wx-step { display: none; }
   /* Меню высоты: 30 значений в пять колонок — не закрывает свою кнопку */
   #wx-alt-menu { grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(360px, calc(100vw - 16px)); }
+  /* Телефон: шесть колонок — на ряд меньше, меню помещается над кнопкой */
+  @media (max-width: 899px) { #wx-alt-menu { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
   /* ================= Чек-лист ================= */
   .prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
@@ -1421,7 +1424,7 @@
     transition: background-color 0.2s var(--ease);
   }
   .ck .grow { flex: 1; min-width: 0; }
-  .ck .t { display: block; font-size: var(--font); font-weight: 550; }
+  .ck .t { display: block; font-size: var(--font); font-weight: 550; text-wrap: balance; }
   .ck .d { display: block; color: var(--mut); font-size: calc(var(--font-d) - 0.5px); }
   .ck .ck-main {
     flex: 1; min-width: 0;
@@ -1596,6 +1599,8 @@
   /* Подпись борта и АКБ — до двух строк: главное в начале, остальное
      обрезается, а не уходит за край одной строки */
   .fleet-row .d, .batt-row .d { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* В строке АКБ battTag — имя борта-владельца: оно переносится */
+  .batt-row .d .bt { white-space: normal; }
   .grp-head {
     display: flex; align-items: center; gap: 8px;
     margin: 16px 2px 7px;
@@ -1634,9 +1639,6 @@
     overflow: hidden;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
-  /* На десктопе карточки статистики стоят столбиком — колонка значения
-     одной ширины, дорожки кончаются на одной вертикали по всей странице */
-  @media (min-width: 900px) { .bar-row .v { min-width: 124px; } }
   .bar-row[data-res="crash"] .bar-track i { background: var(--bad); box-shadow: none; }
   .bar-row[data-res="problem"] .bar-track i, .bar-row[data-res="emergency"] .bar-track i { background: var(--warn); box-shadow: none; }
   .bar-row[data-res="maintenance"] .bar-track i { background: var(--maint); box-shadow: none; }
@@ -1662,6 +1664,10 @@
     font-size: 13px;
     font-weight: 600;
   }
+  /* На десктопе карточки статистики стоят столбиком — колонка значения
+     одной ширины, дорожки кончаются на одной вертикали по всей странице.
+     После базового правила: тот же слой и специфичность — побеждает позднее. */
+  @media (min-width: 900px) { .bar-row .v { min-width: 124px; } }
   /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
   .heat {
     max-width: 460px;
@@ -1968,8 +1974,8 @@
      что выходит за её край. */
   .card.flat [data-next] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent), inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
   .card.flat [data-next]::after { inset: 0; }
-  .card.flat > .row[data-next] { border-radius: calc(var(--radius) - 3px); box-shadow: inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
-  .card.flat > .row[data-next]::after { inset: 3px; border-radius: calc(var(--radius) - 3px); }
+  .card.flat > :is(.row, .ck)[data-next] { border-radius: calc(var(--radius) - 3px); box-shadow: inset 0 0 calc(20px * var(--fx-glow)) -8px var(--accent); }
+  .card.flat > :is(.row, .ck)[data-next]::after { inset: 3px; border-radius: calc(var(--radius) - 3px); }
   /* Главная кнопка следующим шагом: своё зелёное свечение + рамка */
   .btn-primary[data-next] {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent),
@@ -2144,6 +2150,8 @@
   :root[data-ui="gloves"] .day-chip i { width: 10px; height: 10px; }
   :root[data-ui="gloves"] .hero .btn + .btn, :root[data-ui="gloves"] .btn[data-next] + .btn { margin-top: 18px; }
   /* Заголовок часа с кнопками ±1 — по центру, иначе полоска отрывается от текста */
+  /* Десктоп: панель чек-листа — ряд, зазор под подсвеченной не нужен */
+  @media (min-width: 900px) { :root[data-ui="gloves"] .act-bar .btn + .btn { margin-top: 0; } }
   :root[data-ui="gloves"] .h2:has(> .wx-step) { align-items: center; }
   :root[data-ui="gloves"] .fleet-row .d { -webkit-line-clamp: 3; }
   :root[data-ui="gloves"] .mode-card[aria-pressed="true"] { box-shadow: none; }
@@ -2170,7 +2178,7 @@
        заново размывает всё стекло над ним (док, герои, плитки) — вечная
        анимация по умолчанию стоила бы батареи. Чётное число проходов
        с alternate возвращает пятна в исходное положение без скачка. */
-    animation: aurora 48s ease-in-out 2 alternate;
+    animation: aurora 48s ease-in-out 2 alternate both;
   }
   /* Светлая тема: пастель из неоновых оттенков — тёмный акцент давал серые пятна */
   :root[data-ui="max"][data-theme="light"] body::before {
@@ -4885,13 +4893,21 @@ function toggleMenu(btn, id) {
   // прокручивается внутри меню (max-height в CSS). Меню высоты — первое
   // высокое: три пункта журнала помещались всегда.
   // Низ — над плавающей панелью вкладок (на телефоне), а не под ней.
+  // Меню никогда не закрывает свою кнопку: влезает под ней — под ней,
+  // иначе над ней; не влезает нигде — на ту сторону, где места больше,
+  // с прокруткой внутри (max-height).
   const tb = document.getElementById('tabbar');
   const tbr = tb && tb.getBoundingClientRect();
   const bottom = (tbr && tbr.width < W / 2 ? window.innerHeight : Math.min(window.innerHeight, tbr ? tbr.top : window.innerHeight)) - 8;
+  m.style.maxHeight = '';
   const mh = m.offsetHeight;
-  let top = r.bottom + 6;
-  if (top + mh > bottom) top = r.top - 6 - mh;
-  m.style.top = Math.round(Math.max(8, Math.min(top, bottom - mh))) + 'px';
+  const below = bottom - (r.bottom + 6), above = r.top - 6 - 8;
+  let top;
+  if (mh <= below) top = r.bottom + 6;
+  else if (mh <= above) top = r.top - 6 - mh;
+  else if (below >= above) { m.style.maxHeight = Math.max(120, below) + 'px'; top = r.bottom + 6; }
+  else { m.style.maxHeight = Math.max(120, above) + 'px'; top = 8; }
+  m.style.top = Math.round(top) + 'px';
   btn.setAttribute('aria-expanded', 'true');
 }
 function closeMenus() {
@@ -5253,7 +5269,7 @@ function todayOpenMaintRow(m) {
   const a = S.aircraft.find((x) => x.id === m.aircraftId);
   return rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
     `<span class="grow"><span class="t">${esc(m.title)}</span>
-     <span class="d">${esc(a ? a.name : '')} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`, 'tools');
+     <span class="d wrap">${esc(a ? a.name : '')} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`, 'tools');
 }
 
 // «Обслуживание»: подошедший регламент + открытые работы (до пяти).
@@ -5414,7 +5430,8 @@ function todaySide(wx, flights, backup) {
   if (wx) h += `<div class="wx-slot"><div class="h2 side-only">Условия</div>${wx}</div>`;
   if (flights && flights.length) {
     const mins = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
-    h += `<div class="h2">Полёты сегодня <span class="cnt">${flights.length} ${plural(flights.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span></div>`;
+    // Итог — только при нескольких полётах: у одного он повторял бы строку
+    h += `<div class="h2">Полёты сегодня${flights.length > 1 ? ` <span class="cnt">${flights.length} ${plural(flights.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span>` : ''}</div>`;
     h += logGroupedHtml(flights, null, true);
   } else if (!flights) {
     const recent = S.sessions.filter((s) => s.end).sort((x, y) => y.start - x.start).slice(0, 3);
@@ -7475,7 +7492,7 @@ function wxAttentionHtml(day, lim) {
       ? `вероятность&nbsp;${s.pp}&nbsp;%${s.prec > 0 ? ` · до&nbsp;${wxMm(s.prec)}&nbsp;мм` : ''}`
       : `ветер до&nbsp;${wxNum(s.w)}&nbsp;м/с · порывы до&nbsp;${wxNum(s.g)}`;
     const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
-    return `<button class="row" data-act="weather-hour" data-h="${s.from}">
+    return `<button class="row stack" data-act="weather-hour" data-h="${s.from}">
       <span class="row-ic">${ICONS[s.icon]}</span>
       <span class="grow"><span class="t">${s.text.charAt(0).toUpperCase() + s.text.slice(1)}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
       <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>
@@ -8052,7 +8069,7 @@ function viewPrivacy() {
     в сеть только за обновлением самой страницы.</p>
     <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
     <span class="nowrap">(помечены <span class="badge online">online</span>)</span>. Что уходит наружу:</p>
-    <ul style="padding-left:18px;margin-top:4px;font-size:var(--font-d)">
+    <ul style="padding-left:18px;margin-top:4px">
       <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
       <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
       <li><b>Поиск места</b> (Nominatim/OSM): введённый вами текст запроса.</li>
@@ -8084,11 +8101,14 @@ function viewPrivacy() {
 
 // Блок раздела → разметка. Тексты справочные, но идут через esc():
 // разметки внутри них нет, а дисциплина одна на всё приложение.
+// helpTypo — после esc(): тире и стрелка не начинают строку (неразрывный
+// пробел перед ними); data/help.js и docs/user-guide.md остаются чистыми.
+const helpTypo = (s) => esc(s).replace(/ ([—→])/g, '&nbsp;$1');
 function helpBlockHtml(b) {
-  if (typeof b === 'string') return `<p>${esc(b)}</p>`;
+  if (typeof b === 'string') return `<p>${helpTypo(b)}</p>`;
   if (b.h) return `<div class="h3">${esc(b.h)}</div>`;
-  if (b.list) return `<ul>${b.list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
-  if (b.tip) return `<div class="banner">${ICONS.help}<span class="grow">${esc(b.tip)}</span></div>`;
+  if (b.list) return `<ul>${b.list.map((t) => `<li>${helpTypo(t)}</li>`).join('')}</ul>`;
+  if (b.tip) return `<div class="banner">${ICONS.help}<span class="grow">${helpTypo(b.tip)}</span></div>`;
   if (b.go) return `<div class="card flat">${rowBtn(`data-nav="${esc(b.go)}"`, `<span class="grow"><span class="t">${esc(b.text)}</span></span>`)}</div>`;
   return '';
 }

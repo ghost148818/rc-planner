@@ -277,7 +277,7 @@ function viewPrivacy() {
     в сеть только за обновлением самой страницы.</p>
     <p style="margin-top:8px"><strong>Online-функции — только по вашему нажатию</strong>
     <span class="nowrap">(помечены <span class="badge online">online</span>)</span>. Что уходит наружу:</p>
-    <ul style="padding-left:18px;margin-top:4px;font-size:var(--font-d)">
+    <ul style="padding-left:18px;margin-top:4px">
       <li><b>Прогноз</b> (Open-Meteo): координаты места, огрублённые до ~1 км. Без ключей и аккаунтов.</li>
       <li><b>Мини-карта</b> (OpenStreetMap): номера тайлов просматриваемого района.</li>
       <li><b>Поиск места</b> (Nominatim/OSM): введённый вами текст запроса.</li>

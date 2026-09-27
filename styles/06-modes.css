@@ -101,6 +101,8 @@
   :root[data-ui="gloves"] .day-chip i { width: 10px; height: 10px; }
   :root[data-ui="gloves"] .hero .btn + .btn, :root[data-ui="gloves"] .btn[data-next] + .btn { margin-top: 18px; }
   /* Заголовок часа с кнопками ±1 — по центру, иначе полоска отрывается от текста */
+  /* Десктоп: панель чек-листа — ряд, зазор под подсвеченной не нужен */
+  @media (min-width: 900px) { :root[data-ui="gloves"] .act-bar .btn + .btn { margin-top: 0; } }
   :root[data-ui="gloves"] .h2:has(> .wx-step) { align-items: center; }
   :root[data-ui="gloves"] .fleet-row .d { -webkit-line-clamp: 3; }
   :root[data-ui="gloves"] .mode-card[aria-pressed="true"] { box-shadow: none; }
@@ -127,7 +129,7 @@
        заново размывает всё стекло над ним (док, герои, плитки) — вечная
        анимация по умолчанию стоила бы батареи. Чётное число проходов
        с alternate возвращает пятна в исходное положение без скачка. */
-    animation: aurora 48s ease-in-out 2 alternate;
+    animation: aurora 48s ease-in-out 2 alternate both;
   }
   /* Светлая тема: пастель из неоновых оттенков — тёмный акцент давал серые пятна */
   :root[data-ui="max"][data-theme="light"] body::before {

@@ -7,11 +7,14 @@
 
 // Блок раздела → разметка. Тексты справочные, но идут через esc():
 // разметки внутри них нет, а дисциплина одна на всё приложение.
+// helpTypo — после esc(): тире и стрелка не начинают строку (неразрывный
+// пробел перед ними); data/help.js и docs/user-guide.md остаются чистыми.
+const helpTypo = (s) => esc(s).replace(/ ([—→])/g, '&nbsp;$1');
 function helpBlockHtml(b) {
-  if (typeof b === 'string') return `<p>${esc(b)}</p>`;
+  if (typeof b === 'string') return `<p>${helpTypo(b)}</p>`;
   if (b.h) return `<div class="h3">${esc(b.h)}</div>`;
-  if (b.list) return `<ul>${b.list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
-  if (b.tip) return `<div class="banner">${ICONS.help}<span class="grow">${esc(b.tip)}</span></div>`;
+  if (b.list) return `<ul>${b.list.map((t) => `<li>${helpTypo(t)}</li>`).join('')}</ul>`;
+  if (b.tip) return `<div class="banner">${ICONS.help}<span class="grow">${helpTypo(b.tip)}</span></div>`;
   if (b.go) return `<div class="card flat">${rowBtn(`data-nav="${esc(b.go)}"`, `<span class="grow"><span class="t">${esc(b.text)}</span></span>`)}</div>`;
   return '';
 }

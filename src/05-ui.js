@@ -161,13 +161,21 @@ function toggleMenu(btn, id) {
   // прокручивается внутри меню (max-height в CSS). Меню высоты — первое
   // высокое: три пункта журнала помещались всегда.
   // Низ — над плавающей панелью вкладок (на телефоне), а не под ней.
+  // Меню никогда не закрывает свою кнопку: влезает под ней — под ней,
+  // иначе над ней; не влезает нигде — на ту сторону, где места больше,
+  // с прокруткой внутри (max-height).
   const tb = document.getElementById('tabbar');
   const tbr = tb && tb.getBoundingClientRect();
   const bottom = (tbr && tbr.width < W / 2 ? window.innerHeight : Math.min(window.innerHeight, tbr ? tbr.top : window.innerHeight)) - 8;
+  m.style.maxHeight = '';
   const mh = m.offsetHeight;
-  let top = r.bottom + 6;
-  if (top + mh > bottom) top = r.top - 6 - mh;
-  m.style.top = Math.round(Math.max(8, Math.min(top, bottom - mh))) + 'px';
+  const below = bottom - (r.bottom + 6), above = r.top - 6 - 8;
+  let top;
+  if (mh <= below) top = r.bottom + 6;
+  else if (mh <= above) top = r.top - 6 - mh;
+  else if (below >= above) { m.style.maxHeight = Math.max(120, below) + 'px'; top = r.bottom + 6; }
+  else { m.style.maxHeight = Math.max(120, above) + 'px'; top = 8; }
+  m.style.top = Math.round(top) + 'px';
   btn.setAttribute('aria-expanded', 'true');
 }
 function closeMenus() {

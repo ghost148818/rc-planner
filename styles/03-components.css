@@ -51,9 +51,9 @@
   /* Строка с чипом или кнопкой справа (класс stack): на узком экране
      действие уходит под текст, а не выдавливает его в три слова */
   @media (max-width: 480px) {
-    div.row.stack { flex-wrap: wrap; row-gap: 8px; }
-    div.row.stack > .grow { flex: 1 1 58%; }
-    div.row.stack > .grow + * { margin-left: auto; }
+    .row.stack { flex-wrap: wrap; row-gap: 8px; }
+    .row.stack > .grow { flex: 1 1 58%; }
+    .row.stack > .grow + * { margin-left: auto; }
   }
   .row .chev { color: var(--dim); flex: none; }
   .row .chev svg { width: 18px; height: 18px; }

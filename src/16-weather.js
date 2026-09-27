@@ -553,7 +553,7 @@ function wxAttentionHtml(day, lim) {
       ? `вероятность&nbsp;${s.pp}&nbsp;%${s.prec > 0 ? ` · до&nbsp;${wxMm(s.prec)}&nbsp;мм` : ''}`
       : `ветер до&nbsp;${wxNum(s.w)}&nbsp;м/с · порывы до&nbsp;${wxNum(s.g)}`;
     const chipCls = s.verdict === 'bad' ? 'st-grounded' : 'st-check';
-    return `<button class="row" data-act="weather-hour" data-h="${s.from}">
+    return `<button class="row stack" data-act="weather-hour" data-h="${s.from}">
       <span class="row-ic">${ICONS[s.icon]}</span>
       <span class="grow"><span class="t">${s.text.charAt(0).toUpperCase() + s.text.slice(1)}</span><span class="d wrap"><span class="mono nowrap">${time}</span> · ${sub}</span></span>
       <span class="chip ${chipCls}">${WX_WORDS[s.verdict]}</span>

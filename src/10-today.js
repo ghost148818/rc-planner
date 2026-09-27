@@ -64,7 +64,7 @@ function todayOpenMaintRow(m) {
   const a = S.aircraft.find((x) => x.id === m.aircraftId);
   return rowBtn(`data-act="edit-maint" data-id="${m.id}"`,
     `<span class="grow"><span class="t">${esc(m.title)}</span>
-     <span class="d">${esc(a ? a.name : '')} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`, 'tools');
+     <span class="d wrap">${esc(a ? a.name : '')} · ${fmtDate(m.date)}${m.next ? ' · далее: ' + esc(m.next) : ''}</span></span>`, 'tools');
 }
 
 // «Обслуживание»: подошедший регламент + открытые работы (до пяти).
@@ -225,7 +225,8 @@ function todaySide(wx, flights, backup) {
   if (wx) h += `<div class="wx-slot"><div class="h2 side-only">Условия</div>${wx}</div>`;
   if (flights && flights.length) {
     const mins = flights.reduce((n, s) => n + (s.durationMin || 0), 0);
-    h += `<div class="h2">Полёты сегодня <span class="cnt">${flights.length} ${plural(flights.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span></div>`;
+    // Итог — только при нескольких полётах: у одного он повторял бы строку
+    h += `<div class="h2">Полёты сегодня${flights.length > 1 ? ` <span class="cnt">${flights.length} ${plural(flights.length, 'полёт', 'полёта', 'полётов')} · ${fmtDur(mins)}</span>` : ''}</div>`;
     h += logGroupedHtml(flights, null, true);
   } else if (!flights) {
     const recent = S.sessions.filter((s) => s.end).sort((x, y) => y.start - x.start).slice(0, 3);

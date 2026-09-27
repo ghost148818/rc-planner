@@ -52,6 +52,7 @@
   .onb-head .t { display: block; font-weight: 750; font-size: 16px; }
   .onb-head .d { display: block; color: var(--mut); font-size: var(--font-d); }
   .onb-head .progress { margin: 8px 0 2px; }
+  .onb .row .t { text-wrap: balance; }
   .row.done { opacity: 0.55; }
   .row.done .t { text-decoration: line-through; }
   .row.done .row-ic { --c: var(--ok); }
@@ -178,6 +179,8 @@
   .wx-step { display: none; }
   /* Меню высоты: 30 значений в пять колонок — не закрывает свою кнопку */
   #wx-alt-menu { grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(360px, calc(100vw - 16px)); }
+  /* Телефон: шесть колонок — на ряд меньше, меню помещается над кнопкой */
+  @media (max-width: 899px) { #wx-alt-menu { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
   /* ================= Чек-лист ================= */
   .prep-pills { align-items: center; margin-bottom: 10px; overflow: visible; }
@@ -198,7 +201,7 @@
     transition: background-color 0.2s var(--ease);
   }
   .ck .grow { flex: 1; min-width: 0; }
-  .ck .t { display: block; font-size: var(--font); font-weight: 550; }
+  .ck .t { display: block; font-size: var(--font); font-weight: 550; text-wrap: balance; }
   .ck .d { display: block; color: var(--mut); font-size: calc(var(--font-d) - 0.5px); }
   .ck .ck-main {
     flex: 1; min-width: 0;
@@ -373,6 +376,8 @@
   /* Подпись борта и АКБ — до двух строк: главное в начале, остальное
      обрезается, а не уходит за край одной строки */
   .fleet-row .d, .batt-row .d { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* В строке АКБ battTag — имя борта-владельца: оно переносится */
+  .batt-row .d .bt { white-space: normal; }
   .grp-head {
     display: flex; align-items: center; gap: 8px;
     margin: 16px 2px 7px;
@@ -411,9 +416,6 @@
     overflow: hidden;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
-  /* На десктопе карточки статистики стоят столбиком — колонка значения
-     одной ширины, дорожки кончаются на одной вертикали по всей странице */
-  @media (min-width: 900px) { .bar-row .v { min-width: 124px; } }
   .bar-row[data-res="crash"] .bar-track i { background: var(--bad); box-shadow: none; }
   .bar-row[data-res="problem"] .bar-track i, .bar-row[data-res="emergency"] .bar-track i { background: var(--warn); box-shadow: none; }
   .bar-row[data-res="maintenance"] .bar-track i { background: var(--maint); box-shadow: none; }
@@ -439,6 +441,10 @@
     font-size: 13px;
     font-weight: 600;
   }
+  /* На десктопе карточки статистики стоят столбиком — колонка значения
+     одной ширины, дорожки кончаются на одной вертикали по всей странице.
+     После базового правила: тот же слой и специфичность — побеждает позднее. */
+  @media (min-width: 900px) { .bar-row .v { min-width: 124px; } }
   /* Календарь лётных дней: 12 недель × 7 дней, яркость — налёт дня */
   .heat {
     max-width: 460px;
