@@ -8,7 +8,7 @@
   <meta name="referrer" content="origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-vqnPs6mVUuJsPU8oIB19894sarGb68O7REzxRA7CSqk=' 'sha256-1xFvSbWKLC5GyFfZK78IrkeOQ2VdbSZRgKlvcf7b2vA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="616d4ebe85">
+  <meta name="build" content="7e2d29c35e">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -2119,7 +2119,27 @@
 </style>
   <!-- Картинки из assets/art: сборка вставляет правила только для
        существующих файлов и только в PWA (офлайн-файл без них). -->
-  
+  <style>
+@layer art {
+:root{--art-bg-dark:url("art/bg-dark.webp")}
+:root{--art-bg-dark-wide:url("art/bg-dark-wide.webp")}
+:root{--art-bg-light:url("art/bg-light.webp")}
+:root{--art-bg-light-wide:url("art/bg-light-wide.webp")}
+[data-art="type-quad"]{--art-img:url("art/type-quad.webp")}[data-art="type-quad"]>svg{visibility:hidden}.welcome-art[data-art="type-quad"]{display:block}.welcome-art[data-art="type-quad"]+.welcome-ic{display:none}
+[data-art="type-plane"]{--art-img:url("art/type-plane.webp")}[data-art="type-plane"]>svg{visibility:hidden}.welcome-art[data-art="type-plane"]{display:block}.welcome-art[data-art="type-plane"]+.welcome-ic{display:none}
+[data-art="type-wing"]{--art-img:url("art/type-wing.webp")}[data-art="type-wing"]>svg{visibility:hidden}.welcome-art[data-art="type-wing"]{display:block}.welcome-art[data-art="type-wing"]+.welcome-ic{display:none}
+[data-art="type-other"]{--art-img:url("art/type-other.webp")}[data-art="type-other"]>svg{visibility:hidden}.welcome-art[data-art="type-other"]{display:block}.welcome-art[data-art="type-other"]+.welcome-ic{display:none}
+[data-art="welcome-1"]{--art-img:url("art/welcome-1.webp")}[data-art="welcome-1"]>svg{visibility:hidden}.welcome-art[data-art="welcome-1"]{display:block}.welcome-art[data-art="welcome-1"]+.welcome-ic{display:none}
+[data-art="welcome-2"]{--art-img:url("art/welcome-2.webp")}[data-art="welcome-2"]>svg{visibility:hidden}.welcome-art[data-art="welcome-2"]{display:block}.welcome-art[data-art="welcome-2"]+.welcome-ic{display:none}
+[data-art="welcome-3"]{--art-img:url("art/welcome-3.webp")}[data-art="welcome-3"]>svg{visibility:hidden}.welcome-art[data-art="welcome-3"]{display:block}.welcome-art[data-art="welcome-3"]+.welcome-ic{display:none}
+.empty-art[data-art="empty-fleet"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-fleet.svg") center/contain no-repeat;mask:url("art/empty-fleet.svg") center/contain no-repeat}.empty-art[data-art="empty-fleet"]>svg{display:none}
+.empty-art[data-art="empty-journal"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-journal.svg") center/contain no-repeat;mask:url("art/empty-journal.svg") center/contain no-repeat}.empty-art[data-art="empty-journal"]>svg{display:none}
+.empty-art[data-art="empty-batteries"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-batteries.svg") center/contain no-repeat;mask:url("art/empty-batteries.svg") center/contain no-repeat}.empty-art[data-art="empty-batteries"]>svg{display:none}
+.empty-art[data-art="empty-sites"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-sites.svg") center/contain no-repeat;mask:url("art/empty-sites.svg") center/contain no-repeat}.empty-art[data-art="empty-sites"]>svg{display:none}
+.empty-art[data-art="empty-packing"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-packing.svg") center/contain no-repeat;mask:url("art/empty-packing.svg") center/contain no-repeat}.empty-art[data-art="empty-packing"]>svg{display:none}
+.empty-art[data-art="empty-generic"]{display:block;width:min(240px,72vw);aspect-ratio:3/2;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-mask:url("art/empty-generic.svg") center/contain no-repeat;mask:url("art/empty-generic.svg") center/contain no-repeat}.empty-art[data-art="empty-generic"]>svg{display:none}
+}
+</style>
 </head>
 <body>
   <main id="views" aria-live="polite"></main>

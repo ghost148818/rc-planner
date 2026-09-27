@@ -4,7 +4,7 @@
 // управление передаётся только по кнопке «Обновить» в настройках.
 'use strict';
 
-const VERSION = '616d4ebe85';
+const VERSION = '7e2d29c35e';
 const CACHE = 'rcplanner-' + VERSION;
 const ASSETS = [
   './',
@@ -16,7 +16,23 @@ const ASSETS = [
   './icons/maskable-512.png',
   './icons/apple-touch-180.png',
   // Картинки из assets/art — сборка подставляет существующие (метка ниже).
-  
+  './art/bg-dark.webp',
+  './art/bg-dark-wide.webp',
+  './art/bg-light.webp',
+  './art/bg-light-wide.webp',
+  './art/type-quad.webp',
+  './art/type-plane.webp',
+  './art/type-wing.webp',
+  './art/type-other.webp',
+  './art/welcome-1.webp',
+  './art/welcome-2.webp',
+  './art/welcome-3.webp',
+  './art/empty-fleet.svg',
+  './art/empty-journal.svg',
+  './art/empty-batteries.svg',
+  './art/empty-sites.svg',
+  './art/empty-packing.svg',
+  './art/empty-generic.svg',
 ];
 
 self.addEventListener('install', (e) => {
