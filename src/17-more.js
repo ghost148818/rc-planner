@@ -280,8 +280,11 @@ function viewBackup() {
   h += `<p class="small muted" style="margin:8px 2px 0">Последняя копия: ${lb
     ? `${fmtDate(new Date(lb).toLocaleDateString('en-CA'))}, ${fmtTime(lb)}${backupDue() ? ' — <span class="nowrap" style="color:var(--warn)">пора обновить</span>' : ''}`
     : 'ещё не было'}. На телефоне файл предлагается через системный лист «Поделиться».</p>`;
+  // Без accept: iOS не знает расширения .rcpilot и гасит такие файлы
+  // в «Файлах» — выбрать копию было нельзя. Содержимое всё равно
+  // проверяют JSON.parse и validateBackup, фильтр по типу ничего не защищал.
   h += `<div class="card" style="margin-top:16px">` +
-    field('Восстановить из файла', `<input type="file" accept=".rcpilot,.json,application/json" data-change="import-file">`,
+    field('Восстановить из файла', `<input type="file" data-change="import-file">`,
       'Файл .rcpilot или .json, созданный RC Planner') + '</div>';
   h += `<hr class="sep"><button class="btn btn-danger" data-act="wipe-all">Стереть все данные</button>
     <p class="small muted" style="margin-top:8px">Удаляет всё с этого устройства. Копий нигде нет&nbsp;—

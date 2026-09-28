@@ -71,9 +71,18 @@ async function doImport(mode) {
   render();
 }
 
+const IMPORT_MAX_MB = 300;
 function handleImportFile(input) {
   const f = input.files && input.files[0];
   if (!f) return;
+  // Фильтра по типу нет (см. viewBackup) — случайно выбранное видео
+  // не читаем целиком в память
+  if (f.size > IMPORT_MAX_MB * 1048576) {
+    input.value = '';
+    openModal('Импорт не удался', `<p>Файл больше ${IMPORT_MAX_MB}&nbsp;МБ — это не резервная копия RC Planner.</p>
+      <div class="spacer"></div><button class="btn" data-act="close-modal">Понятно</button>`);
+    return;
+  }
   const r = new FileReader();
   r.onload = () => {
     let parsed = null;

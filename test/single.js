@@ -261,6 +261,10 @@ const TMP = path.join(__dirname, 'tmp', 'single-' + Date.now());
   // 8. Импорт обратно
   await page.evaluate(() => { location.hash = '#/backup'; });
   await page.waitForTimeout(80);
+  // iOS гасит в «Файлах» всё, что не подходит под accept, а .rcpilot
+  // системе неизвестен — фильтра у поля быть не должно
+  ok(await page.$eval('input[data-change="import-file"]', (el) => !el.hasAttribute('accept')),
+    'поле импорта без accept: на iPhone копия .rcpilot выбирается');
   await page.setInputFiles('input[data-change="import-file"]', backupFile);
   await page.waitForSelector('dialog [data-act="import-merge"]');
   await page.click('dialog [data-act="import-merge"]');
