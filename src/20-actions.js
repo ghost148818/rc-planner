@@ -400,6 +400,16 @@ const ACTIONS = {
   'journal-tab': (el) => { UI.journalTab = el.dataset.tab === 'stats' ? 'stats' : 'log'; render(true); },
   'journal-menu': (el) => toggleMenu(el, 'journal-menu'),
   'print-log': () => printLog(),
+  // Печать чек-листа: меню на экране чек-листа, бланк шаблона, прогон полёта
+  'prep-menu': (el) => toggleMenu(el, 'prep-menu'),
+  'print-prep': () => { closeMenus(); printPrep(); },
+  'print-blank': (el) => { closeMenus(); openBlankPrint(allTemplates().find((t) => t.id === el.dataset.tpl)); },
+  'print-blank-go': (el) => {
+    const tpl = allTemplates().find((t) => t.id === el.dataset.tpl);
+    closeModal();
+    printChecklistBlank(tpl, +el.dataset.n);
+  },
+  'print-run': (el) => printRun(S.sessions.find((x) => x.id === el.dataset.id)),
   'export-log-csv': () => exportLogCsv(),
   'export-stats-csv': () => exportStatsCsv(),
   // «Посадка» только фиксирует момент посадки (landedAt): таймер стоит,

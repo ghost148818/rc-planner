@@ -32,17 +32,38 @@
       "name": "Начать полёт",
       "short_name": "Полёт",
       "description": "Выбор борта и чек-лист",
-      "url": "./#/prep"
+      "url": "./#/prep",
+      "icons": [
+        {
+          "src": "icons/sc-flight.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Журнал полётов",
       "short_name": "Журнал",
-      "url": "./#/journal"
+      "url": "./#/journal",
+      "icons": [
+        {
+          "src": "icons/sc-journal.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Окна для полётов",
       "short_name": "Погода",
-      "url": "./#/weather"
+      "url": "./#/weather",
+      "icons": [
+        {
+          "src": "icons/sc-weather.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

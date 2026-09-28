@@ -67,7 +67,10 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   const injected = async () => page.evaluate(() => {
     const dlg = document.querySelector('dialog');
     if (!dlg) return 'окно не открылось';
-    const bad = dlg.querySelectorAll('[onfocus], [autofocus], [x]');
+    // x= у HTML-элемента — след вырвавшегося атрибута; у SVG (<rect x>
+    // в иконках ICONS) это законная геометрия, её не считаем.
+    const bad = [...dlg.querySelectorAll('[onfocus], [autofocus], [x]')]
+      .filter((el) => el.hasAttribute('onfocus') || el.hasAttribute('autofocus') || !(el instanceof SVGElement));
     // Заодно проводим фокус по всем полям: подложенный обработчик сработал бы.
     dlg.querySelectorAll('input, select, textarea').forEach((el) => el.focus());
     return bad.length;
@@ -583,6 +586,54 @@ const VIEWS = ['today', 'fleet', 'flight', 'prep', 'journal', 'log', 'stats', 'p
   ok(await page.evaluate(() => document.querySelector('.act-bar .banner.warn') !== null),
     'перечисление проблем не падает на пункте из копии');
   ok(errors.length === 0, 'после пробы 11 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
+
+  // Проба двенадцатая (3.0): печать чек-листа. Имя шаблона, текст и
+  // подсказка пункта, имя шаблона и отметки прогона — из копии; лист
+  // собирается в #print-area строкой разметки — тег обязан остаться текстом.
+  // Системный диалог печати в headless не нужен — print подменён.
+  await page.evaluate(() => { window.__print = window.print; window.print = () => {}; });
+  await page.click('[data-act="prep-menu"]');
+  await page.waitForSelector('#prep-menu [data-act="print-prep"]', { state: 'visible' });
+  await page.click('#prep-menu [data-act="print-prep"]');
+  ok(await page.evaluate(() => {
+    const a = document.getElementById('print-area');
+    return !!a && a.querySelectorAll('tbody tr').length === 1 && a.textContent.includes('✗ проблема');
+  }), 'печать с отметками с экрана чек-листа: один пункт с отметкой «проблема»');
+  await page.evaluate(async (tag) => {
+    window.dispatchEvent(new Event('afterprint'));
+    await window.RCDB.put('templates', { id: 'xss-tpl', name: tag, type: 'any', items: [{ t: tag, hint: tag }, { t: 'Второй пункт' }] });
+    await window.RCDB.put('runs', { id: 'xss-run', aircraftId: 'tpl-air', date: '2026-09-01', templateName: tag,
+      items: [{ t: tag, state: 'ok' }, { t: 'Пункт', state: 'constructor' }] });
+    await window.RCDB.put('sessions', { id: 'xss-sess', aircraftId: 'tpl-air', date: '2026-09-01', start: 1e20, end: 1,
+      durationMin: 3, flightNo: 1, checklistRunId: 'xss-run', result: 'normal' });
+    await window.loadAll();
+    location.hash = '#/templates';
+  }, '<img src=x onerror="window.__xss12=1">');
+  await page.waitForSelector('[data-act="print-blank"][data-tpl="xss-tpl"]');
+  await page.click('[data-act="print-blank"][data-tpl="xss-tpl"]');
+  await page.waitForSelector('dialog[open] [data-act="print-blank-go"][data-n="3"]');
+  await page.click('dialog[open] [data-act="print-blank-go"][data-n="3"]');
+  const blank = await page.evaluate(() => {
+    const a = document.getElementById('print-area');
+    return a ? { rows: a.querySelectorAll('tbody tr').length, boxes: a.querySelectorAll('.box').length, img: a.querySelectorAll('img').length } : null;
+  });
+  ok(!!blank && blank.rows === 5 && blank.boxes === 6 && blank.img === 0,
+    'бланк на 3 полёта: 3 строки полей и 2 пункта, 6 клеток, тег из копии не стал разметкой' + (blank ? ` (${JSON.stringify(blank)})` : ''));
+  await page.evaluate(() => { window.dispatchEvent(new Event('afterprint')); window.printRun(S.sessions.find((x) => x.id === 'xss-sess')); });
+  const run = await page.evaluate(() => {
+    const a = document.getElementById('print-area');
+    return a ? { rows: a.querySelectorAll('tbody tr').length, img: a.querySelectorAll('img').length, text: a.textContent } : null;
+  });
+  ok(!!run && run.rows === 2 && run.img === 0 && run.text.includes('не отмечен') && !run.text.includes('Invalid Date'),
+    'печать прогона из копии: 2 пункта, неизвестная отметка — «не отмечен», время вне диапазона не печатается');
+  ok(!(await page.evaluate(() => window.__xss12)), 'обработчик из шаблона и прогона не исполнился при печати');
+  await page.evaluate(async () => {
+    window.dispatchEvent(new Event('afterprint'));
+    window.print = window.__print; delete window.__print;
+    for (const [st, id] of [['templates', 'xss-tpl'], ['runs', 'xss-run'], ['sessions', 'xss-sess']]) await window.RCDB.del(st, id);
+  });
+  ok(await page.evaluate(() => !document.getElementById('print-area')), 'после печати область листа убрана');
+  ok(errors.length === 0, 'после пробы 12 ошибок консоли нет' + (errors.length ? ': ' + errors.join('; ') : ''));
 
   await page.evaluate(async () => {
     UI.prep = null;

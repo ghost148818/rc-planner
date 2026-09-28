@@ -86,7 +86,12 @@ function viewPrep() {
 
   const kept = UI.prep.runId && preparedFresh(a);
   let h = pageHead('Чек-лист', { back: '#/flight', help: 'flight',
+    act: 'prep-menu', actLabel: 'Печать чек-листа', actIcon: 'print',
     sub: esc(a.name) + (TYPES[a.type] ? ' · ' + TYPES[a.type] : '') + (kept ? ' · <span class="nowrap">подготовлен в ' + fmtTime(a.prepared.at) + '</span>' : '') });
+  h += `<div class="menu" popover="manual" id="prep-menu" role="menu" hidden>
+      <button role="menuitem" data-act="print-prep">${ICONS.templates}Печать с отметками</button>
+      <button role="menuitem" data-act="print-blank" data-tpl="${esc(UI.prep.tplId)}">${ICONS.print}Пустой бланк…</button>
+    </div>`;
   if (statusOf(a) === 'grounded') {
     h += `<div class="banner warn">Полёты этого борта запрещены вами. Снимите запрет в его карточке, если готовы летать.</div>`;
   }
@@ -166,6 +171,114 @@ function viewPrep() {
   // к вылету, и не занимает пол-экрана на телефоне.
   h += `<button class="btn prep-cancel" data-act="cancel-prep">${kept ? 'Сбросить подготовку' : 'Отменить подготовку'}</button>`;
   return h;
+}
+
+/* ---------- Печать чек-листа ----------
+   Бланк (printChecklistBlank) — пункты шаблона и пустые клетки на 1, 3
+   или 5 полётов с полями «Борт / АКБ / Время»: лист на день, отмечать
+   ручкой. Заполненный (printChecklistRun) — отметки прогона, борт, АКБ,
+   локация, время, итог по пунктам: протокол подготовки. Входы: меню
+   с принтером на экране чек-листа, кнопка у каждого шаблона в «Шаблонах
+   чек-листов», кнопка в деталях полёта. Лист собирается в браузере,
+   печатает системный диалог (printArea); пользовательские тексты —
+   через esc(), шаблоны и прогоны из копии нормализованы в NORM. */
+const PRINT_COLS = [1, 3, 5];
+const CK_PRINT = { ok: '✓ ок', fail: '✗ проблема', skip: '— пропуск' };
+
+function allTemplates() { return RC.CHECKLISTS.concat(S.templates); }
+
+function ckPrintItem(it) {
+  return `${esc(it.t)}${it.hint ? `<div class="h">${esc(it.hint)}</div>` : ''}`;
+}
+function ckPrintFoot(withDate) {
+  const pilot = S.settings.pilot ? esc(S.settings.pilot) : '______________________';
+  return `<p class="foot"><span>Пилот: ${pilot}</span>${withDate ? '<span>Дата: ______________</span>' : ''}<span>Подпись: ______________</span></p>`;
+}
+
+function printChecklistBlank(tpl, n) {
+  if (!tpl) return;
+  n = PRINT_COLS.includes(n) ? n : 1;
+  const items = Array.isArray(tpl.items) ? tpl.items : [];
+  const cols = Array.from({ length: n }, (_, i) => i + 1);
+  const empty = cols.map(() => '<td class="c w"></td>').join('');
+  const box = cols.map(() => '<td class="c"><span class="box"></span></td>').join('');
+  const type = tpl.type === 'any' ? 'любой тип' : TYPES[tpl.type] || '';
+  printArea(`<h1>Чек-лист «${esc(tpl.name)}»</h1>
+    <p>${[type, `${items.length} ${plural(items.length, 'пункт', 'пункта', 'пунктов')}`, n > 1 ? `бланк на ${n} ${plural(n, 'полёт', 'полёта', 'полётов')}` : 'бланк', 'RC Planner'].filter(Boolean).join(' · ')}</p>
+    <table class="pck cols-${n}"><thead><tr><th class="n">№</th><th>Пункт</th>${cols.map((c) => `<th class="c">${n > 1 ? 'Полёт ' + c : 'Отметка'}</th>`).join('')}</tr></thead>
+    <tbody>
+      <tr class="meta"><td class="n"></td><td>Борт</td>${empty}</tr>
+      <tr class="meta"><td class="n"></td><td>АКБ, заряд</td>${empty}</tr>
+      <tr class="meta"><td class="n"></td><td>Время взлёта</td>${empty}</tr>
+      ${items.map((it, i) => `<tr><td class="n">${i + 1}</td><td>${ckPrintItem(it)}</td>${box}</tr>`).join('')}
+    </tbody></table>
+    <p class="legend">Отметка: ✓ — ок · ✗ — проблема · — — пропуск. Пункт с проблемой — не взлетать, пока не устранено.</p>
+    ${ckPrintFoot(true)}`);
+}
+
+// d: { name, items [{t, hint, state}], meta [[подпись, текст]] } — тексты
+// сырые, экранируются здесь.
+function printChecklistRun(d) {
+  const items = d.items || [];
+  const cnt = (st) => items.filter((it) => it.state === st).length;
+  const marked = items.filter((it) => CK_PRINT[it.state]).length;
+  const sum = [`отмечено ${marked} из ${items.length}`, cnt('fail') ? `проблем ${cnt('fail')}` : 'проблем нет', cnt('skip') ? `пропущено ${cnt('skip')}` : ''].filter(Boolean).join(' · ');
+  printArea(`<h1>Чек-лист «${esc(d.name || 'Чек-лист')}»</h1>
+    <p class="meta-line">${d.meta.filter(([, v]) => v).map(([k, v]) => `<span><b>${k}:</b> ${esc(v)}</span>`).join('')}</p>
+    <p>${sum}</p>
+    <table class="pck run"><thead><tr><th class="n">№</th><th>Пункт</th><th class="c">Отметка</th></tr></thead>
+    <tbody>${items.map((it, i) => `<tr${it.state === 'fail' ? ' class="fail"' : ''}><td class="n">${i + 1}</td><td>${ckPrintItem(it)}</td><td class="c">${CK_PRINT[it.state] || 'не отмечен'}</td></tr>`).join('')}</tbody></table>
+    ${ckPrintFoot(false)}`);
+}
+
+// Текущая подготовка (экран чек-листа) — заполненный лист.
+function printPrep() {
+  if (!UI.prep) return;
+  const a = S.aircraft.find((x) => x.id === UI.prep.aircraftId);
+  if (!a) return;
+  const tpl = templatesFor(a.type).find((t) => t.id === UI.prep.tplId) || {};
+  const b = armedBattery(a);
+  const site = S.sites.find((x) => x.id === UI.prep.siteId);
+  printChecklistRun({
+    name: tpl.name,
+    items: UI.prep.items,
+    meta: [
+      ['Борт', a.name + (TYPES[a.type] ? ' (' + TYPES[a.type] + ')' : '')],
+      ['АКБ', b ? b.label + (CHARGE_LABEL[b.charge] ? ' — ' + CHARGE_LABEL[b.charge] : '') : 'не установлен'],
+      ['Локация', site ? site.name : ''],
+      ['Дата', fmtDate(todayISO()) + ', ' + fmtTime(Date.now())],
+    ],
+  });
+}
+
+// Чек-лист, пройденный перед полётом (детали полёта) — заполненный лист.
+function printRun(s) {
+  const run = s && S.runs.find((r) => r.id === s.checklistRunId);
+  if (!run) return;
+  const a = S.aircraft.find((x) => x.id === s.aircraftId);
+  const b = S.batteries.find((x) => x.id === s.batteryId);
+  const site = S.sites.find((x) => x.id === s.siteId);
+  const t = +s.start;
+  printChecklistRun({
+    name: run.templateName,
+    items: run.items,
+    meta: [
+      ['Полёт', flightNoText(s)],
+      ['Борт', a ? a.name : 'удалён'],
+      ['АКБ', b ? b.label : ''],
+      ['Локация', site ? site.name : ''],
+      ['Дата', fmtDate(s.date) + (t > 0 && t <= 8.64e15 ? ', ' + fmtTime(t) : '')],
+    ],
+  });
+}
+
+// Окно выбора бланка: сколько колонок-полётов на листе.
+function openBlankPrint(tpl) {
+  if (!tpl) return;
+  const n = Array.isArray(tpl.items) ? tpl.items.length : 0;
+  openModal('Печать бланка', `<p class="small muted" style="margin:0 0 12px">«${esc(tpl.name)}» · ${n}&nbsp;${plural(n, 'пункт', 'пункта', 'пунктов')}.
+      Колонка на каждый полёт: один лист на весь день, отметки ручкой.</p>
+    <div class="btn-line eq">${PRINT_COLS.map((c) => `<button class="btn" data-act="print-blank-go" data-tpl="${esc(tpl.id)}" data-n="${c}">${c}&nbsp;${plural(c, 'полёт', 'полёта', 'полётов')}</button>`).join('')}</div>`);
 }
 
 /* ---------- Экран полёта: HUD-кольцо, пилюли, посадка ----------
@@ -396,7 +509,7 @@ function sessionDetailHtml(s) {
       run.items.map((it) => `<div class="ck" data-state="${it.state || ''}">
         <span class="grow"><span class="t">${esc(it.t)}</span></span>
         <span class="st">${ckMark(it.state || 'skip')}</span></div>`).join('') +
-      '</div></div></details>';
+      `</div><button class="btn btn-sm" data-act="print-run" data-id="${s.id}" style="margin-top:10px">${ICONS.print}Печать чек-листа</button></div></details>`;
   }
   return h;
 }

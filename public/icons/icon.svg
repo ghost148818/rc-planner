@@ -1,43 +1,88 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- RC Planner 3.0 «Кокпит»: HUD-кольцо полёта со шкалой и дротик в наборе
+       высоты. #bg — фон (make-icons.js снимает скругление для maskable и
+       apple-touch), #fg — рисунок (для maskable сжимается в безопасную зону). -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1c232e"/>
-      <stop offset="0.55" stop-color="#12161d"/>
-      <stop offset="1" stop-color="#0b0e13"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.75">
-      <stop offset="0" stop-color="#39c26d" stop-opacity="0.16"/>
-      <stop offset="0.55" stop-color="#39c26d" stop-opacity="0.05"/>
-      <stop offset="1" stop-color="#39c26d" stop-opacity="0"/>
+    <radialGradient id="bgg" cx=".3" cy=".2" r="1.1">
+      <stop offset="0" stop-color="#17222f"/>
+      <stop offset=".6" stop-color="#0b1119"/>
+      <stop offset="1" stop-color="#05080d"/>
     </radialGradient>
-    <linearGradient id="jet" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#2ba55c"/>
-      <stop offset="1" stop-color="#5ee694"/>
-    </linearGradient>
     <linearGradient id="ring" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#1f5c39"/>
-      <stop offset="1" stop-color="#39c26d"/>
+      <stop offset="0" stop-color="#7c8cff"/>
+      <stop offset="1" stop-color="#3fd6f0"/>
     </linearGradient>
+    <linearGradient id="jet" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#3fd6f0"/>
+      <stop offset="1" stop-color="#e9fbff"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
-  <!-- кольцо-окно: разомкнутая дуга -->
-  <circle cx="256" cy="256" r="168" fill="none" stroke="url(#ring)" stroke-width="22"
-          stroke-linecap="round" stroke-dasharray="792 264" stroke-dashoffset="-132"
-          transform="rotate(-90 256 256)" opacity="0.9"/>
-  <!-- линии ветра -->
-  <g stroke="#39c26d" stroke-opacity="0.45" stroke-width="16" stroke-linecap="round" fill="none">
-    <path d="M118 330 h74"/>
-    <path d="M96 282 h54"/>
-  </g>
-  <!-- самолёт-дротик в наборе высоты -->
-  <g transform="rotate(45 256 256)">
-    <path d="M256 80
-             C 263 116 267 156 267 196
-             L 270 204 378 292 378 322 269 254
-             L 265 330 300 360 300 380 256 364 212 380 212 360 247 330
-             L 243 254 134 322 134 292 242 204
-             L 245 196 C 245 156 249 116 256 80 Z"
-          fill="url(#jet)"/>
+  <rect id="bg" width="512" height="512" rx="114" fill="url(#bgg)"/>
+  <g id="fg">
+    <!-- шкала: 48 делений, каждое четвёртое длиннее -->
+    <g stroke="#3fd6f0" stroke-opacity=".3" stroke-width="5" stroke-linecap="round">
+      <path d="M256 62L256 43"/>
+      <path d="M282.5 54.7L283.8 44.8"/>
+      <path d="M308.5 59.9L311.1 50.3"/>
+      <path d="M333.7 68.5L337.5 59.2"/>
+      <path d="M353 88L362.5 71.5"/>
+      <path d="M379.6 94.9L385.7 87"/>
+      <path d="M399.5 112.5L406.6 105.4"/>
+      <path d="M417.1 132.4L425 126.3"/>
+      <path d="M424 159L440.5 149.5"/>
+      <path d="M443.5 178.3L452.8 174.5"/>
+      <path d="M452.1 203.5L461.7 200.9"/>
+      <path d="M457.3 229.5L467.2 228.2"/>
+      <path d="M450 256L469 256"/>
+      <path d="M457.3 282.5L467.2 283.8"/>
+      <path d="M452.1 308.5L461.7 311.1"/>
+      <path d="M443.5 333.7L452.8 337.5"/>
+      <path d="M424 353L440.5 362.5"/>
+      <path d="M417.1 379.6L425 385.7"/>
+      <path d="M399.5 399.5L406.6 406.6"/>
+      <path d="M379.6 417.1L385.7 425"/>
+      <path d="M353 424L362.5 440.5"/>
+      <path d="M333.7 443.5L337.5 452.8"/>
+      <path d="M308.5 452.1L311.1 461.7"/>
+      <path d="M282.5 457.3L283.8 467.2"/>
+      <path d="M256 450L256 469"/>
+      <path d="M229.5 457.3L228.2 467.2"/>
+      <path d="M203.5 452.1L200.9 461.7"/>
+      <path d="M178.3 443.5L174.5 452.8"/>
+      <path d="M159 424L149.5 440.5"/>
+      <path d="M132.4 417.1L126.3 425"/>
+      <path d="M112.5 399.5L105.4 406.6"/>
+      <path d="M94.9 379.6L87 385.7"/>
+      <path d="M88 353L71.5 362.5"/>
+      <path d="M68.5 333.7L59.2 337.5"/>
+      <path d="M59.9 308.5L50.3 311.1"/>
+      <path d="M54.7 282.5L44.8 283.8"/>
+      <path d="M62 256L43 256"/>
+      <path d="M54.7 229.5L44.8 228.2"/>
+      <path d="M59.9 203.5L50.3 200.9"/>
+      <path d="M68.5 178.3L59.2 174.5"/>
+      <path d="M88 159L71.5 149.5"/>
+      <path d="M94.9 132.4L87 126.3"/>
+      <path d="M112.5 112.5L105.4 105.4"/>
+      <path d="M132.4 94.9L126.3 87"/>
+      <path d="M159 88L149.5 71.5"/>
+      <path d="M178.3 68.5L174.5 59.2"/>
+      <path d="M203.5 59.9L200.9 50.3"/>
+      <path d="M229.5 54.7L228.2 44.8"/>
+    </g>
+    <!-- дорожка и неоновая дуга кольца (72 %), ореол — размытая копия -->
+    <circle cx="256" cy="256" r="168" fill="none" stroke="#3fd6f0" stroke-opacity=".12" stroke-width="20"/>
+    <circle cx="256" cy="256" r="168" fill="none" stroke="url(#ring)" stroke-width="20" stroke-linecap="round"
+            stroke-dasharray="760 2000" transform="rotate(-90 256 256)" filter="url(#glow)" opacity=".8"/>
+    <circle cx="256" cy="256" r="168" fill="none" stroke="url(#ring)" stroke-width="20" stroke-linecap="round"
+            stroke-dasharray="760 2000" transform="rotate(-90 256 256)"/>
+    <!-- дротик в наборе высоты -->
+    <g transform="rotate(45 256 256)">
+      <path d="M256 118 L282 214 L372 290 L372 316 L280 286 L274 352 L304 376 L304 394 L256 382 L208 394 L208 376 L238 352 L232 286 L140 316 L140 290 L230 214 Z" fill="url(#jet)" filter="url(#glow)" opacity=".55"/>
+      <path d="M256 118 L282 214 L372 290 L372 316 L280 286 L274 352 L304 376 L304 394 L256 382 L208 394 L208 376 L238 352 L232 286 L140 316 L140 290 L230 214 Z" fill="url(#jet)"/>
+    </g>
   </g>
 </svg>

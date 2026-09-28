@@ -261,6 +261,58 @@ async function checkPrint(page, tag, viewport) {
   await page.setViewportSize(viewport);
 }
 
+// Печать чек-листа (3.0): бланк на 5 полётов и заполненный прогон. Лист
+// белый, на нём только таблица, она не шире листа, в бланке все пункты,
+// три строки полей и клетки на каждый полёт. PDF — рядом со снимками
+// для проверки глазами (как у журнала).
+async function checkPrintChecklist(page, tag, viewport) {
+  await page.setViewportSize({ width: 794, height: 1123 });
+  await page.evaluate(() => {
+    window.__print = window.print;
+    window.print = () => {};
+    window.printChecklistBlank(RC.CHECKLISTS[0], 5);
+  });
+  await page.emulateMedia({ media: 'print' });
+  const r = await page.evaluate(() => {
+    const cs = (el) => getComputedStyle(el);
+    const area = document.getElementById('print-area');
+    const table = area && area.querySelector('table');
+    return {
+      area: area ? cs(area).display : 'нет',
+      views: cs(document.getElementById('views')).display,
+      body: cs(document.body).backgroundColor,
+      rows: area ? area.querySelectorAll('tbody tr').length : 0,
+      boxes: area ? area.querySelectorAll('.box').length : 0,
+      items: RC.CHECKLISTS[0].items.length,
+      tableW: table ? Math.round(table.getBoundingClientRect().width) : 0,
+      sheetW: document.documentElement.clientWidth,
+    };
+  });
+  ok(r.area === 'block' && r.views === 'none', `${tag}: печать бланка — на листе только чек-лист`);
+  ok(r.rows === r.items + 3 && r.boxes === r.items * 5, `${tag}: печать бланка — все пункты, строки полей и клетки на 5 полётов (${r.rows} строк, ${r.boxes} клеток)`);
+  ok(r.body === 'rgb(255, 255, 255)' && r.tableW <= r.sheetW, `${tag}: печать бланка — лист белый, таблица не шире листа (${r.tableW} при ${r.sheetW})`);
+  await page.emulateMedia({ media: null });
+  await page.evaluate(() => { window.printChecklistBlank(RC.CHECKLISTS[0], 5); });
+  await page.pdf({ path: path.join(OUT, `${tag}-print-checklist-blank.pdf`), format: 'A4', printBackground: true });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('afterprint'));
+    // полёт с прогоном r1 есть только после состояния «в полёте» — иначе такой же вручную
+    window.printRun(S.sessions.find((x) => x.checklistRunId === 'r1')
+      || { id: 'print-probe', aircraftId: 'a1', batteryId: 'b1', siteId: 'site-1', date: todayISO(), start: Date.now(), flightNo: 15, checklistRunId: 'r1' });
+  });
+  const run = await page.evaluate(() => {
+    const a = document.getElementById('print-area');
+    return a ? { rows: a.querySelectorAll('tbody tr').length, ok: a.textContent.includes('✓ ок'), meta: a.textContent.includes('Борт:') } : null;
+  });
+  ok(!!run && run.rows === 2 && run.ok && run.meta, `${tag}: печать прогона — пункты с отметками и данные полёта`);
+  await page.pdf({ path: path.join(OUT, `${tag}-print-checklist-run.pdf`), format: 'A4', printBackground: true });
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('afterprint'));
+    window.print = window.__print; delete window.__print;
+  });
+  await page.setViewportSize(viewport);
+}
+
 // Ожидание перерисовки вместо пауз: paint() заменяет содержимое #views
 // целиком, поэтому новый первый потомок — признак, что она случилась.
 // С анимациями (RCP_MOTION=1) разметка меняется в колбэке View
@@ -637,6 +689,7 @@ async function run(browser, tag, opts) {
   ok(await page.evaluate(menuOpen), `${tag}: меню журнала открывается`);
   await page.keyboard.press('Escape');
   await checkPrint(page, tag, opts.viewport);
+  await checkPrintChecklist(page, tag, opts.viewport);
 
   // --- Окна для полётов: кэш, чипы дней, полоска часов ---
   await shot('weather', '#/weather', async (p) => {

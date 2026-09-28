@@ -26,14 +26,18 @@ function fail(msg) {
 // --- Иконки: должны существовать и быть свежее SVG ---
 const ICON_SRC = path.join(ROOT, 'assets/icons/app-icon.svg');
 const ICON_DIR = path.join(ROOT, 'assets/icons/gen');
-const ICON_FILES = ['icon-192.png', 'icon-512.png', 'maskable-512.png', 'apple-touch-180.png', 'icon.svg'];
+const ICON_FILES = ['icon-192.png', 'icon-512.png', 'maskable-512.png', 'apple-touch-180.png', 'icon.svg',
+  'sc-flight.png', 'sc-journal.png', 'sc-weather.png'];
 if (!fs.existsSync(ICON_DIR)) fail('нет assets/icons/gen — выполните: npm run icons');
 const svgTime = fs.statSync(ICON_SRC).mtimeMs;
+// Значки ярлыков (sc-*) рисуются из ICONS в src/05-ui.js — сверяются с ним
+const uiTime = fs.statSync(path.join(ROOT, 'src/05-ui.js')).mtimeMs;
 for (const f of ICON_FILES) {
   const p = path.join(ICON_DIR, f);
   if (!fs.existsSync(p)) fail('нет иконки ' + f + ' — выполните: npm run icons');
   // В CI время файлов — момент checkout, а не правки: сверять нечего.
   if (!process.env.CI && fs.statSync(p).mtimeMs < svgTime) fail('иконка ' + f + ' старше app-icon.svg — выполните: npm run icons');
+  if (!process.env.CI && f.startsWith('sc-') && fs.statSync(p).mtimeMs < uiTime) fail('значок ярлыка ' + f + ' старше src/05-ui.js — выполните: npm run icons');
 }
 
 // --- Источники ---
@@ -113,7 +117,12 @@ if (!manifest.name || !manifest.icons || !manifest.icons.length) fail('manifest 
 const iconsHash = crypto.createHash('sha1');
 for (const f of ICON_FILES) iconsHash.update(fs.readFileSync(path.join(ICON_DIR, f)));
 const iconsVer = iconsHash.digest('hex').slice(0, 8);
-manifest.icons = manifest.icons.map((i) => Object.assign({}, i, { src: i.src + '?v=' + iconsVer }));
+const verIcon = (i) => Object.assign({}, i, { src: i.src + '?v=' + iconsVer });
+manifest.icons = manifest.icons.map(verIcon);
+for (const s of manifest.shortcuts || []) {
+  for (const i of s.icons || []) if (!ICON_FILES.includes(i.src.replace(/^icons\//, ''))) fail('manifest: нет значка ярлыка ' + i.src);
+  if (s.icons) s.icons = s.icons.map(verIcon);
+}
 const manifestOut = JSON.stringify(manifest, null, 2) + '\n';
 
 // --- Вклейка по маркерам ---

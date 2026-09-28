@@ -2,6 +2,17 @@
    меню, баннеры, шкалы, раскрывашки, окна. */
 
 @layer components {
+  /* ---------- Иконки «HUD-двутон» ----------
+     i-t — тоновая заливка цветом иконки, i-a / i-as — акцентный узел
+     (заливка / штрих) цвета --ic-a. На цветных поверхностях (главная
+     кнопка, чипы, баннеры, неактивные вкладки) акцент — цвет иконки:
+     циан на зелёном или на сером неактивной вкладке спорил бы с ней. */
+  svg .i-t { fill: currentColor; fill-opacity: 0.18; stroke: none; }
+  svg .i-a { fill: var(--ic-a); stroke: none; }
+  svg .i-as { stroke: var(--ic-a); }
+  .btn-primary, .btn-danger, .chip, .banner.warn, .banner.ok,
+  #tabbar .tab:not([aria-current="page"]), .menu button[disabled], dialog.photo { --ic-a: currentColor; }
+
   /* ---------- Карточки ---------- */
   .card {
     position: relative;

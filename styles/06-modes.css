@@ -8,7 +8,9 @@
      полоса у нижнего края; следующий шаг — толстая статичная обводка. */
   :root[data-ui="gloves"] {
     --art-opacity: 0;
+    --ic-a: currentColor; /* иконки — чистый контур одного цвета */
   }
+  :root[data-ui="gloves"] svg .i-t { display: none; }
   :root[data-ui="gloves"]::before,
   :root[data-ui="gloves"] body::before,
   :root[data-ui="gloves"] body::after { display: none; }

@@ -227,14 +227,16 @@ function viewBatteries() {
 function viewTemplates() {
   let h = pageHead('Шаблоны чек-листов', { back: '#/more', act: 'add-template', actLabel: 'Создать' });
   h += '<div class="h2">Встроенные</div><div class="card flat">';
+  // У каждого шаблона — печать пустого бланка (окно выбора 1/3/5 полётов)
+  const printBtn = (t) => `<button class="ic-btn" data-act="print-blank" data-tpl="${esc(t.id)}" aria-label="Печать бланка «${esc(t.name)}»">${ICONS.print}</button>`;
   h += RC.CHECKLISTS.map((t) => `<div class="row"><span class="grow">
-    <span class="t">${esc(t.name)}</span><span class="d">${t.items.length} пунктов · ${TYPES[t.type] || ''}</span></span></div>`).join('');
+    <span class="t">${esc(t.name)}</span><span class="d">${t.items.length} пунктов · ${TYPES[t.type] || ''}</span></span>${printBtn(t)}</div>`).join('');
   h += '</div>';
   if (S.templates.length) {
     h += '<div class="h2">Свои</div><div class="card flat">';
-    h += S.templates.map((t) => rowBtn(`data-act="edit-template" data-id="${t.id}"`,
-      `<span class="grow"><span class="t">${esc(t.name)}</span>
-       <span class="d">${t.items.length} пунктов · ${t.type === 'any' ? 'любой тип' : TYPES[t.type] || ''}</span></span>`)).join('');
+    h += S.templates.map((t) => `<div class="row">
+      <button class="grow row-main" data-act="edit-template" data-id="${t.id}"><span class="grow"><span class="t">${esc(t.name)}</span>
+       <span class="d">${t.items.length} пунктов · ${t.type === 'any' ? 'любой тип' : TYPES[t.type] || ''}</span></span></button>${printBtn(t)}</div>`).join('');
     h += '</div>';
   } else {
     h += '<p class="small muted" style="margin-top:10px">Свой шаблон появится в списке при подготовке к полёту подходящего борта.</p>';
@@ -290,7 +292,7 @@ function viewPrivacy() {
     приложение передаёт только своё доменное имя, без каких-либо ваших данных.</p>
     <p style="margin-top:8px">Вибрация и звук сигнала таймера — функции самого телефона: приложение
     ничего не записывает с микрофона и ничего не отправляет.</p>
-    <p style="margin-top:8px">Статистика, печать журнала и экспорт в CSV считаются и собираются прямо
+    <p style="margin-top:8px">Статистика, печать журнала и чек-листов, экспорт в CSV считаются и собираются прямо
     в браузере: файл сохраняется на устройство, никуда не отправляется.</p>
     <p style="margin-top:8px">Резервная копия и CSV на телефоне предлагаются через системный лист
     «Поделиться»: куда положить файл, решаете вы; приложение само никуда его не отправляет.</p>

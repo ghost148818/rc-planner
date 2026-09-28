@@ -79,17 +79,10 @@ function printLog() {
       `${cell(x.durationMin != null ? x.durationMin + ' мин' : '')}${cell(b ? b.label : '')}${cell(site ? site.name : '')}` +
       `${cell(resultLabel(x, ''))}${cell(x.notes || x.problems || '')}</tr>`;
   }).join('');
-  const area = document.createElement('div');
-  area.id = 'print-area';
-  area.innerHTML = `<h1>RC Planner — журнал полётов</h1>
+  printArea(`<h1>RC Planner — журнал полётов</h1>
     <p>${esc(S.settings.pilot || '')} · всего ${done.length} ${plural(done.length, 'полёт', 'полёта', 'полётов')} · напечатано ${fmtDate(todayISO())}</p>
-    <table><thead><tr><th>№</th><th>Дата</th><th>Борт</th><th>Время</th><th>АКБ</th><th>Локация</th><th>Итог</th><th>Заметки</th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
-  document.body.appendChild(area);
-  const cleanup = () => { area.remove(); window.removeEventListener('afterprint', cleanup); };
-  window.addEventListener('afterprint', cleanup);
-  window.print();
-  setTimeout(cleanup, 60000); // страховка, если afterprint не пришёл
+    <table class="log"><thead><tr><th>№</th><th>Дата</th><th>Борт</th><th>Время</th><th>АКБ</th><th>Локация</th><th>Итог</th><th>Заметки</th></tr></thead>
+    <tbody>${rows}</tbody></table>`);
 }
 
 /* ---------- Статистика ---------- */

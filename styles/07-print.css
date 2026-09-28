@@ -27,10 +27,25 @@
       vertical-align: top;
       font-size: 10pt;
     }
-    #print-area td:nth-child(3), #print-area td:nth-child(5),
-    #print-area td:nth-child(6), #print-area td:last-child { overflow-wrap: anywhere; }
+    /* Журнал (.log): колонки по номерам — только у его таблицы */
+    #print-area .log td:nth-child(3), #print-area .log td:nth-child(5),
+    #print-area .log td:nth-child(6), #print-area .log td:last-child { overflow-wrap: anywhere; }
     /* Дата и длительность — число с единицей не разрываются */
-    #print-area td:nth-child(2), #print-area td:nth-child(4) { white-space: nowrap; }
+    #print-area .log td:nth-child(2), #print-area .log td:nth-child(4) { white-space: nowrap; }
+
+    /* Чек-лист (.pck): номер, пункт с подсказкой, клетки на 1/3/5 полётов
+       (бланк) или отметка (прогон). Клетка — рамка 5 мм под галочку ручкой. */
+    #print-area .pck td:nth-child(2) { overflow-wrap: anywhere; }
+    #print-area .pck .n { width: 7mm; text-align: right; color: #444; }
+    #print-area .pck .c { width: 22mm; text-align: center; vertical-align: middle; white-space: nowrap; }
+    #print-area .pck.cols-5 .c { width: 17mm; }
+    #print-area .pck .box { display: inline-block; width: 5mm; height: 5mm; border: 1.2pt solid #000; border-radius: 1mm; }
+    #print-area .pck tr.meta td { height: 8mm; font-weight: 600; }
+    #print-area .pck .h { font-size: 8.5pt; color: #444; margin-top: 1pt; }
+    #print-area .pck tr.fail td { font-weight: 700; }
+    #print-area .meta-line { display: flex; flex-wrap: wrap; gap: 2pt 14pt; }
+    #print-area .legend { margin-top: 8pt; font-size: 9.5pt; }
+    #print-area .foot { display: flex; flex-wrap: wrap; gap: 6pt 24pt; margin-top: 14pt; font-size: 10.5pt; }
     #print-area th { background: #eee; }
     #print-area tr { break-inside: avoid; }
   }
