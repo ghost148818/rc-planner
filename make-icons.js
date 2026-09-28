@@ -5,7 +5,9 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const sharp = require('sharp');
+// sharp — только при генерации (main): build.js берёт отсюда лишь
+// loadIcons/iconsHash и не должен зависеть от него.
+let sharp = null;
 
 const SRC = path.join(__dirname, 'assets/icons/app-icon.svg');
 const OUT = path.join(__dirname, 'assets/icons/gen');
@@ -65,6 +67,7 @@ function shortcutSvg(icon) {
 }
 
 async function main() {
+  sharp = require('sharp');
   fs.mkdirSync(OUT, { recursive: true });
   const svg = fs.readFileSync(SRC, 'utf8');
   for (const { file, size, full, fg } of SIZES) {
@@ -78,9 +81,19 @@ async function main() {
     await sharp(shortcutSvg(ICONS[icon]), { density: 300 }).resize(96, 96).png().toFile(path.join(OUT, file));
     console.log('ok', file);
   }
+  // Отпечаток глифов ярлыков: сборка сверяет его с ICONS и падает, только
+  // если изменились именно эти иконки (а не любая строка src/05-ui.js).
+  const keys = SHORTCUTS.map((s) => s.icon);
+  fs.writeFileSync(path.join(OUT, 'sc-stamp.txt'), keys.join(',') + ':' + iconsHash(ICONS, keys) + '\n');
 }
 
-main().catch((e) => {
+function iconsHash(ICONS, keys) {
+  return require('crypto').createHash('sha1').update(keys.map((k) => ICONS[k]).join('\n')).digest('hex');
+}
+
+module.exports = { loadIcons, iconsHash };
+
+if (require.main === module) main().catch((e) => {
   console.error(e);
   process.exit(1);
 });

@@ -30,14 +30,22 @@ const ICON_FILES = ['icon-192.png', 'icon-512.png', 'maskable-512.png', 'apple-t
   'sc-flight.png', 'sc-journal.png', 'sc-weather.png'];
 if (!fs.existsSync(ICON_DIR)) fail('нет assets/icons/gen — выполните: npm run icons');
 const svgTime = fs.statSync(ICON_SRC).mtimeMs;
-// Значки ярлыков (sc-*) рисуются из ICONS в src/05-ui.js — сверяются с ним
-const uiTime = fs.statSync(path.join(ROOT, 'src/05-ui.js')).mtimeMs;
+// Значки ярлыков (sc-*) рисуются из ICONS в src/05-ui.js: отпечаток глифов
+// (sc-stamp.txt, пишет make-icons.js) обязан совпасть с текущими ICONS.
+{
+  const { loadIcons, iconsHash } = require('./make-icons');
+  const stampPath = path.join(ICON_DIR, 'sc-stamp.txt');
+  const stamp = fs.existsSync(stampPath) ? fs.readFileSync(stampPath, 'utf8').trim() : '';
+  const [keys, hash] = stamp.split(':');
+  if (!keys || hash !== iconsHash(loadIcons(), keys.split(','))) {
+    fail('значки ярлыков не совпадают с ICONS в src/05-ui.js — выполните: npm run icons');
+  }
+}
 for (const f of ICON_FILES) {
   const p = path.join(ICON_DIR, f);
   if (!fs.existsSync(p)) fail('нет иконки ' + f + ' — выполните: npm run icons');
   // В CI время файлов — момент checkout, а не правки: сверять нечего.
   if (!process.env.CI && fs.statSync(p).mtimeMs < svgTime) fail('иконка ' + f + ' старше app-icon.svg — выполните: npm run icons');
-  if (!process.env.CI && f.startsWith('sc-') && fs.statSync(p).mtimeMs < uiTime) fail('значок ярлыка ' + f + ' старше src/05-ui.js — выполните: npm run icons');
 }
 
 // --- Источники ---

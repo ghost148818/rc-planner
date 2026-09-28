@@ -31,16 +31,28 @@ function calcNum(v, lo, hi) {
 }
 const calcFmt = (n, d) => (n == null ? '—' : n.toFixed(d).replace('.', ','));
 
-function calcValues(form) {
+// Химия — ключ словаря CALC_CHEM: у АКБ из копии поле chem произвольное
+// (NORM его не приводит), поэтому только через keyOrNull — ключ прототипа
+// вроде 'constructor' иначе прошёл бы проверку «есть в словаре».
+const calcChem = (v) => keyOrNull(CALC_CHEM, v) || 'LiPo';
+
+// Сырой ввод формы (строки как набраны) — его и хранит UI.calc: число
+// «30» по дороге к «3000» вне диапазона, но стирать его перерисовкой нельзя.
+function calcRaw(form) {
   const fd = new FormData(form);
-  const chem = CALC_CHEM[fd.get('chem')] ? fd.get('chem') : 'LiPo';
+  const g = (k) => String(fd.get(k) == null ? '' : fd.get(k));
+  return { battId: g('battId'), chem: g('chem'), s: g('s'), mah: g('mah'), c: g('c'), amps: g('amps') };
+}
+// Разобранные значения для расчёта: вне диапазона — null («—» в итоге).
+function calcParse(r) {
+  const s = calcNum(r.s, 1, 24);
   return {
-    battId: String(fd.get('battId') || ''),
-    chem,
-    s: calcNum(fd.get('s'), 1, 24),
-    mah: calcNum(fd.get('mah'), 50, 100000),
-    c: calcNum(fd.get('c'), 1, 300),
-    amps: calcNum(fd.get('amps'), 0.1, 500),
+    battId: String(r.battId || ''),
+    chem: calcChem(r.chem),
+    s: s != null && Number.isInteger(s) ? s : null,
+    mah: calcNum(r.mah, 50, 100000),
+    c: calcNum(r.c, 1, 300),
+    amps: calcNum(r.amps, 0.1, 500),
   };
 }
 
@@ -60,20 +72,27 @@ function calcOutHtml(v) {
     ['Время полёта', ah && v.amps ? calcFmt(ah * CALC_USABLE / v.amps * 60, 1) + '&nbsp;мин' : 'укажите средний ток'],
   ];
   let h = `<div class="kv calc-kv">${rows.map(([key, val]) => `<div><span class="k">${key}</span><span class="v">${val}</span></div>`).join('')}</div>`;
-  if (v.s && CALC_CHEM[v.chem].store != null) {
-    h += `<p class="hint">На банку: полный ${calcFmt(k.full, 2)}, номинал ${calcFmt(k.nom, 2)}, хранение ${calcFmt(k.store, 2)}, минимум ${calcFmt(k.min, 2)}&nbsp;В.
+  if (v.s) {
+    const per = [`полный ${calcFmt(k.full, 2)}`, `номинал ${calcFmt(k.nom, 2)}`, k.store == null ? '' : `хранение ${calcFmt(k.store, 2)}`, `минимум ${calcFmt(k.min, 2)}`];
+    h += `<p class="hint">На банку: ${per.filter(Boolean).join(', ')}&nbsp;В.
       Время — до ${Math.round(CALC_USABLE * 100)}&nbsp;% ёмкости, чтобы оставался запас на посадку.</p>`;
   }
   // Средний полёт на этой АКБ по своему журналу
   if (v.battId) {
-    const fl = S.sessions.filter((s) => s.end && s.batteryId === v.battId && +s.durationMin > 0);
+    const fl = S.sessions.filter((s) => s.end && s.batteryId === v.battId && isFinite(+s.durationMin) && +s.durationMin > 0);
     if (fl.length) {
       const avg = fl.reduce((n, s) => n + +s.durationMin, 0) / fl.length;
       h += `<p class="hint">По журналу: средний полёт на этой АКБ — ${calcFmt(avg, 1)}&nbsp;мин (${fl.length}&nbsp;${plural(fl.length, 'полёт', 'полёта', 'полётов')}).</p>`;
     }
   }
-  if (wh) {
-    const cls = CALC_AIR.find(([lim]) => wh <= lim)[1];
+  if (wh && v.chem === 'NiMH') {
+    h += `<div class="banner ok calc-air">${ICONS.flight}<span class="grow"><b>В самолёте:</b> ограничения IATA по Вт·ч — для литиевых АКБ,
+      на NiMH они не распространяются. Уточните у перевозчика; клеммы — заизолировать.</span></div>`;
+  } else if (wh) {
+    // Порог — по показанному (округлённому) числу: 100,04 Вт·ч на экране
+    // «100,0» и не должны попадать в «100–160»
+    const whR = Math.round(wh * 10) / 10;
+    const cls = CALC_AIR.find(([lim]) => whR <= lim)[1];
     const text = cls === 'ok' ? 'до 100 Вт·ч — в ручной клади, в сдаваемый багаж нельзя'
       : cls === 'warn' ? '100–160 Вт·ч — только с согласия авиакомпании, не больше двух запасных, в ручной клади'
       : 'больше 160 Вт·ч — пассажирам перевозить нельзя';
@@ -83,23 +102,22 @@ function calcOutHtml(v) {
   return h;
 }
 
-// Ввод запоминается в UI.calc: перерисовка (выбор своей АКБ, смена темы)
-// не должна стирать набранное.
+// Ввод запоминается в UI.calc как набран: перерисовка (выбор своей АКБ,
+// смена темы) не должна стирать набранное.
 function calcUpdate(form) {
-  const v = calcValues(form);
-  UI.calc = { battId: v.battId, chem: v.chem, s: v.s, mah: v.mah, c: v.c, amps: v.amps };
+  UI.calc = calcRaw(form);
   const out = document.getElementById('calc-out');
-  if (out) out.innerHTML = calcOutHtml(v);
+  if (out) out.innerHTML = calcOutHtml(calcParse(UI.calc));
 }
 
 function viewBattCalc() {
-  const c = UI.calc || (UI.calc = { battId: '', chem: 'LiPo', s: 6, mah: 1300, c: null, amps: null });
+  const c = UI.calc || (UI.calc = { battId: '', chem: 'LiPo', s: '6', mah: '1300', c: '', amps: '' });
   let h = pageHead('Калькулятор АКБ', { back: '#/more', help: 'battcalc' });
   const own = S.batteries.filter((b) => b.status !== 'retired');
   const opts = [['', 'Свои цифры']].concat(own.map((b) => [b.id, b.label || 'АКБ']));
   h += `<form data-calc class="card" autocomplete="off">
     ${own.length ? field('Аккумулятор', selectHtml('battId', opts, c.battId, 'data-change="calc-batt"'), 'подставит химию, банки и ёмкость из карточки') : ''}
-    ${field('Химия', selectHtml('chem', Object.keys(CALC_CHEM).map((x) => [x, x]), c.chem))}
+    ${field('Химия', selectHtml('chem', Object.keys(CALC_CHEM).map((x) => [x, x]), calcChem(c.chem)))}
     <div class="grid2">
       ${field('Банок, S', `<input type="number" name="s" min="1" max="24" step="1" inputmode="numeric" value="${numVal(c.s)}">`)}
       ${field('Ёмкость, мА·ч', `<input type="number" name="mah" min="50" max="100000" step="10" inputmode="numeric" value="${numVal(c.mah)}">`)}
@@ -109,23 +127,24 @@ function viewBattCalc() {
       ${field('Средний ток, А', `<input type="number" name="amps" min="0.1" max="500" step="0.1" inputmode="decimal" value="${numVal(c.amps)}" placeholder="напр. 25">`)}
     </div>
   </form>`;
-  h += `<div id="calc-out" aria-live="polite">${calcOutHtml({ battId: c.battId, chem: CALC_CHEM[c.chem] ? c.chem : 'LiPo',
-    s: calcNum(c.s, 1, 24), mah: calcNum(c.mah, 50, 100000), c: calcNum(c.c, 1, 300), amps: calcNum(c.amps, 0.1, 500) })}</div>`;
+  // Без aria-live: он уже у #views — на каждый ввод весь итог зачитывался бы заново
+  h += `<div id="calc-out">${calcOutHtml(calcParse(c))}</div>`;
   h += `<p class="small muted" style="margin-top:12px">Средний ток — из телеметрии или OSD (mAh за полёт / время). Токоотдача C по маркировке
     обычно завышена: реальный длительный ток ниже.</p>`;
   return h;
 }
 
-// Выбор своей АКБ: химия, банки и ёмкость из карточки (числа уже
-// нормализованы в NORM.batteries), остальное — как было.
+// Выбор своей АКБ: химия, банки и ёмкость из карточки (числа
+// нормализованы в NORM.batteries; химия — через keyOrNull). Поля, которых
+// у АКБ нет, очищаются — цифры прежней АКБ не должны остаться.
 function calcPickBattery(id) {
   const c = UI.calc || (UI.calc = {});
   const b = S.batteries.find((x) => x.id === id);
   c.battId = b ? b.id : '';
   if (b) {
-    if (CALC_CHEM[b.chem]) c.chem = b.chem;
-    if (b.cells) c.s = b.cells;
-    if (b.capacity) c.mah = b.capacity;
+    c.chem = keyOrNull(CALC_CHEM, b.chem) || c.chem;
+    c.s = b.cells ? String(b.cells) : '';
+    c.mah = b.capacity ? String(b.capacity) : '';
   }
   render(true);
 }

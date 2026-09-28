@@ -186,6 +186,8 @@ const PRINT_COLS = [1, 3, 5];
 const CK_PRINT = { ok: '✓ ок', fail: '✗ проблема', skip: '— пропуск' };
 
 function allTemplates() { return RC.CHECKLISTS.concat(S.templates); }
+// Поле записи из копии в текст листа: отсутствующее — пусто, не «undefined»
+const printTxt = (v) => (v == null ? '' : String(v));
 
 function ckPrintItem(it) {
   return `${esc(it.t)}${it.hint ? `<div class="h">${esc(it.hint)}</div>` : ''}`;
@@ -243,9 +245,9 @@ function printPrep() {
     name: tpl.name,
     items: UI.prep.items,
     meta: [
-      ['Борт', a.name + (TYPES[a.type] ? ' (' + TYPES[a.type] + ')' : '')],
-      ['АКБ', b ? b.label + (CHARGE_LABEL[b.charge] ? ' — ' + CHARGE_LABEL[b.charge] : '') : 'не установлен'],
-      ['Локация', site ? site.name : ''],
+      ['Борт', printTxt(a.name) + (TYPES[a.type] ? ' (' + TYPES[a.type] + ')' : '')],
+      ['АКБ', b ? printTxt(b.label) + (CHARGE_LABEL[b.charge] ? ' — ' + CHARGE_LABEL[b.charge] : '') : 'не установлен'],
+      ['Локация', site ? printTxt(site.name) : ''],
       ['Дата', fmtDate(todayISO()) + ', ' + fmtTime(Date.now())],
     ],
   });
@@ -264,9 +266,9 @@ function printRun(s) {
     items: run.items,
     meta: [
       ['Полёт', flightNoText(s)],
-      ['Борт', a ? a.name : 'удалён'],
-      ['АКБ', b ? b.label : ''],
-      ['Локация', site ? site.name : ''],
+      ['Борт', a ? printTxt(a.name) : 'удалён'],
+      ['АКБ', b ? printTxt(b.label) : ''],
+      ['Локация', site ? printTxt(site.name) : ''],
       ['Дата', fmtDate(s.date) + (t > 0 && t <= 8.64e15 ? ', ' + fmtTime(t) : '')],
     ],
   });
