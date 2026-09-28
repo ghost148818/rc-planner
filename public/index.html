@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-C5fceuIqnBlMZyze/GqKrat7yE+KtPvSSLeWvwD1luM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-FOdzoIinN1I9tRdmxBH3zXS04k89K+5lM81e0b8+kBg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="b4a9b203b0">
+  <meta name="build" content="905c935993">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -3287,7 +3287,8 @@ RC.TOOL_CATS = [
 // РАЗБЛОКИРОВКА (unlock, 3.0). Каналы и мощность открываются файлом-ключом
 // на SD-карте: это не прошивка, а текстовый файл в один символ — имя и
 // содержимое переданы владельцем вместе с инструкцией Walksnail «Unlock
-// procedure» (Avatar, перевод) и порядком для Ascent (владелец, 2026-09-28).
+// procedure» (Avatar, перевод) и порядком для Ascent (владелец, 2026-09-28:
+// карта с файлом — только в Ascent VRX).
 // Приложение создаёт файл само (Blob → saveFile), в сеть ничего не ходит.
 // Имя и содержимое — байт в байт как у присланных файлов: регистр имени
 // карте FAT безразличен, но текст оставлен как у производителя.
@@ -3325,14 +3326,14 @@ RC.FIRMWARE = {
     {
       id: 'ascent-unlock',
       name: 'Разблокировка Walksnail Ascent',
-      what: 'Открывает Ascent все частотные сетки и уровни мощности.',
+      what: 'Открывает Ascent все частотные сетки и уровни мощности. Карта с файлом вставляется только в Ascent VRX.',
       files: [
         { name: 'Ascent_std.txt', content: '7', what: 'частотные сетки и мощность' },
       ],
       steps: [
         'Сохраните файл Ascent_std.txt кнопкой выше и скопируйте его в корень SD-карты.',
-        'Вставьте карту в устройство Ascent и включите его, дождитесь полной загрузки.',
-        'Выключите устройство, достаньте карту и проверьте: файла на ней больше нет — устройство его применило и удалило.',
+        'Вставьте карту в Ascent VRX (только в него) и включите VRX, дождитесь полной загрузки.',
+        'Выключите VRX, достаньте карту и проверьте: файла на ней больше нет — VRX его применил и удалил.',
         'Включите снова и проверьте, что стали доступны все частотные сетки и уровни мощности.',
         'Если файл остался на карте — разблокировка не прошла: проверьте имя файла и повторите.',
       ],
@@ -3931,7 +3932,7 @@ RC.HELP = {
         { h: 'Прошивки Walksnail' },
         'Блок показывает последнюю известную версию Avatar, Ascent, Ascent Industry, PC Tool и головного трекера с кнопками «Скачать» и «Все версии» (папка производителя на Google Диске). Список ручной: Google Диск не позволяет приложению прочитать папку, поэтому рядом честно стоит дата сверки. Если она давняя — загляните в «Все версии».',
         { h: 'Разблокировка каналов и мощности' },
-        'В том же блоке — файлы-ключи для SD-карты: для Avatar HD два (avatar_std.txt — все 8 каналов, avatar_pwr.txt — мощность 1000 и 1200 мВт), для Ascent один (Ascent_std.txt — частотные сетки и мощность), и пошаговая инструкция на русском. Файлы создаёт само приложение, без интернета. Разблокируйте, только если эти каналы и мощность разрешены в вашей стране и у вас есть нужные разрешения.',
+        'В том же блоке — файлы-ключи для SD-карты: для Avatar HD два (avatar_std.txt — все 8 каналов, avatar_pwr.txt — мощность 1000 и 1200 мВт), для Ascent один (Ascent_std.txt — частотные сетки и мощность; карта вставляется только в Ascent VRX), и пошаговая инструкция на русском. Файлы создаёт само приложение, без интернета. Разблокируйте, только если эти каналы и мощность разрешены в вашей стране и у вас есть нужные разрешения.',
       ],
     },
 
