@@ -159,6 +159,23 @@ for (const f of fw.items) {
   fwIds.add(f.id);
 }
 
+// Разблокировка: файл-ключ создаётся в приложении из этих строк и
+// сохраняется под этим именем — имя только латиницей (имя файла на карте
+// и в saveFile), содержимое — короткий код без разметки.
+const unl = fw.unlock || [];
+ok(Array.isArray(unl), 'разблокировка — список');
+ok(!unl.length || (typeof fw.unlockWarn === 'string' && fw.unlockWarn.length > 40), 'у разблокировки есть предупреждение о правилах частот');
+for (const u of unl) {
+  ok(u.id && u.name && u.what && Array.isArray(u.steps) && u.steps.length >= 3, `разблокировка «${u.name || u.id}»: название, описание и шаги`);
+  ok(Array.isArray(u.files) && u.files.length >= 1, `«${u.name}»: есть файлы`);
+  for (const f of u.files || []) {
+    ok(/^[A-Za-z0-9_-]+\.txt$/.test(f.name || ''), `«${u.name}»: имя файла ${f.name} — латиница, .txt`);
+    ok(/^[0-9A-Za-z]{1,16}$/.test(f.content || ''), `«${u.name}»: содержимое ${f.name} — короткий код`);
+  }
+  ok(!fwIds.has(u.id), `«${u.id}» уникален`);
+  fwIds.add(u.id);
+}
+
 console.log('Сборы:');
 ok(RC.PACKING_PRESETS.length >= 2, 'есть стартовые наборы');
 for (const p of RC.PACKING_PRESETS) {

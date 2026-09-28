@@ -583,6 +583,14 @@
     .tool-row > .ic-btn { margin-left: auto; }
   }
   .ck > [data-act="pack-del-item"] { margin-left: -8px; }
+  /* Калькулятор АКБ: результат плиткой ключ — значение */
+  #calc-out .calc-kv { margin: 4px 2px 10px; }
+  #calc-out .hint { margin: 0 2px 10px; }
+  .calc-air { margin-top: 4px; }
+  /* Разблокировка Walksnail: шаги нумерованным списком */
+  .unlock .btn-line { margin-bottom: 10px; }
+  .unlock-steps { margin: 0 0 8px; padding-left: 20px; font-size: var(--font-d); line-height: 1.45; }
+  .unlock-steps li + li { margin-top: 4px; }
 
   /* ================= Приветствие и инструкция ================= */
   /* div: у окна приветствия тот же класс welcome */

@@ -13,6 +13,7 @@ const RENDERERS = {
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,
   backup: viewBackup, privacy: viewPrivacy, help: viewHelp,
+  battcalc: viewBattCalc,
 };
 
 // Старые адреса (закладки, ссылки в changelog): #/log и #/stats

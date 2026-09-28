@@ -6,9 +6,9 @@
   <!-- Внешним хостам (тайлы, погода, геокодер) уходит только домен
        приложения, не путь страницы. -->
   <meta name="referrer" content="origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-s1ToxJnqo8Lu7PvC3xQGzxOXpXD+ZHLQM7tlIoIOHSk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'sha256-TMWGZyOLrRVzx7r0k53PYJiIsjoLC3DZhvIn7FIJF74=' 'sha256-YL//4/CKiUWfY+4f1WeBwmXF7RFQq5SeKrkOvYm0GSY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src https://embed.windy.com">
   <meta name="theme-color" content="#0b1017">
-  <meta name="build" content="28d1b5ec85-single">
+  <meta name="build" content="f4f2e9bc45-single">
   <meta name="description" content="RC Planner — локальный офлайн-помощник авиамоделиста и FPV-пилота. Данные хранятся на вашем устройстве.">
   <title>RC Planner</title>
   <script>
@@ -1818,6 +1818,14 @@
     .tool-row > .ic-btn { margin-left: auto; }
   }
   .ck > [data-act="pack-del-item"] { margin-left: -8px; }
+  /* Калькулятор АКБ: результат плиткой ключ — значение */
+  #calc-out .calc-kv { margin: 4px 2px 10px; }
+  #calc-out .hint { margin: 0 2px 10px; }
+  .calc-air { margin-top: 4px; }
+  /* Разблокировка Walksnail: шаги нумерованным списком */
+  .unlock .btn-line { margin-bottom: 10px; }
+  .unlock-steps { margin: 0 0 8px; padding-left: 20px; font-size: var(--font-d); line-height: 1.45; }
+  .unlock-steps li + li { margin-top: 4px; }
 
   /* ================= Приветствие и инструкция ================= */
   /* div: у окна приветствия тот же класс welcome */
@@ -2724,7 +2732,8 @@ RC.BATTERY_PRESETS = [
 // документацией (Context7) и проверить САМУ СТРАНИЦУ, а не только код ответа:
 // HTTP 200 + заголовок/содержимое соответствуют назначению + ресурс известен
 // сообществу. HTTP 200 у припаркованного или вредоносного домена — не проверка.
-// Последняя проверка всех ссылок: 2026-08-30.
+// Последняя проверка всех ссылок: 2026-09-28 (поиском: сеть облачной сессии
+// не пускала на сами сайты; неподтверждённое вынесено владельцу).
 // Прошивки Walksnail (Avatar / Ascent) живут отдельно — в data/firmware.js,
 // потому что там показывается номер последней версии, а не просто ссылка.
 window.RC = window.RC || {};
@@ -2734,18 +2743,10 @@ RC.TOOLS = [
   {
     id: 'betaflight-app',
     cat: 'config',
-    name: 'Betaflight Configurator (Web)',
-    desc: 'Настройка полётных контроллеров Betaflight из браузера: PID, режимы, OSD, CLI.',
+    name: 'Betaflight App',
+    desc: 'Настройка полётных контроллеров Betaflight из браузера (Chrome/Edge): PID, режимы, OSD, CLI и просмотр blackbox-логов.',
     url: 'https://app.betaflight.com/',
     src: 'betaflight.com — официальное web-приложение проекта',
-  },
-  {
-    id: 'betaflight-blackbox',
-    cat: 'config',
-    name: 'Betaflight Blackbox Explorer',
-    desc: 'Просмотр и анализ blackbox-логов полёта в браузере: PID, шум, prop wash.',
-    url: 'https://blackbox.betaflight.com/',
-    src: 'betaflight.com — официальный инструмент проекта',
   },
   {
     id: 'elrs-web-flasher',
@@ -2775,17 +2776,17 @@ RC.TOOLS = [
     id: 'kiss-ultra',
     cat: 'config',
     name: 'KISS Ultra',
-    desc: 'Конфигуратор полётных контроллеров KISS / Ultra.',
-    url: 'https://kiss-ultra.com/',
+    desc: 'Веб-конфигуратор полётных контроллеров KISS Ultra (FCFC) в Chrome и Edge. Старые платы KISS FC им не поддерживаются.',
+    url: 'https://kiss-ultra.com/gui/',
     src: 'kiss-ultra.com — официальный конфигуратор',
   },
   {
     id: 'vtx-tables',
     cat: 'config',
-    name: 'VTX Tables',
-    desc: 'Готовые VTX-таблицы для Betaflight: каналы и мощности вашего передатчика видео.',
-    url: 'https://vtx-tables.vercel.app/',
-    src: 'сборник таблиц сообщества Betaflight',
+    name: 'VTX-таблицы (Betaflight)',
+    desc: 'Официальная инструкция Betaflight по VTX-таблицам: готовые файлы для SmartAudio, Tramp и RTC6705, загрузка в конфигуратор.',
+    url: 'https://betaflight.com/docs/wiki/guides/current/VTX',
+    src: 'betaflight.com — официальная документация проекта',
   },
 
   // Прошивки и десктоп-приложения: официальные релизы
@@ -2809,7 +2810,7 @@ RC.TOOLS = [
     id: 'inav-configurator',
     cat: 'firmware',
     name: 'INAV Configurator (десктоп)',
-    desc: 'Настольное приложение для настройки и прошивки INAV — web-версии у проекта нет.',
+    desc: 'Настольное приложение для настройки и прошивки INAV. Официальной web-версии пока нет — её готовят к INAV 10.',
     url: 'https://github.com/iNavFlight/inav-configurator/releases',
     src: 'GitHub iNavFlight — официальные релизы',
   },
@@ -2835,7 +2836,7 @@ RC.TOOLS = [
     id: 'calc-motor',
     cat: 'calc',
     name: 'Подбор мотора и тяги',
-    desc: 'Тяговооружённость коптера: вес, тяга моторов, запас по мощности.',
+    desc: 'Требуемая тяга на мотор по весу коптера (рама, АКБ, оборудование), желаемой тяговооружённости и числу моторов.',
     url: 'https://www.omnicalculator.com/other/drone-motor',
     src: 'omnicalculator.com — Drone Motor Calculator',
   },
@@ -2843,7 +2844,7 @@ RC.TOOLS = [
     id: 'calc-flight-time',
     cat: 'calc',
     name: 'Время полёта',
-    desc: 'Оценка времени полёта по ёмкости батареи и среднему току.',
+    desc: 'Оценка времени полёта по ёмкости и напряжению АКБ, допустимому разряду и полётному весу; средний ток можно задать вручную.',
     url: 'https://www.omnicalculator.com/other/drone-flight-time',
     src: 'omnicalculator.com — Drone Flight Time Calculator',
   },
@@ -2859,7 +2860,7 @@ RC.TOOLS = [
     id: 'calc-cg-wing',
     cat: 'calc',
     name: 'Центровка летающего крыла',
-    desc: 'Flying Wing CG Calculator V3: CG, MAC и аэродинамический фокус по геометрии крыла.',
+    desc: 'Центровка летающего крыла по размаху, хордам и стреловидности: CG, САХ и площадь крыла; на сайте есть расширенная версия V3.',
     url: 'https://fwcg.3dzone.dk/',
     src: 'fwcg.3dzone.dk — известный калькулятор сообщества (наследник fwcg.ru)',
   },
@@ -2885,7 +2886,7 @@ RC.TOOLS = [
     id: 'db-mqtb',
     cat: 'db',
     name: 'Mini Quad Test Bench',
-    desc: 'Измеренная на стенде тяга и токи реальных моторов и пропеллеров — данные, а не реклама.',
+    desc: 'Архив стендовых замеров тяги и тока моторов и пропеллеров (тесты до 2021 года): данные, а не реклама.',
     url: 'https://www.miniquadtestbench.com/',
     src: 'miniquadtestbench.com — известный стенд сообщества',
   },
@@ -2919,7 +2920,7 @@ RC.TOOLS = [
     id: 'weather-windy',
     cat: 'weather',
     name: 'Windy',
-    desc: 'Карта ветра и прогноз по высотам: ветер, порывы, осадки, облачность в точке полётов.',
+    desc: 'Карта ветра и прогноз в точке полётов: ветер по высотам, порывы у земли, осадки, облачность.',
     url: 'https://www.windy.com/',
     src: 'windy.com — известный метеосервис',
   },
@@ -2996,7 +2997,7 @@ RC.TOOLS = [
   {
     id: 'db-technobee',
     cat: 'db',
-    name: 'Технобиблиотека (рабочие конспекты)',
+    name: 'Technobee — рабочие конспекты',
     desc: 'Русскоязычные конспекты и обзоры: прошивка ESC, ELRS, стеки, аппаратура, разборы новинок.',
     url: 'https://technobee.ru/index.php',
     src: 'technobee.ru — «Рабочие конспекты. БПЛА и роботы»',
@@ -3010,14 +3011,6 @@ RC.TOOLS = [
     src: 'propwashservice.com — справочник сообщества',
   },
   {
-    id: 'db-fpvcompare',
-    cat: 'db',
-    name: 'FPVcompare',
-    desc: 'Сравнение готовых дронов, очков, аккумуляторов и пропеллеров по характеристикам.',
-    url: 'https://fpvcompare.com/',
-    src: 'fpvcompare.com — база сравнений сообщества',
-  },
-  {
     id: 'db-aos',
     cat: 'db',
     name: 'AOS RC — сборка 5″ фристайл',
@@ -3028,8 +3021,8 @@ RC.TOOLS = [
   {
     id: 'db-twgo',
     cat: 'db',
-    name: 'Tiny Whoop Club — TWGO',
-    desc: 'Клубная база по вупам: сборки, настройки, площадки и мероприятия (англ.).',
+    name: 'Tiny Whoop GO — симулятор',
+    desc: 'Официальный симулятор Tiny Whoop: карьера, онлайн-гонки и клубные заезды, свои трассы (Windows/macOS, англ.).',
     url: 'https://www.tinywhoopclubnetwork.com/twgo',
     src: 'tinywhoopclubnetwork.com — клуб Tiny Whoop',
   },
@@ -3053,7 +3046,7 @@ RC.TOOLS = [
     id: 'calc-ecalc',
     cat: 'calc',
     name: 'eCalc — расчёт силовой установки',
-    desc: 'Подбор мотора, пропеллера и АКБ с оценкой тяги, тока и времени полёта.',
+    desc: 'propCalc: мотор, винт и АКБ для самолёта или крыла — тяга, ток, время полёта. Для коптеров у eCalc — xcopterCalc. Бесплатно — урезанная версия.',
     url: 'https://www.ecalc.ch/motorcalc.php',
     src: 'ecalc.ch — известный отраслевой калькулятор',
   },
@@ -3061,7 +3054,7 @@ RC.TOOLS = [
     id: 'calc-pidcalc',
     cat: 'calc',
     name: 'PID Calc — UAV Tech',
-    desc: 'Пересчёт ПИД-коэффициентов при смене рамы, моторов или пропеллеров.',
+    desc: 'Подстройка ПИД Betaflight: общий множитель и соотношения P/D, I/P, D/FF без потери баланса между членами (англ.).',
     url: 'https://theuavtech.com/pidcalc/',
     src: 'theuavtech.com — UAV Tech, автор методик тюнинга',
   },
@@ -3069,7 +3062,7 @@ RC.TOOLS = [
     id: 'calc-fresnel',
     cat: 'calc',
     name: 'Зона Френеля для радиоканала',
-    desc: 'Расчёт зоны Френеля и профиля трассы: где рельеф съест дальность связи.',
+    desc: 'Строит 3D-зону Френеля между двумя точками в KML для Google Earth: видно, где рельеф перекрывает радиоканал (англ.).',
     url: 'https://www.radiofresnel.com/',
     src: 'radiofresnel.com — расчёт радиотрассы',
   },
@@ -3077,7 +3070,7 @@ RC.TOOLS = [
     id: 'fw-blheli',
     cat: 'firmware',
     name: 'BLHeliSuite (регуляторы)',
-    desc: 'Настройка и прошивка регуляторов BLHeli — десктоп-приложение.',
+    desc: 'Десктоп-программа (Windows) для регуляторов BLHeli и BLHeli_S. Прошивка не развивается с 2022 года; обычно хватает ESC Configurator.',
     url: 'https://github.com/4712/BLHeliSuite/releases',
     src: 'GitHub 4712 — официальный репозиторий BLHeliSuite',
   },
@@ -3085,7 +3078,7 @@ RC.TOOLS = [
     id: 'fw-zadig',
     cat: 'firmware',
     name: 'Zadig (драйверы USB)',
-    desc: 'Установка драйверов USB для прошивки полётников и приёмников в Windows.',
+    desc: 'Установка драйвера WinUSB в Windows для прошивки полётника или аппаратуры в режиме DFU (STM32 BOOTLOADER).',
     url: 'https://zadig.akeo.ie/',
     src: 'zadig.akeo.ie — официальный сайт проекта',
   },
@@ -3105,8 +3098,8 @@ RC.TOOLS = [
   {
     id: 'doc-pid-habr',
     cat: 'docs',
-    name: 'ПИД-регулятор простыми словами',
-    desc: 'Разбор того, что делают P, I и D — чтобы тюнинг перестал быть шаманством.',
+    name: 'ПИД-регулятор — это весело (Хабр)',
+    desc: 'Интерактивный разбор P, I и D на бытовых примерах с симулятором — база, чтобы тюнинг перестал быть шаманством.',
     url: 'https://habr.com/ru/articles/1016090/',
     src: 'habr.com — разбор с примерами',
   },
@@ -3188,7 +3181,7 @@ RC.TOOLS = [
     id: 'shop-squidstick',
     cat: 'shop',
     name: 'Squid Stick (ELRS-донгл для симулятора)',
-    desc: 'Донгл ExpressLRS, чтобы летать в симуляторе со своей аппаратуры.',
+    desc: 'Донгл ExpressLRS, чтобы летать в симуляторе со своей аппаратуры (магазин в США, англ.).',
     url: 'https://elrsquidstick.com/products/elrs-simulator-dongle-squid-stick',
     src: 'elrsquidstick.com — сайт производителя донгла',
   },
@@ -3214,17 +3207,9 @@ RC.TOOLS = [
     id: 'race-rdmfpv',
     cat: 'race',
     name: 'Random FPV',
-    desc: 'Сайт о дрон-рейсинге и системе хронометража RotorHazard.',
+    desc: 'Дрон-рейсинг: хронометраж RotorHazard и NuclearHazard, гоночные рамы Belka, отчёты о гонках.',
     url: 'https://rdmfpv.ru/',
     src: 'rdmfpv.ru — сообщество дрон-рейсинга',
-  },
-  {
-    id: 'race-hackfast',
-    cat: 'race',
-    name: 'HackFast',
-    desc: 'Инструменты и материалы по гонкам: настройки, таймингу и трассам.',
-    url: 'https://hackfa.st/',
-    src: 'hackfa.st — проект сообщества',
   },
   {
     id: 'race-vdt',
@@ -3238,7 +3223,7 @@ RC.TOOLS = [
     id: 'race-flytribe',
     cat: 'race',
     name: 'Fly Tribe Magazine',
-    desc: 'Журнал сообщества пилотов: сборки, интервью, репортажи с соревнований (англ.).',
+    desc: 'Печатный журнал о FPV из США: фристайл-пилоты, трюки, сборки, свои конкурсы; выпуски платные (англ.).',
     url: 'https://www.flytribemagazine.com/',
     src: 'flytribemagazine.com — журнал сообщества',
   },
@@ -3273,13 +3258,61 @@ RC.TOOL_CATS = [
 // конкретные версии взяты не с вики, а из самих каталогов папок: на вики
 // ссылка «18.21.10 (Latest)» ведёт в папку с файлами 17.5.8.
 // Файлы не копируем и не перезаливаем — только ссылки.
+//
+// РАЗБЛОКИРОВКА (unlock, 3.0). Каналы и мощность открываются файлом-ключом
+// на SD-карте: это не прошивка, а текстовый файл в один символ — имя и
+// содержимое переданы владельцем вместе с инструкцией Walksnail «Unlock
+// procedure» (Avatar, перевод) и порядком для Ascent (владелец, 2026-09-28).
+// Приложение создаёт файл само (Blob → saveFile), в сеть ничего не ходит.
+// Имя и содержимое — байт в байт как у присланных файлов: регистр имени
+// карте FAT безразличен, но текст оставлен как у производителя.
 window.RC = window.RC || {};
 
 RC.FIRMWARE = {
   checked: '2026-08-30',
   source: { name: 'Walksnail Wiki — справочник сообщества', url: 'https://walksnail.wiki/en/firmware' },
   // Предупреждение с вики: откат прошивки на новых партиях убивает очки.
-  warn: 'Goggles X из партий с января 2025 года: НЕ откатывайте прошивку ниже 38.44.13 — там другая память, очки выйдут из строя навсегда.',
+  // 2026-09-28: поддержку новой памяти добавила 38.43.13, на вики написано
+  // 38.44.13 — держим более строгий порог. Avatar GT новых партий — с вики
+  // и IntoFPV (ветка 39.44.3): компоненты сменились, откат не поддерживается.
+  warn: 'Goggles X из партий с января 2025 года: НЕ откатывайте прошивку ниже 38.44.13 — там другая память, очки выйдут из строя навсегда. Avatar GT новых партий — не ниже 39.44.2.',
+  // Разблокировка каналов и мощности — см. шапку файла.
+  unlockWarn: 'Разблокируйте, только если эти каналы и мощность разрешены правилами вашей страны и у вас есть нужные разрешения на передачу. Ответственность за использование частот и мощности — на пилоте.',
+  unlock: [
+    {
+      id: 'avatar-unlock',
+      name: 'Разблокировка Walksnail Avatar HD',
+      what: 'Открывает очкам Avatar HD все 8 каналов и мощность передатчика 1000 и 1200 мВт.',
+      files: [
+        { name: 'avatar_std.txt', content: '2', what: 'все 8 каналов' },
+        { name: 'avatar_pwr.txt', content: '1', what: 'мощность 1000 и 1200 мВт' },
+      ],
+      steps: [
+        'Сохраните файлы кнопками выше: avatar_std.txt открывает все 8 каналов, avatar_pwr.txt — мощность 1000 и 1200 мВт.',
+        'Достаньте SD-карту из очков и вставьте её в компьютер (или в телефон через картридер).',
+        'Скопируйте файлы в корень карты. Только avatar_std.txt — откроются 8 каналов; оба файла — каналы и мощность.',
+        'Извлеките карту и вставьте обратно в очки Avatar.',
+        'Включите очки и дождитесь полной загрузки — до экрана ожидания (Standby).',
+        'Готово: в очках доступны все каналы и повышенная мощность.',
+      ],
+      source: 'Инструкция Walksnail «Unlock procedure», перевод',
+    },
+    {
+      id: 'ascent-unlock',
+      name: 'Разблокировка Walksnail Ascent',
+      what: 'Открывает Ascent все частотные сетки и уровни мощности.',
+      files: [
+        { name: 'Ascent_std.txt', content: '7', what: 'частотные сетки и мощность' },
+      ],
+      steps: [
+        'Сохраните файл Ascent_std.txt кнопкой выше и скопируйте его в корень SD-карты.',
+        'Вставьте карту в устройство Ascent и включите его, дождитесь полной загрузки.',
+        'Выключите устройство, достаньте карту и проверьте: файла на ней больше нет — устройство его применило и удалило.',
+        'Включите снова и проверьте, что стали доступны все частотные сетки и уровни мощности.',
+        'Если файл остался на карте — разблокировка не прошла: проверьте имя файла и повторите.',
+      ],
+    },
+  ],
   items: [
     {
       id: 'avatar',
@@ -3405,6 +3438,9 @@ RC.CHANGELOG = [
       'Лёгкий отклик вибрацией на отметку пункта, взлёт и посадку — там, где телефон это умеет. Ничего из этого не ходит в сеть.',
       'Печать чек-листов: пустой бланк на 1, 3 или 5 полётов и лист с отметками — с экрана чек-листа, из «Шаблонов» и из деталей полёта.',
       'Новые иконки «HUD-двутон» — контур, тон и акцентная точка цвета темы — и новый значок приложения «HUD-кольцо»; у ярлыков свои значки.',
+      'Калькулятор АКБ в «Ещё»: напряжения пакета, энергия, токи, время полёта и можно ли в самолёт — для своей АКБ из флота или по цифрам.',
+      'Разблокировка Walksnail: файлы-ключи для Avatar HD и Ascent с инструкцией на русском — в «Инструментах», создаются без интернета.',
+      'Каталог инструментов сверен: Betaflight App вместо Configurator и Blackbox Explorer, новые адреса и описания, неактуальное убрано.',
       'Фон и картинки в стиле «Кокпит»: изолинии и приборная сетка, силуэты бортов без фото, рисунки пустых экранов и приветствия. Всё внутри приложения, без сети.',
       'Аккуратнее на телефоне: строки «Сегодня» и аккумуляторов не зажимают текст, панель чек-листа ниже, свои галочки в формах, фото — на чёрном в любом режиме.',
     ],
@@ -3869,6 +3905,23 @@ RC.HELP = {
         ] },
         { h: 'Прошивки Walksnail' },
         'Блок показывает последнюю известную версию Avatar, Ascent, Ascent Industry, PC Tool и головного трекера с кнопками «Скачать» и «Все версии» (папка производителя на Google Диске). Список ручной: Google Диск не позволяет приложению прочитать папку, поэтому рядом честно стоит дата сверки. Если она давняя — загляните в «Все версии».',
+        { h: 'Разблокировка каналов и мощности' },
+        'В том же блоке — файлы-ключи для SD-карты: для Avatar HD два (avatar_std.txt — все 8 каналов, avatar_pwr.txt — мощность 1000 и 1200 мВт), для Ascent один (Ascent_std.txt — частотные сетки и мощность), и пошаговая инструкция на русском. Файлы создаёт само приложение, без интернета. Разблокируйте, только если эти каналы и мощность разрешены в вашей стране и у вас есть нужные разрешения.',
+      ],
+    },
+
+    {
+      id: 'battcalc',
+      title: 'Калькулятор АКБ',
+      blocks: [
+        '«Ещё → Калькулятор АКБ» считает прямо в телефоне, без интернета. Выберите свою АКБ — подставятся химия, число банок и ёмкость из карточки — или введите цифры сами.',
+        { list: [
+          'Напряжения пакета: полный заряд, номинал, хранение и минимум в покое — по химии (LiPo, LiHV, Li-Ion, LiFe, NiMH) и числу банок.',
+          'Энергия в Вт·ч, ток заряда 1C и ток по маркировке C (реальный длительный ток обычно ниже).',
+          'Время полёта при среднем токе — до 80 % ёмкости, с запасом на посадку. Средний ток берётся из телеметрии или OSD.',
+          'У своей АКБ — средний полёт на ней по журналу.',
+          'Перевозка в самолёте по правилам IATA: до 100 Вт·ч — в ручной клади, 100–160 — только с согласия авиакомпании и не больше двух запасных, больше 160 — нельзя. Перед поездкой уточните у перевозчика.',
+        ] },
       ],
     },
 
@@ -4846,7 +4899,7 @@ const TAB_OF = {
   flight: 'flight', prep: 'flight', session: 'flight',
   journal: 'journal', log: 'journal', stats: 'journal',
   more: 'more', tools: 'more', sites: 'more',
-  backup: 'more', privacy: 'more', templates: 'more', help: 'more',
+  backup: 'more', privacy: 'more', templates: 'more', help: 'more', battcalc: 'more',
 };
 
 // actIcon — КЛЮЧ из ICONS: кнопка справа становится квадратной с иконкой,
@@ -7944,6 +7997,7 @@ function viewMore() {
   h += '<div class="card flat">';
   h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d wrap">Что взять с собой: наборы и галочки</span></span>`, 'packing');
   h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d wrap">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
+  h += rowBtn('data-nav="#/battcalc"', `<span class="grow"><span class="t">Калькулятор АКБ</span><span class="d wrap">Напряжения, энергия, токи, время полёта, перелёт</span></span>`, 'batteries');
   h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d wrap">Запомненные места полётов</span></span>`, 'sites');
   h += rowBtn('data-nav="#/templates"', `<span class="grow"><span class="t">Шаблоны чек-листов</span><span class="d wrap">Свои предполётные проверки</span></span>`, 'templates');
   h += rowBtn('data-nav="#/backup"', `<span class="grow"><span class="t">Данные и резервная копия</span><span class="d wrap">Экспорт, импорт, восстановление</span></span>`, 'backup');
@@ -8013,7 +8067,27 @@ function firmwareHtml() {
   h += `<p class="small muted">Версии сверяются вручную: Google Диск не позволяет
     приложению прочитать список файлов. Свежее списка может быть только сама папка —
     загляните в «Все версии», если дата проверки давняя.${src}</p>`;
+  h += unlockHtml(fw);
   return h + '</div></details>';
+}
+
+// Разблокировка каналов и мощности: файл-ключ на SD-карту. Файл создаёт
+// само приложение (действие unlock-file → saveFile), без сети. Тексты —
+// справочные из data/firmware.js, но идут через esc(), как всё остальное.
+function unlockHtml(fw) {
+  const list = Array.isArray(fw.unlock) ? fw.unlock : [];
+  if (!list.length) return '';
+  let h = `<div class="h3" style="margin-top:18px">Разблокировка каналов и мощности</div>
+    <div class="banner warn">${ICONS.alert}<span class="grow">${esc(fw.unlockWarn || '')}</span></div>`;
+  h += list.map((u) => `<div class="card unlock">
+      <div class="t" style="font-weight:700">${esc(u.name)}</div>
+      <p class="small muted" style="margin:4px 0 10px">${esc(u.what)}</p>
+      <div class="btn-line">${u.files.map((f, i) => `<button class="btn btn-sm" data-act="unlock-file" data-u="${esc(u.id)}" data-f="${i}"
+        aria-label="Сохранить ${esc(f.name)} — ${esc(f.what)}">${ICONS.backup}<span class="mono">${esc(f.name)}</span></button>`).join('')}</div>
+      <ol class="unlock-steps">${u.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+      ${u.source ? `<p class="xs muted" style="margin:0">Источник: ${esc(u.source)}.</p>` : ''}
+    </div>`).join('');
+  return h;
 }
 
 function viewTools() {
@@ -8302,6 +8376,138 @@ function openWelcome(step) {
   if (body) { body.innerHTML = welcomeBodyHtml(i); return; }
   openModal('Добро пожаловать', welcomeBodyHtml(i));
   $('#modal-root dialog').classList.add('welcome');
+}
+
+/* == src/19-calc.js == */
+// RC Planner · «Калькулятор АКБ»: напряжения, энергия, токи, время полёта, перелёт.
+
+/* ---------- Калькулятор АКБ (3.0) ----------
+   Всё считается на месте из введённых цифр или из своей АКБ (подставляет
+   химию, банки и ёмкость); в сеть ничего не уходит. Результат
+   пересчитывается на каждый ввод без перерисовки экрана (calcUpdate из
+   события input в 31-events.js) — фокус и курсор в поле не прыгают.
+   Ёмкость — ёмкость ПАКЕТА, как в карточке АКБ (у 6S2P 7000 — 7000). */
+
+// Напряжение на банку, В: полный заряд, номинал, хранение, минимум
+// в покое. Значения — общепринятые для хобби; у Li-Ion нижний порог
+// зависит от элемента (по даташиту бывает до 2,5 В) — берём осторожный.
+const CALC_CHEM = {
+  LiPo: { full: 4.2, nom: 3.7, store: 3.8, min: 3.5 },
+  LiHV: { full: 4.35, nom: 3.8, store: 3.85, min: 3.5 },
+  'Li-Ion': { full: 4.2, nom: 3.6, store: 3.7, min: 3.0 },
+  LiFe: { full: 3.6, nom: 3.3, store: 3.3, min: 2.8 },
+  NiMH: { full: 1.4, nom: 1.2, store: null, min: 1.0 },
+};
+const CALC_USABLE = 0.8; // расходуем до 80 % ёмкости — запас на посадку и ресурс АКБ
+// Перевозка запасных литиевых АКБ в самолёте (IATA, руководство 2026):
+// до 100 Вт·ч — в ручной клади; 100–160 — с согласия авиакомпании,
+// не больше двух запасных; больше 160 — пассажирам нельзя.
+const CALC_AIR = [[100, 'ok'], [160, 'warn'], [Infinity, 'bad']];
+
+// Число из поля в пределах [lo, hi], иначе null.
+function calcNum(v, lo, hi) {
+  const n = parseFloat(String(v == null ? '' : v).replace(',', '.'));
+  return isFinite(n) && n >= lo && n <= hi ? n : null;
+}
+const calcFmt = (n, d) => (n == null ? '—' : n.toFixed(d).replace('.', ','));
+
+function calcValues(form) {
+  const fd = new FormData(form);
+  const chem = CALC_CHEM[fd.get('chem')] ? fd.get('chem') : 'LiPo';
+  return {
+    battId: String(fd.get('battId') || ''),
+    chem,
+    s: calcNum(fd.get('s'), 1, 24),
+    mah: calcNum(fd.get('mah'), 50, 100000),
+    c: calcNum(fd.get('c'), 1, 300),
+    amps: calcNum(fd.get('amps'), 0.1, 500),
+  };
+}
+
+// Результат — только числа и подписи из констант: пользовательского
+// текста в нём нет, кроме средней длительности из своего журнала (число).
+function calcOutHtml(v) {
+  const k = CALC_CHEM[v.chem];
+  const ah = v.mah ? v.mah / 1000 : null;
+  const volt = (x) => (v.s && x != null ? calcFmt(x * v.s, 2) + '&nbsp;В' : '—');
+  const wh = v.s && ah ? k.nom * v.s * ah : null;
+  const rows = [
+    ['Полный заряд', volt(k.full)], ['Номинал', volt(k.nom)],
+    ['Хранение', k.store == null ? 'не нужно' : volt(k.store)], ['Минимум в покое', volt(k.min)],
+    ['Энергия', wh ? calcFmt(wh, 1) + '&nbsp;Вт·ч' : '—'],
+    ['Заряд 1C', ah ? calcFmt(ah, 1) + '&nbsp;А' : '—'],
+    ['Ток по маркировке', ah && v.c ? calcFmt(ah * v.c, 0) + '&nbsp;А' : 'укажите C'],
+    ['Время полёта', ah && v.amps ? calcFmt(ah * CALC_USABLE / v.amps * 60, 1) + '&nbsp;мин' : 'укажите средний ток'],
+  ];
+  let h = `<div class="kv calc-kv">${rows.map(([key, val]) => `<div><span class="k">${key}</span><span class="v">${val}</span></div>`).join('')}</div>`;
+  if (v.s && CALC_CHEM[v.chem].store != null) {
+    h += `<p class="hint">На банку: полный ${calcFmt(k.full, 2)}, номинал ${calcFmt(k.nom, 2)}, хранение ${calcFmt(k.store, 2)}, минимум ${calcFmt(k.min, 2)}&nbsp;В.
+      Время — до ${Math.round(CALC_USABLE * 100)}&nbsp;% ёмкости, чтобы оставался запас на посадку.</p>`;
+  }
+  // Средний полёт на этой АКБ по своему журналу
+  if (v.battId) {
+    const fl = S.sessions.filter((s) => s.end && s.batteryId === v.battId && +s.durationMin > 0);
+    if (fl.length) {
+      const avg = fl.reduce((n, s) => n + +s.durationMin, 0) / fl.length;
+      h += `<p class="hint">По журналу: средний полёт на этой АКБ — ${calcFmt(avg, 1)}&nbsp;мин (${fl.length}&nbsp;${plural(fl.length, 'полёт', 'полёта', 'полётов')}).</p>`;
+    }
+  }
+  if (wh) {
+    const cls = CALC_AIR.find(([lim]) => wh <= lim)[1];
+    const text = cls === 'ok' ? 'до 100 Вт·ч — в ручной клади, в сдаваемый багаж нельзя'
+      : cls === 'warn' ? '100–160 Вт·ч — только с согласия авиакомпании, не больше двух запасных, в ручной клади'
+      : 'больше 160 Вт·ч — пассажирам перевозить нельзя';
+    h += `<div class="banner ${cls === 'ok' ? 'ok' : 'warn'} calc-air">${ICONS.flight}<span class="grow"><b>В самолёте:</b> ${text}.
+      Правила IATA; перед поездкой уточните у перевозчика. Клеммы — заизолировать.</span></div>`;
+  }
+  return h;
+}
+
+// Ввод запоминается в UI.calc: перерисовка (выбор своей АКБ, смена темы)
+// не должна стирать набранное.
+function calcUpdate(form) {
+  const v = calcValues(form);
+  UI.calc = { battId: v.battId, chem: v.chem, s: v.s, mah: v.mah, c: v.c, amps: v.amps };
+  const out = document.getElementById('calc-out');
+  if (out) out.innerHTML = calcOutHtml(v);
+}
+
+function viewBattCalc() {
+  const c = UI.calc || (UI.calc = { battId: '', chem: 'LiPo', s: 6, mah: 1300, c: null, amps: null });
+  let h = pageHead('Калькулятор АКБ', { back: '#/more', help: 'battcalc' });
+  const own = S.batteries.filter((b) => b.status !== 'retired');
+  const opts = [['', 'Свои цифры']].concat(own.map((b) => [b.id, b.label || 'АКБ']));
+  h += `<form data-calc class="card" autocomplete="off">
+    ${own.length ? field('Аккумулятор', selectHtml('battId', opts, c.battId, 'data-change="calc-batt"'), 'подставит химию, банки и ёмкость из карточки') : ''}
+    ${field('Химия', selectHtml('chem', Object.keys(CALC_CHEM).map((x) => [x, x]), c.chem))}
+    <div class="grid2">
+      ${field('Банок, S', `<input type="number" name="s" min="1" max="24" step="1" inputmode="numeric" value="${numVal(c.s)}">`)}
+      ${field('Ёмкость, мА·ч', `<input type="number" name="mah" min="50" max="100000" step="10" inputmode="numeric" value="${numVal(c.mah)}">`)}
+    </div>
+    <div class="grid2">
+      ${field('Токоотдача, C', `<input type="number" name="c" min="1" max="300" step="1" inputmode="numeric" value="${numVal(c.c)}" placeholder="напр. 100">`)}
+      ${field('Средний ток, А', `<input type="number" name="amps" min="0.1" max="500" step="0.1" inputmode="decimal" value="${numVal(c.amps)}" placeholder="напр. 25">`)}
+    </div>
+  </form>`;
+  h += `<div id="calc-out" aria-live="polite">${calcOutHtml({ battId: c.battId, chem: CALC_CHEM[c.chem] ? c.chem : 'LiPo',
+    s: calcNum(c.s, 1, 24), mah: calcNum(c.mah, 50, 100000), c: calcNum(c.c, 1, 300), amps: calcNum(c.amps, 0.1, 500) })}</div>`;
+  h += `<p class="small muted" style="margin-top:12px">Средний ток — из телеметрии или OSD (mAh за полёт / время). Токоотдача C по маркировке
+    обычно завышена: реальный длительный ток ниже.</p>`;
+  return h;
+}
+
+// Выбор своей АКБ: химия, банки и ёмкость из карточки (числа уже
+// нормализованы в NORM.batteries), остальное — как было.
+function calcPickBattery(id) {
+  const c = UI.calc || (UI.calc = {});
+  const b = S.batteries.find((x) => x.id === id);
+  c.battId = b ? b.id : '';
+  if (b) {
+    if (CALC_CHEM[b.chem]) c.chem = b.chem;
+    if (b.cells) c.s = b.cells;
+    if (b.capacity) c.mah = b.capacity;
+  }
+  render(true);
 }
 
 /* == src/20-actions.js == */
@@ -8706,6 +8912,14 @@ const ACTIONS = {
   'journal-tab': (el) => { UI.journalTab = el.dataset.tab === 'stats' ? 'stats' : 'log'; render(true); },
   'journal-menu': (el) => toggleMenu(el, 'journal-menu'),
   'print-log': () => printLog(),
+  // Файл-ключ разблокировки Walksnail: создаётся здесь же из data/firmware.js
+  // (имя и содержимое проверены test/checks.js), в сеть не ходит.
+  'unlock-file': async (el) => {
+    const u = ((RC.FIRMWARE || {}).unlock || []).find((x) => x.id === el.dataset.u);
+    const f = u && u.files[+el.dataset.f];
+    if (!f) return;
+    await saveFile(f.name, new Blob([f.content], { type: 'text/plain' }));
+  },
   // Печать чек-листа: меню на экране чек-листа, бланк шаблона, прогон полёта
   'prep-menu': (el) => toggleMenu(el, 'prep-menu'),
   'print-prep': () => { closeMenus(); printPrep(); },
@@ -10158,6 +10372,7 @@ const RENDERERS = {
   more: viewMore, tools: viewTools, sites: viewSites,
   batteries: viewBatteries, templates: viewTemplates,
   backup: viewBackup, privacy: viewPrivacy, help: viewHelp,
+  battcalc: viewBattCalc,
 };
 
 // Старые адреса (закладки, ссылки в changelog): #/log и #/stats
@@ -10386,7 +10601,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMenus();
 });
 
+// Калькулятор АКБ: пересчёт на каждый ввод без перерисовки экрана;
+// Enter в поле не отправляет форму (иначе браузер перезагрузил бы страницу).
+document.addEventListener('input', (e) => {
+  const form = e.target.closest('form[data-calc]');
+  if (form) calcUpdate(form);
+});
+
 document.addEventListener('submit', (e) => {
+  if (e.target.closest('form[data-calc]')) { e.preventDefault(); return; }
   const form = e.target.closest('form[data-form]');
   if (!form) return;
   e.preventDefault();
@@ -10489,6 +10712,8 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'journal-aircraft') {
     UI.journalAircraft = el.value;
     render(true);
+  } else if (kind === 'calc-batt') {
+    calcPickBattery(el.value);
   }
 });
 

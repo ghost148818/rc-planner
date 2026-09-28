@@ -748,6 +748,20 @@ async function run(browser, tag, opts) {
   ok((await count('.ck > .ck-main[data-act="pack-toggle"]')) >= 3, `${tag}: пункты набора — кнопки на всю строку`);
   await shot('more', '#/more');
   await shot('tools', '#/tools');
+  // Разблокировка Walksnail: файлы-ключи создаются в приложении
+  ok((await count('[data-act="unlock-file"]')) === 3, `${tag}: в «Инструментах» три файла разблокировки Walksnail`);
+  // Калькулятор АКБ: своя АКБ подставляет химию, банки и ёмкость, средний
+  // ток даёт время полёта; пересчёт — на ввод, без перерисовки экрана.
+  await shot('battcalc', '#/battcalc', async (p) => {
+    await p.selectOption('select[name="battId"]', 'b1');
+    await p.waitForFunction(() => UI.calc && UI.calc.battId === 'b1' && document.querySelector('input[name="s"]'));
+    await p.fill('input[name="amps"]', '25');
+    await p.waitForFunction(() => /мин/.test((document.getElementById('calc-out') || {}).textContent || ''));
+  });
+  ok(await page.evaluate(() => {
+    const t = document.getElementById('calc-out').textContent;
+    return /Вт·ч/.test(t) && /В самолёте/.test(t) && /Время полёта/.test(t) && document.activeElement && document.activeElement.name === 'amps';
+  }), `${tag}: калькулятор АКБ — энергия, время полёта и перелёт, фокус в поле остался`);
   await shot('batteries', '#/batteries');
   ok((await count('#views .row')) >= 4, `${tag}: четыре АКБ в списке`);
   await shot('sites', '#/sites');

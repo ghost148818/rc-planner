@@ -58,7 +58,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMenus();
 });
 
+// Калькулятор АКБ: пересчёт на каждый ввод без перерисовки экрана;
+// Enter в поле не отправляет форму (иначе браузер перезагрузил бы страницу).
+document.addEventListener('input', (e) => {
+  const form = e.target.closest('form[data-calc]');
+  if (form) calcUpdate(form);
+});
+
 document.addEventListener('submit', (e) => {
+  if (e.target.closest('form[data-calc]')) { e.preventDefault(); return; }
   const form = e.target.closest('form[data-form]');
   if (!form) return;
   e.preventDefault();
@@ -161,6 +169,8 @@ document.addEventListener('change', (e) => {
   } else if (kind === 'journal-aircraft') {
     UI.journalAircraft = el.value;
     render(true);
+  } else if (kind === 'calc-batt') {
+    calcPickBattery(el.value);
   }
 });
 

@@ -10,6 +10,7 @@ function viewMore() {
   h += '<div class="card flat">';
   h += rowBtn('data-nav="#/packing"', `<span class="grow"><span class="t">Сборы</span><span class="d wrap">Что взять с собой: наборы и галочки</span></span>`, 'packing');
   h += rowBtn('data-nav="#/tools"', `<span class="grow"><span class="t">Инструменты</span><span class="d wrap">Конфигураторы, прошивки, калькуляторы</span></span>`, 'tools');
+  h += rowBtn('data-nav="#/battcalc"', `<span class="grow"><span class="t">Калькулятор АКБ</span><span class="d wrap">Напряжения, энергия, токи, время полёта, перелёт</span></span>`, 'batteries');
   h += rowBtn('data-nav="#/sites"', `<span class="grow"><span class="t">Локации</span><span class="d wrap">Запомненные места полётов</span></span>`, 'sites');
   h += rowBtn('data-nav="#/templates"', `<span class="grow"><span class="t">Шаблоны чек-листов</span><span class="d wrap">Свои предполётные проверки</span></span>`, 'templates');
   h += rowBtn('data-nav="#/backup"', `<span class="grow"><span class="t">Данные и резервная копия</span><span class="d wrap">Экспорт, импорт, восстановление</span></span>`, 'backup');
@@ -79,7 +80,27 @@ function firmwareHtml() {
   h += `<p class="small muted">Версии сверяются вручную: Google Диск не позволяет
     приложению прочитать список файлов. Свежее списка может быть только сама папка —
     загляните в «Все версии», если дата проверки давняя.${src}</p>`;
+  h += unlockHtml(fw);
   return h + '</div></details>';
+}
+
+// Разблокировка каналов и мощности: файл-ключ на SD-карту. Файл создаёт
+// само приложение (действие unlock-file → saveFile), без сети. Тексты —
+// справочные из data/firmware.js, но идут через esc(), как всё остальное.
+function unlockHtml(fw) {
+  const list = Array.isArray(fw.unlock) ? fw.unlock : [];
+  if (!list.length) return '';
+  let h = `<div class="h3" style="margin-top:18px">Разблокировка каналов и мощности</div>
+    <div class="banner warn">${ICONS.alert}<span class="grow">${esc(fw.unlockWarn || '')}</span></div>`;
+  h += list.map((u) => `<div class="card unlock">
+      <div class="t" style="font-weight:700">${esc(u.name)}</div>
+      <p class="small muted" style="margin:4px 0 10px">${esc(u.what)}</p>
+      <div class="btn-line">${u.files.map((f, i) => `<button class="btn btn-sm" data-act="unlock-file" data-u="${esc(u.id)}" data-f="${i}"
+        aria-label="Сохранить ${esc(f.name)} — ${esc(f.what)}">${ICONS.backup}<span class="mono">${esc(f.name)}</span></button>`).join('')}</div>
+      <ol class="unlock-steps">${u.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+      ${u.source ? `<p class="xs muted" style="margin:0">Источник: ${esc(u.source)}.</p>` : ''}
+    </div>`).join('');
+  return h;
 }
 
 function viewTools() {

@@ -96,7 +96,7 @@ const TAB_OF = {
   flight: 'flight', prep: 'flight', session: 'flight',
   journal: 'journal', log: 'journal', stats: 'journal',
   more: 'more', tools: 'more', sites: 'more',
-  backup: 'more', privacy: 'more', templates: 'more', help: 'more',
+  backup: 'more', privacy: 'more', templates: 'more', help: 'more', battcalc: 'more',
 };
 
 // actIcon — КЛЮЧ из ICONS: кнопка справа становится квадратной с иконкой,

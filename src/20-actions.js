@@ -400,6 +400,14 @@ const ACTIONS = {
   'journal-tab': (el) => { UI.journalTab = el.dataset.tab === 'stats' ? 'stats' : 'log'; render(true); },
   'journal-menu': (el) => toggleMenu(el, 'journal-menu'),
   'print-log': () => printLog(),
+  // Файл-ключ разблокировки Walksnail: создаётся здесь же из data/firmware.js
+  // (имя и содержимое проверены test/checks.js), в сеть не ходит.
+  'unlock-file': async (el) => {
+    const u = ((RC.FIRMWARE || {}).unlock || []).find((x) => x.id === el.dataset.u);
+    const f = u && u.files[+el.dataset.f];
+    if (!f) return;
+    await saveFile(f.name, new Blob([f.content], { type: 'text/plain' }));
+  },
   // Печать чек-листа: меню на экране чек-листа, бланк шаблона, прогон полёта
   'prep-menu': (el) => toggleMenu(el, 'prep-menu'),
   'print-prep': () => { closeMenus(); printPrep(); },
